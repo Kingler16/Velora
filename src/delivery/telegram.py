@@ -340,10 +340,15 @@ def create_bot_app(bot_token: str, chat_id: str, on_ticker_request=None, on_brie
             await update.message.reply_text(f"🗑 {ticker} von Watchlist entfernt.")
             return
 
-        # Ticker-Analyse anfordern
-        ticker_match = re.match(r"^[A-Z]{1,5}(?:\.[A-Z]{2})?$", text.upper())
-        if ticker_match and on_ticker_request:
-            ticker = text.upper()
+        # Ticker-Analyse anfordern: $TSLA-Prefix ODER reines UPPERCASE-Wort (>=2 Buchstaben).
+        # Wichtig: KEIN .upper() vorher — sonst werden Stopwords wie "hi"/"ok"/"hallo" als Ticker erkannt.
+        ticker = None
+        explicit = re.match(r"^\$([A-Za-z]{1,5}(?:\.[A-Za-z]{2})?)$", text)
+        if explicit:
+            ticker = explicit.group(1).upper()
+        elif re.match(r"^[A-Z]{2,5}(?:\.[A-Z]{2})?$", text):
+            ticker = text
+        if ticker and on_ticker_request:
             await update.message.reply_text(f"🔍 Analysiere {ticker}... Das kann ein paar Minuten dauern.")
             await on_ticker_request(ticker, update, context)
             return
