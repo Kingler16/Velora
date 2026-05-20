@@ -31,7 +31,7 @@
 <div class="card" style="margin-bottom: var(--space-5);">
     <div class="card-title">Performance vs Benchmark</div>
     {% if snapshots %}
-    <div id="perfRangeChart"></div>
+    <div id="perfRangeChart" class="chart-h-lg"></div>
     {% else %}
     <div class="empty-state-v2">
         <div class="empty-state-icon">◠</div>
@@ -49,15 +49,15 @@
 <div class="charts-grid grid-cols-3" style="margin-bottom: var(--space-5);">
     <div class="card">
         <div class="card-title">Nach Sektor</div>
-        <div id="sectorPie"></div>
+        <div id="sectorPie" class="chart-h-sm"></div>
     </div>
     <div class="card">
         <div class="card-title">Nach Region</div>
-        <div id="regionPie"></div>
+        <div id="regionPie" class="chart-h-sm"></div>
     </div>
     <div class="card">
         <div class="card-title">Nach Konto</div>
-        <div id="accountPie"></div>
+        <div id="accountPie" class="chart-h-sm"></div>
     </div>
 </div>
 
