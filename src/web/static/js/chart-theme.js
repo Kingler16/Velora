@@ -47,13 +47,20 @@
       // gesetzte Property uebersteuert den ApexCharts-Default und fuehrt
       // dann zu TypeErrors ("reading 'vertical'") / "Legend position not
       // supported". Deshalb Properties nur setzen, wenn ein Wert existiert.
+      // Padding immer explizit setzen — sobald wir ein `grid`-Objekt
+      // ueberreichen, ueberschreibt ApexCharts den eigenen Default komplett.
+      // Fehlt dann grid.padding, crasht der interne Aufruf (Safari: TypeError
+      // "undefined is not an object (evaluating 'this.gridPad.top')"; Chrome
+      // schluckt es bei Donut still). Daher hier Default-aequivalente Werte
+      // fuer Desktop und ueberschrieben fuer Phone/Tablet.
       const grid = {
         borderColor: window.VeloraChartTheme.grid(),
         strokeDashArray: 4,
         xaxis: { lines: { show: false } },
+        padding: phone ? { left: 4, right: 4, top: 0, bottom: 0 }
+              : tablet ? { left: 8, right: 8, top: 0, bottom: 0 }
+              :          { left: 12, right: 0, top: 0, bottom: 0 },
       };
-      if (phone) grid.padding = { left: 4, right: 4, top: 0, bottom: 0 };
-      else if (tablet) grid.padding = { left: 8, right: 8, top: 0, bottom: 0 };
 
       const legend = {
         labels: { colors: window.VeloraChartTheme.text() },
