@@ -49,13 +49,9 @@
         <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 4.5 4.5 2-4.5 2L12 16l-2-4.5L5.5 9.5 10 7.5z"/><path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/></svg></span>
         <span>{{ t.nav.empfehlungen }}</span>
     </a>
-    <a href="/settings" class="bottom-more-item {{ 'active' if page == 'settings' }}" role="menuitem">
+    <a href="/settings" class="bottom-more-item {{ 'active' if page in ('settings', 'install') }}" role="menuitem">
         <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.36.166.68.42.93.74.251.32.44.7.53 1.11"/></svg></span>
         <span>{{ t.nav.get('settings', 'Einstellungen') }}</span>
-    </a>
-    <a href="/install" class="bottom-more-item {{ 'active' if page == 'install' }}" role="menuitem">
-        <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><polyline points="9 12 12 15 15 12"/><line x1="12" y1="7" x2="12" y2="15"/></svg></span>
-        <span>{% if lang == 'en' %}Install{% else %}Installieren{% endif %}</span>
     </a>
 </div>
 <div class="bottom-more-backdrop" onclick="document.body.classList.remove('bottom-more-open'); document.getElementById('bottom-more-sheet').classList.remove('open'); var b=document.querySelector('.bottom-nav-more'); if(b) b.setAttribute('aria-expanded','false');"></div>

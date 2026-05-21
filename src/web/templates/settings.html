@@ -250,6 +250,19 @@
     </div>
 </div>
 
+<!-- Velora als App installieren -->
+<div class="card" style="margin-bottom: 16px;">
+    <div class="card-title">{% if lang == 'en' %}Install Velora as app{% else %}Velora als App installieren{% endif %}</div>
+    <div style="display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center;">
+        <div class="text-muted" style="font-size: 13px; line-height: 1.5;">
+            {% if lang == 'en' %}Add to your home screen on iPhone/Android or install as a desktop app — step-by-step guide.{% else %}Auf iPhone/Android zum Home-Bildschirm hinzufügen oder als Desktop-App installieren — Schritt-für-Schritt-Anleitung.{% endif %}
+        </div>
+        <a href="/install" class="btn btn-ghost" style="flex-shrink: 0;">
+            {% if lang == 'en' %}Open guide{% else %}Anleitung öffnen{% endif %}
+        </a>
+    </div>
+</div>
+
 <!-- System & Updates -->
 <div class="card" style="margin-bottom: 16px;">
     <div class="card-title">{% if lang == 'en' %}System & Updates{% else %}System & Updates{% endif %}</div>
