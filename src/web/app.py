@@ -678,6 +678,46 @@ async def api_system_update():
     return JSONResponse(parsed)
 
 
+def _maybe_append_monthly_snapshot(overview: dict) -> bool:
+    """Haengt einen Snapshot fuer den aktuellen Monat an monthly_snapshots.json an,
+    falls fuer diesen Monat noch keiner existiert. Returns True wenn geschrieben."""
+    from datetime import datetime
+    import json
+    memory_dir = Path(__file__).parent.parent.parent / "memory"
+    path = memory_dir / "monthly_snapshots.json"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    snapshots = []
+    if path.exists():
+        try:
+            with open(path) as f:
+                snapshots = json.load(f)
+        except Exception:
+            snapshots = []
+    now = datetime.now()
+    month_key = now.strftime("%Y-%m")
+    if any(s.get("month") == month_key for s in snapshots):
+        return False
+    snap = {
+        "date": now.isoformat(),
+        "month": month_key,
+        "total_value": round(overview.get("total_value_eur", 0), 2),
+        "portfolio_value": round(overview.get("total_value_eur", 0), 2),
+        "holdings_value_eur": round(overview.get("holdings_value_eur", 0), 2),
+        "cash_total": round(overview.get("cash_total", 0), 2),
+        "total_pnl_eur": round(overview.get("total_pnl_eur", 0), 2),
+        "total_pnl_pct": round(overview.get("total_pnl_pct", 0), 2),
+        "position_count": len(overview.get("positions", [])),
+    }
+    snapshots.append(snap)
+    snapshots = snapshots[-24:]
+    tmp = path.with_suffix(".json.tmp")
+    with open(tmp, "w") as f:
+        json.dump(snapshots, f, indent=2, default=str)
+    tmp.replace(path)
+    logger.info(f"Monthly-Snapshot fuer {month_key} angelegt: {snap['total_value']}€")
+    return True
+
+
 @app.post("/api/refresh")
 async def api_refresh(background_tasks: BackgroundTasks):
     global _refresh_running
@@ -756,6 +796,18 @@ async def _run_refresh():
         for r in results:
             if isinstance(r, Exception):
                 logger.error(f"Refresh-Teil-Task Fehler: {r}")
+
+        # Monats-Snapshot anlegen, falls fuer aktuellen Monat noch keiner existiert.
+        # Damit baut sich die Asset-History-Kurve auch ohne erfolgreichen Monthly-
+        # Cron-Job auf — der lief auf manchen Setups wg. Permission/Owner-Issues
+        # nicht durch (siehe Commit 95a6d5f), und der Dashboard-Chart blieb leer.
+        try:
+            market_result = results[0] if results else None
+            market_data = market_result if isinstance(market_result, dict) else get_market_data()
+            overview = compute_portfolio_overview(portfolio, market_data)
+            _maybe_append_monthly_snapshot(overview)
+        except Exception as e:
+            logger.error(f"Snapshot-Append fehlgeschlagen: {e}")
 
         logger.info(f"Background-Refresh abgeschlossen in {time.monotonic() - start:.1f}s")
     except Exception as e:
