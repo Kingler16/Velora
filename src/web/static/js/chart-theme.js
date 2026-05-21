@@ -42,6 +42,28 @@
       const phone = isPhone();
       const tablet = isTablet();
       const compact = phone || tablet;
+      // ApexCharts liest viele Optionen tief in den Objekten weiter
+      // (z. B. legend.itemMargin.vertical). Eine explizit auf `undefined`
+      // gesetzte Property uebersteuert den ApexCharts-Default und fuehrt
+      // dann zu TypeErrors ("reading 'vertical'") / "Legend position not
+      // supported". Deshalb Properties nur setzen, wenn ein Wert existiert.
+      const grid = {
+        borderColor: window.VeloraChartTheme.grid(),
+        strokeDashArray: 4,
+        xaxis: { lines: { show: false } },
+      };
+      if (phone) grid.padding = { left: 4, right: 4, top: 0, bottom: 0 };
+      else if (tablet) grid.padding = { left: 8, right: 8, top: 0, bottom: 0 };
+
+      const legend = {
+        labels: { colors: window.VeloraChartTheme.text() },
+        fontFamily: 'Inter',
+        fontSize: phone ? '10px' : tablet ? '11px' : '12px',
+        markers: { width: phone ? 8 : 10, height: phone ? 8 : 10 },
+      };
+      if (compact) legend.itemMargin = { horizontal: 6, vertical: 2 };
+      if (phone) legend.position = 'bottom';
+
       return {
         chart: {
           foreColor: window.VeloraChartTheme.text(),
@@ -62,14 +84,7 @@
           redrawOnParentResize: true,
         },
         theme: { mode: dark ? 'dark' : 'light' },
-        grid: {
-          borderColor: window.VeloraChartTheme.grid(),
-          strokeDashArray: 4,
-          xaxis: { lines: { show: false } },
-          padding: phone ? { left: 4, right: 4, top: 0, bottom: 0 }
-                  : tablet ? { left: 8, right: 8, top: 0, bottom: 0 }
-                  : undefined,
-        },
+        grid,
         tooltip: {
           theme: dark ? 'dark' : 'light',
           style: { fontSize: phone ? '11px' : '12px', fontFamily: 'Inter' },
@@ -77,14 +92,7 @@
         },
         colors: window.VeloraChartTheme.colors,
         dataLabels: { enabled: false },
-        legend: {
-          labels: { colors: window.VeloraChartTheme.text() },
-          fontFamily: 'Inter',
-          fontSize: phone ? '10px' : tablet ? '11px' : '12px',
-          markers: { width: phone ? 8 : 10, height: phone ? 8 : 10 },
-          itemMargin: compact ? { horizontal: 6, vertical: 2 } : undefined,
-          position: phone ? 'bottom' : undefined,
-        },
+        legend,
         stroke: {
           // Phone: gerade Linien (CPU-schonender, schärfer auf 375px).
           curve: phone ? 'straight' : 'smooth',
