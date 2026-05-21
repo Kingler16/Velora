@@ -115,7 +115,12 @@ def fetch_finnhub_news(ticker: str, api_key: str) -> list[dict]:
 
 
 def fetch_finnhub_sentiment(ticker: str, api_key: str) -> dict | None:
-    """Holt Sentiment-Score von Finnhub."""
+    """Holt Sentiment-Score von Finnhub.
+    Hinweis: Im Free Tier liefert /news-sentiment seit Anfang 2026 nur noch
+    HTTP 403 ("You don't have access to this resource."). Wir lassen den
+    Code als optionalen Pfad stehen, falls jemand einen Paid-Key hat,
+    aber das tatsaechliche Sentiment kommt aus fetch_yfinance_sentiment().
+    """
     if not api_key:
         return None
     try:
@@ -124,6 +129,8 @@ def fetch_finnhub_sentiment(ticker: str, api_key: str) -> dict | None:
             params={"symbol": ticker, "token": api_key},
             timeout=10,
         )
+        if resp.status_code != 200:
+            return None
         data = resp.json()
         sentiment = data.get("sentiment") or {}
         buzz = data.get("buzz") or {}
@@ -131,14 +138,46 @@ def fetch_finnhub_sentiment(ticker: str, api_key: str) -> dict | None:
         if bullish is None:
             return None
         return {
-            "bullish": bullish,
-            "bearish": sentiment.get("bearishPercent", 0),
+            "bullish": bullish * 100 if bullish <= 1 else bullish,
+            "bearish": (sentiment.get("bearishPercent", 0) * 100) if sentiment.get("bearishPercent", 0) <= 1 else sentiment.get("bearishPercent", 0),
             "buzz_volume": buzz.get("articlesInLastWeek"),
             "buzz_change": buzz.get("weeklyAverage"),
             "source": "finnhub",
         }
     except Exception as e:
         logger.debug(f"Finnhub Sentiment für {ticker}: {e}")
+        return None
+
+
+def fetch_yfinance_sentiment(ticker: str) -> dict | None:
+    """Leitet Sentiment aus den Analyst-Recommendations von Yahoo Finance ab.
+    strongBuy/buy zaehlen bullish, sell/strongSell bearish, hold neutral.
+    Funktioniert fuer US- und Nicht-US-Tickers, anders als Finnhub im Free
+    Tier. Returns None bei ETFs / Tickern ohne Coverage."""
+    try:
+        import yfinance as yf
+        stock = yf.Ticker(ticker)
+        rs = stock.recommendations_summary
+        if rs is None or len(rs) == 0:
+            return None
+        row = rs.iloc[0].to_dict()
+        sb = int(row.get("strongBuy", 0) or 0)
+        b = int(row.get("buy", 0) or 0)
+        h = int(row.get("hold", 0) or 0)
+        s = int(row.get("sell", 0) or 0)
+        ss = int(row.get("strongSell", 0) or 0)
+        total = sb + b + h + s + ss
+        if total == 0:
+            return None
+        return {
+            "bullish": round((sb + b) / total * 100, 1),
+            "bearish": round((s + ss) / total * 100, 1),
+            "neutral": round(h / total * 100, 1),
+            "buzz_volume": total,
+            "source": "yfinance-analysts",
+        }
+    except Exception as e:
+        logger.debug(f"yfinance Sentiment für {ticker}: {e}")
         return None
 
 
@@ -239,14 +278,16 @@ def _collect_position_news(portfolio_tickers: list[dict], brave_api_key: str, fi
 
 
 def _collect_sentiment(portfolio_tickers: list[dict], finnhub_api_key: str) -> dict:
-    if not finnhub_api_key:
-        return {}
-    candidates = [t["ticker"] for t in portfolio_tickers[:8] if _is_us_ticker(t["ticker"])]
+    """Sentiment pro Ticker aus yfinance-Analyst-Recommendations.
+    Finnhub /news-sentiment ist im Free Tier seit 2026 unbrauchbar (403);
+    yfinance funktioniert fuer US- und EU-Tickers. Top 8 Positionen.
+    finnhub_api_key bleibt im Signature aus Backward-Compat, wird nicht genutzt."""
+    candidates = [t["ticker"] for t in portfolio_tickers[:8]]
     if not candidates:
         return {}
     results: dict[str, dict] = {}
     with ThreadPoolExecutor(max_workers=min(8, len(candidates))) as ex:
-        futures = {ex.submit(fetch_finnhub_sentiment, tk, finnhub_api_key): tk for tk in candidates}
+        futures = {ex.submit(fetch_yfinance_sentiment, tk): tk for tk in candidates}
         for fut in as_completed(futures):
             tk = futures[fut]
             s = fut.result()

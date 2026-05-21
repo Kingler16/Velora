@@ -236,7 +236,7 @@
 
 <div class="charts-grid" style="margin-bottom: var(--space-5);">
     <div class="card">
-        <div class="card-title">Stimmung (Finnhub)</div>
+        <div class="card-title">Analyst-Konsens</div>
         {% if news.get('sentiment') %}
         <div style="display: grid; gap: 8px;">
             {% for ticker, s in news['sentiment'].items() %}
@@ -253,13 +253,13 @@
                     </div>
                 </div>
                 {% if s.get('buzz_volume') %}
-                <span class="tabular-nums" style="font-size: 10px; color: var(--text-muted);" title="Artikel letzte Woche">{{ s.buzz_volume }} Art.</span>
+                <span class="tabular-nums" style="font-size: 10px; color: var(--text-muted);" title="Analysten gesamt">{{ s.buzz_volume }}</span>
                 {% endif %}
             </div>
             {% endfor %}
         </div>
         {% else %}
-        <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Keine Sentiment-Daten</div><div class="empty-state-body">Verfuegbar nach dem naechsten Daten-Refresh (nur US-Ticker).</div></div>
+        <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Kein Analyst-Konsens</div><div class="empty-state-body">Erscheint nach dem naechsten Daten-Refresh (Top-8 Positionen mit Analysten-Coverage).</div></div>
         {% endif %}
     </div>
 
