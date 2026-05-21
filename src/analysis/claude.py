@@ -106,14 +106,17 @@ def ask_claude(system_prompt: str, user_prompt: str, timeout: int = 1200) -> dic
 
     if result.returncode != 0:
         stderr = (result.stderr or "").strip()
-        if "401" in stderr or "authentication" in stderr.lower() or "invalid" in stderr.lower() and "credentials" in stderr.lower():
-            logger.error(f"Claude CLI Auth-Fehler (exit {result.returncode}): {stderr[:500]}")
+        stdout = (result.stdout or "").strip()
+        combined = stderr or stdout
+        if "401" in combined or "authentication" in combined.lower() or "invalid" in combined.lower() and "credentials" in combined.lower():
+            logger.error(f"Claude CLI Auth-Fehler (exit {result.returncode}): stderr={stderr[:500]} stdout={stdout[:500]}")
             raise ClaudeCLIError(
                 "Claude CLI ist nicht mehr authentifiziert (401). "
                 "Bitte am RockPi interaktiv `claude` starten und `/login` ausführen."
             )
-        logger.error(f"Claude CLI Fehler (exit {result.returncode}): {stderr[:500]}")
-        raise ClaudeCLIError(f"Claude CLI exit {result.returncode}: {stderr[:200] or '(kein stderr)'}")
+        logger.error(f"Claude CLI Fehler (exit {result.returncode}): stderr={stderr[:1000]!r} stdout={stdout[:1000]!r}")
+        detail = stderr[:200] or stdout[:200] or '(kein stderr/stdout)'
+        raise ClaudeCLIError(f"Claude CLI exit {result.returncode}: {detail}")
 
     output = (result.stdout or "").strip()
     if not output:
