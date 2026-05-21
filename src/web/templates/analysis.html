@@ -265,14 +265,34 @@
 
     const heatTarget = document.getElementById('heatmapChart');
     if (heatTarget) {
+        // Monatsrenditen aus aufeinanderfolgenden total_value-Snapshots ableiten.
+        // Der monthly-Cron schreibt zwar keinen monthly_return_pct ins Snapshot-File,
+        // wir koennen die Rendite aber jederzeit aus den absoluten Werten rechnen.
+        // Sortiert nach (date || month) damit die Reihenfolge stabil ist, auch wenn
+        // Snapshots aus mehreren Cron-Laeufen unsortiert ankommen.
+        const sortedSnaps = [...(snaps || [])].sort((a, b) => {
+            const da = a.date || a.month || '';
+            const db = b.date || b.month || '';
+            return da < db ? -1 : da > db ? 1 : 0;
+        });
         const byYear = {};
-        (snaps || []).forEach(s => {
+        let prevValue = null;
+        sortedSnaps.forEach(s => {
             const d = s.date || s.month || '';
             const [y, m] = String(d).split('-');
             if (!y || !m) return;
             if (!byYear[y]) byYear[y] = new Array(12).fill(null);
-            const v = s.monthly_return_pct !== undefined ? s.monthly_return_pct : (s.return_pct !== undefined ? s.return_pct : null);
+            const cur = s.total_value || s.portfolio_value;
+            let v = null;
+            if (s.monthly_return_pct !== undefined && s.monthly_return_pct !== null) {
+                v = s.monthly_return_pct;
+            } else if (s.return_pct !== undefined && s.return_pct !== null) {
+                v = s.return_pct;
+            } else if (prevValue && cur && prevValue > 0) {
+                v = (cur - prevValue) / prevValue * 100;
+            }
             byYear[y][parseInt(m)-1] = v;
+            if (cur) prevValue = cur;
         });
         const months = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
         const heatSeries = Object.keys(byYear).sort((a,b) => b-a).map(y => ({
