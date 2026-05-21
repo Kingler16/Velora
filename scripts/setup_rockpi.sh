@@ -81,6 +81,23 @@ sudo systemctl daemon-reload
 sudo systemctl enable velora-web
 sudo systemctl start velora-web
 
+# 8. HOME-Override für beide Services installieren (Claude-CLI Credentials liegen unter $HOME/.claude/).
+#    Ohne das sucht ein als User=root laufender Service in /root/.claude → "Not logged in".
+echo "Installing systemd HOME-Override drop-ins for Claude-CLI..."
+for svc in velora-bot velora-web; do
+    sudo mkdir -p "/etc/systemd/system/${svc}.service.d"
+    if [ -f "$INSTALL_DIR/scripts/systemd/${svc}.service.d/override.conf" ]; then
+        sudo cp "$INSTALL_DIR/scripts/systemd/${svc}.service.d/override.conf" "/etc/systemd/system/${svc}.service.d/override.conf"
+    else
+        sudo tee "/etc/systemd/system/${svc}.service.d/override.conf" > /dev/null <<OVERRIDE
+[Service]
+Environment=HOME=$HOME
+OVERRIDE
+    fi
+done
+sudo systemctl daemon-reload
+sudo systemctl restart velora-bot velora-web
+
 echo "=== Setup complete ==="
 echo ""
 echo "Next steps:"

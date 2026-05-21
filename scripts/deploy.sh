@@ -63,9 +63,38 @@ scp "$LOCAL_DIR"/setup.py $REMOTE:$REMOTE_DIR/
 scp "$LOCAL_DIR"/scripts/setup_rockpi.sh $REMOTE:$REMOTE_DIR/scripts/
 scp "$LOCAL_DIR"/scripts/system_update.sh $REMOTE:$REMOTE_DIR/scripts/ 2>/dev/null || true
 scp "$LOCAL_DIR"/scripts/claude_keepalive.sh $REMOTE:$REMOTE_DIR/scripts/ 2>/dev/null || true
-ssh $REMOTE "mkdir -p $REMOTE_DIR/scripts/systemd"
+ssh $REMOTE "mkdir -p $REMOTE_DIR/scripts/systemd $REMOTE_DIR/scripts/systemd/velora-bot.service.d $REMOTE_DIR/scripts/systemd/velora-web.service.d"
 scp "$LOCAL_DIR"/scripts/systemd/*.service "$LOCAL_DIR"/scripts/systemd/*.timer $REMOTE:$REMOTE_DIR/scripts/systemd/ 2>/dev/null || true
+scp "$LOCAL_DIR"/scripts/systemd/velora-bot.service.d/*.conf $REMOTE:$REMOTE_DIR/scripts/systemd/velora-bot.service.d/ 2>/dev/null || true
+scp "$LOCAL_DIR"/scripts/systemd/velora-web.service.d/*.conf $REMOTE:$REMOTE_DIR/scripts/systemd/velora-web.service.d/ 2>/dev/null || true
 ssh $REMOTE "chmod +x $REMOTE_DIR/scripts/*.sh 2>/dev/null || true"
+
+# 4b. Idempotenter Doctor: HOME-Override für Claude-CLI sicherstellen.
+#    Bei Services als User=root sucht die CLI sonst Credentials in /root/.claude → "Not logged in".
+#    Schlägt soft fehl, wenn sudo nicht passwortlos verfügbar — User bekommt dann manuell Hinweis.
+echo "Ensuring systemd HOME-Override drop-ins..."
+ssh -t $REMOTE "sudo bash -c '
+    set -e
+    CHANGED=
+    for svc in velora-bot velora-web; do
+        src=\"$REMOTE_DIR/scripts/systemd/\${svc}.service.d/override.conf\"
+        dst=\"/etc/systemd/system/\${svc}.service.d/override.conf\"
+        if [ -f \"\$src\" ]; then
+            mkdir -p \"/etc/systemd/system/\${svc}.service.d\"
+            if ! cmp -s \"\$src\" \"\$dst\" 2>/dev/null; then
+                cp \"\$src\" \"\$dst\"
+                echo \"  override.conf installiert/aktualisiert für \$svc\"
+                CHANGED=1
+            fi
+        fi
+    done
+    if [ -n \"\$CHANGED\" ]; then
+        systemctl daemon-reload
+        echo \"  systemd daemon-reload ausgeführt — Services manuell neustarten falls nötig\"
+    else
+        echo \"  HOME-Overrides up-to-date\"
+    fi
+'" 2>&1 || echo "  (Override-Sync übersprungen — sudo nicht verfügbar; manuell: bash scripts/setup_rockpi.sh)"
 
 # 5. Live-State-Files NUR mit --with-config kopieren.
 #    Ohne Flag werden diese Files NICHT angefasst — sonst überschreibt der Deploy
