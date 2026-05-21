@@ -105,25 +105,12 @@
           curve: phone ? 'straight' : 'smooth',
           width: 2,
         },
-        // Mehrstufige Responsive-Konfiguration. Wirkt zusätzlich zu den isPhone()-
-        // Defaults oben, falls Chart auf eigene Breakpoints zugeschnitten ist.
-        responsive: [
-          {
-            breakpoint: 1024,
-            options: {
-              legend: { fontSize: '11px' },
-            },
-          },
-          {
-            breakpoint: 768,
-            options: {
-              chart: { height: 240 },
-              stroke: { curve: 'straight' },
-              legend: { fontSize: '10px', position: 'bottom', markers: { width: 8, height: 8 } },
-              plotOptions: { pie: { donut: { size: '60%' }, expandOnClick: false } },
-            },
-          },
-        ],
+        // Hinweis: KEIN responsive-Array. ApexCharts merged die responsive-
+        // Options beim Init in den globalen Config, und Safari crasht dann
+        // tief in dCtx.gridPad.{top,left} weil das Merge die padding-Defaults
+        // verschluckt (Chrome ignoriert es bei Donut/Pie still). Wir machen
+        // Viewport-Branching ohnehin schon via isPhone()/isTablet() oben, das
+        // responsive-Array war redundant.
       };
     },
     // Donut-/Pie-Defaults:
