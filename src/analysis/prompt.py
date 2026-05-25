@@ -142,13 +142,14 @@ Am Ende: Gib eine JSON-Zusammenfassung aus, eingepackt in ```json ... ```, mit:
 - "summary": kurze Zusammenfassung des Briefings (1-2 Sätze)
 - "market_regime": aktuelle Marktlage in einem Satz
 - "recommendations": MAXIMAL 3 Einträge. Lieber leere Liste als halbgare Vorschläge. Jeder Eintrag MUSS dieser Pflicht-Checkliste folgen — sonst wird er beim Speichern verworfen:
-  Format: {{"ticker": "...", "action": "buy/sell/watch", "entry_price": ..., "target_price": ..., "stop_loss": ..., "shares": ..., "sell_pct": ..., "reasoning": "..."}}
-  PFLICHT:
-    * action ∈ {{"buy", "sell", "watch"}} — KEIN "hold"! "Halten" gehört in den Fließtext (PORTFOLIO-CHECK).
-    * reasoning ≥ 20 Zeichen, konkrete Begründung (Katalysator / Bewertung / Risiko/Reward).
-    * "watch" NUR mit gesetztem entry_price (= konkrete Limit-Order-Idee). Ohne entry_price weglassen — ein vager "schau dir mal X an"-Eintrag wird gedroppt.
-    * "buy"/"sell" MÜSSEN shares ODER sell_pct gesetzt haben (sell_pct = % der Position, z.B. 50). Ohne Order-Größe wird der Eintrag gedroppt.
-  Wiederhole KEINE Empfehlung, die schon offen aus einem vorherigen Briefing existiert (siehe Memory-Sektion) — es sei denn, sich hat etwas Wesentliches geändert.
+  Format: {{"ticker": "...", "action": "buy/sell/watch/hold", "entry_price": ..., "target_price": ..., "stop_loss": ..., "shares": ..., "sell_pct": ..., "reasoning": "..."}}
+  WICHTIG zu Preisen: entry_price/stop_loss/target_price IMMER in der Quote-Währung des Tickers angeben — also USD für US-Ticker (AAPL, META, TSLA, NVDA...) und EUR für europäische Ticker (ASML.AS, ALV.DE, MC.PA...). KEINE Umrechnung. Die UI rendert das Symbol ($/€) automatisch anhand des Tickers.
+  ERLAUBTE AKTIONEN (alle anderen werden verworfen):
+    * "buy"   → Aktien kaufen. MUSS shares ODER sell_pct UND reasoning ≥ 20 Zeichen haben. entry_price optional (mit = Limit-Order, ohne = Markt).
+    * "sell"  → Aktien verkaufen. MUSS shares ODER sell_pct (z.B. 50 für 50%) haben.
+    * "watch" → Limit-Kauf-Order vorbereiten. NUR mit konkretem entry_price! "Mal beobachten" ohne Level wird gedroppt — gehört in den Fließtext.
+    * "hold"  → NUR mit konkretem stop_loss-Wert! Das ist die "Stop nachziehen / setzen"-Aktion (User muss zum Broker und Stop-Order anpassen). "Einfach behalten ohne Stop-Änderung" gehört in den Fließtext (PORTFOLIO-CHECK), NICHT in diese Liste.
+  Wiederhole KEINE Empfehlung, die schon offen aus einem vorherigen Briefing existiert (siehe Memory-Sektion) — es sei denn, sich hat etwas Wesentliches geändert (z.B. Stop-Anpassung von altem auf neuen Level).
 - "new_insights": Liste von neuen Key Insights die gemerkt werden sollen
 - "position_theses_updates": {{"TICKER": "aktualisierte These"}} nur wenn sich etwas geändert hat
 

@@ -20,15 +20,19 @@
 
 {#
   Filter-Regel: nur anzeigen was eine konkrete Aktion erfordert.
-   - hold → komplett raus (nichts zu tun)
-   - watch ohne entry_price/stop/target → raus (nur Notiz, keine Order)
-   - buy/sell oder watch mit Order-Level → actionable
+   - hold ohne alles → komplett raus (nichts zu tun)
+   - hold + stop_loss → STOP NACHZIEHEN (User muss zum Broker, Stop ändern)
+   - watch ohne entry_price → raus (nur Notiz, keine Order)
+   - watch + entry_price → LIMIT KAUF
+   - buy/sell → KAUFEN/VERKAUFEN (Markt) oder LIMIT KAUF/VERKAUF (mit entry_price)
 #}
 {% set actionable = [] %}
 {% for rec in open_recs %}
     {% if rec.action in ['buy', 'sell'] %}
         {% set _ = actionable.append(rec) %}
-    {% elif rec.action == 'watch' and (rec.entry_price or rec.stop_loss or rec.target_price) %}
+    {% elif rec.action == 'watch' and rec.entry_price %}
+        {% set _ = actionable.append(rec) %}
+    {% elif rec.action == 'hold' and rec.stop_loss %}
         {% set _ = actionable.append(rec) %}
     {% endif %}
 {% endfor %}
@@ -60,21 +64,29 @@
     <div style="display: grid; gap: 14px;">
         {% for rec in actionable %}
         {#
-          Order-Typ ableiten:
+          Order-Typ ableiten (3 Pfade):
+           - hold + stop_loss → STOP NACHZIEHEN (gelb, kein Kauf/Verkauf)
            - buy/watch + entry_price → LIMIT KAUF
            - sell + entry_price       → LIMIT VERKAUF
-           - buy ohne entry           → MARKT KAUF
-           - sell ohne entry          → MARKT VERKAUF
+           - buy ohne entry           → KAUFEN (Markt)
+           - sell ohne entry          → VERKAUFEN (Markt)
         #}
+        {% set is_stop_adjust = rec.action == 'hold' %}
         {% set is_buy = rec.action in ['buy', 'watch'] %}
         {% set is_limit = rec.entry_price is not none and rec.entry_price %}
-        {% if is_limit %}
+        {% if is_stop_adjust %}
+            {% set order_label = 'STOP NACHZIEHEN' %}
+            {% set accent = 'var(--yellow)' %}
+            {% set accent_bg = 'var(--yellow-bg)' %}
+        {% elif is_limit %}
             {% set order_label = 'LIMIT KAUF' if is_buy else 'LIMIT VERKAUF' %}
+            {% set accent = 'var(--green)' if is_buy else 'var(--red)' %}
+            {% set accent_bg = 'var(--green-bg)' if is_buy else 'var(--red-bg)' %}
         {% else %}
             {% set order_label = 'KAUFEN' if is_buy else 'VERKAUFEN' %}
+            {% set accent = 'var(--green)' if is_buy else 'var(--red)' %}
+            {% set accent_bg = 'var(--green-bg)' if is_buy else 'var(--red-bg)' %}
         {% endif %}
-        {% set accent = 'var(--green)' if is_buy else 'var(--red)' %}
-        {% set accent_bg = 'var(--green-bg)' if is_buy else 'var(--red-bg)' %}
 
         <div id="rec-{{ rec.ticker|replace('.','_') }}"
              style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 12px; padding: 16px; border-left: 4px solid {{ accent }};">
@@ -106,14 +118,24 @@
             </div>
 
             <!-- Order-Levels Grid -->
-            {% if rec.entry_price or rec.stop_loss or rec.target_price %}
+            {% if is_stop_adjust %}
+            {# Stop-Nachziehen: nur die Stop-Box prominent, kein Limit/Ziel-Grid (irreführend). #}
+            <div style="background: var(--bg-secondary); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; border-left: 3px solid var(--yellow);">
+                <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+                    Neuer Stop
+                </div>
+                <div style="font-size: 18px; font-weight: 700; color: var(--yellow);">
+                    {{ rec.stop_loss|price(rec.ticker) }}
+                </div>
+            </div>
+            {% elif rec.entry_price or rec.stop_loss or rec.target_price %}
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
                 <div style="background: var(--bg-secondary); border-radius: 8px; padding: 10px 12px;">
                     <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
                         {{ 'Limit' if is_limit else 'Markt' }}
                     </div>
                     <div style="font-size: 15px; font-weight: 700;">
-                        {% if rec.entry_price %}{{ rec.entry_price|eur }}{% else %}<span class="text-muted">—</span>{% endif %}
+                        {% if rec.entry_price %}{{ rec.entry_price|price(rec.ticker) }}{% else %}<span class="text-muted">—</span>{% endif %}
                     </div>
                 </div>
                 <div style="background: var(--bg-secondary); border-radius: 8px; padding: 10px 12px;">
@@ -121,7 +143,7 @@
                         Stop
                     </div>
                     <div style="font-size: 15px; font-weight: 700; color: {% if rec.stop_loss %}var(--red){% else %}var(--text-muted){% endif %};">
-                        {% if rec.stop_loss %}{{ rec.stop_loss|eur }}{% else %}—{% endif %}
+                        {% if rec.stop_loss %}{{ rec.stop_loss|price(rec.ticker) }}{% else %}—{% endif %}
                     </div>
                 </div>
                 <div style="background: var(--bg-secondary); border-radius: 8px; padding: 10px 12px;">
@@ -129,7 +151,7 @@
                         Ziel
                     </div>
                     <div style="font-size: 15px; font-weight: 700; color: {% if rec.target_price %}var(--green){% else %}var(--text-muted){% endif %};">
-                        {% if rec.target_price %}{{ rec.target_price|eur }}{% else %}—{% endif %}
+                        {% if rec.target_price %}{{ rec.target_price|price(rec.ticker) }}{% else %}—{% endif %}
                     </div>
                 </div>
             </div>

@@ -68,20 +68,27 @@ def save_briefing_summary(summary: str, recommendations: list[dict], market_regi
 def _is_actionable(rec: dict) -> tuple[bool, str]:
     """Prüft ob eine Empfehlung eine echte Aktion ist — sonst Noise.
 
-    Returns (ok, reason_if_dropped). Filter sind absichtlich strikt, damit die
-    Empfehlungs-UI nicht mit halbgaren "schau mal"-Einträgen vollläuft.
+    Returns (ok, reason_if_dropped). Filter sind strikt, aber decken die drei
+    realen Aktions-Muster ab:
+      - buy/sell mit Order-Größe (Markt- oder Limit-Order ausführen)
+      - watch mit entry_price (Limit-Order anlegen)
+      - hold mit stop_loss (Stop nachziehen / setzen — User muss zum Broker)
     """
     action = rec.get("action")
-    ticker = rec.get("ticker", "?")
 
-    if action == "hold":
-        return False, "action=hold (Position behalten ist keine Aktion)"
-    if action not in ("buy", "sell", "watch"):
-        return False, f"action='{action}' ist kein gültiger Wert (buy/sell/watch)"
+    if action not in ("buy", "sell", "watch", "hold"):
+        return False, f"action='{action}' ist kein gültiger Wert (buy/sell/watch/hold)"
 
     reasoning = (rec.get("reasoning") or "").strip()
     if len(reasoning) < 20:
         return False, f"reasoning fehlt oder zu kurz ({len(reasoning)} Zeichen)"
+
+    if action == "hold":
+        # "Halten ohne alles" = reines Noise. Aber "halten + Stop setzen/nachziehen"
+        # ist eine konkrete Order-Aktion am Broker und bleibt sichtbar.
+        if not rec.get("stop_loss"):
+            return False, "action=hold ohne stop_loss (= reines 'nichts tun', keine Order-Aktion)"
+        return True, ""
 
     if action == "watch" and not rec.get("entry_price"):
         return False, "watch ohne entry_price (= keine konkrete Limit-Order, nur Notiz)"

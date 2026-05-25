@@ -54,6 +54,33 @@ def format_eur(value):
     return f"{value:,.2f}€".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _ticker_currency(ticker: str) -> str:
+    """Leitet Quote-Währung aus dem Ticker-Suffix ab.
+
+    EUR: ".AS" (AEX), ".DE" (Xetra), ".PA" (Paris), ".VI" (Wien), ".MI" (Mailand), AT0xxx
+    USD: alles ohne Suffix (NYSE/Nasdaq), z.B. AAPL, META, TSLA.
+    Heuristik konsistent mit chat/actions.py:121.
+    """
+    if not ticker:
+        return "USD"
+    if ticker.startswith("AT0") or "." in ticker:
+        return "EUR"
+    return "USD"
+
+
+def format_price(value, ticker=None):
+    """Jinja2 Filter: Preis ticker-aware formatieren (EUR für DE/AS/PA-Ticker, USD sonst).
+
+    Verwendung im Template: {{ rec.entry_price|price(rec.ticker) }}
+    Vermeidet den kritischen Fehler, USD-Preise (META=$610) als EUR (610€) zu rendern.
+    """
+    if value is None:
+        return "–"
+    curr = _ticker_currency(ticker)
+    formatted = f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{formatted}€" if curr == "EUR" else f"${formatted}"
+
+
 def format_pct(value):
     """Jinja2 Filter: Zahl als Prozent formatieren."""
     if value is None or not isinstance(value, (int, float)):
@@ -94,6 +121,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates.env.filters["eur"] = format_eur
 templates.env.filters["pct"] = format_pct
 templates.env.filters["number"] = format_number
+templates.env.filters["price"] = format_price
 
 # Chat-Router
 from src.chat.routes import router as chat_router
