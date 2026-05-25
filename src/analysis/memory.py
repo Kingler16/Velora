@@ -66,10 +66,15 @@ def save_briefing_summary(summary: str, recommendations: list[dict], market_regi
 
 
 def save_recommendations(recommendations: list[dict]):
-    """Speichert neue Empfehlungen. Ersetzt offene Duplikate für denselben Ticker."""
+    """Speichert neue Empfehlungen. Ersetzt offene Duplikate für denselben Ticker.
+
+    'hold' wird verworfen — "Position behalten" ist keine Aktion, gehört in den Briefing-Fließtext, nicht in die Recommendations-Liste.
+    """
     existing = _load_json("recommendations.json", [])
 
     for rec in recommendations:
+        if rec.get("action") == "hold":
+            continue
         rec["date"] = datetime.now().isoformat()
         rec["status"] = "open"
         rec["outcome"] = None

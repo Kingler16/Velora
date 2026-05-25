@@ -72,13 +72,14 @@ def get_briefings() -> list:
 
 
 def get_recommendations() -> list:
-    """Lädt Empfehlungen."""
+    """Lädt Empfehlungen. Filtert 'hold' raus — die Empfehlungs-UI zeigt nur Aktionen, die der User tatsächlich ausführen muss (Kauf/Verkauf/Limit-Order)."""
     path = MEMORY_DIR / "recommendations.json"
     if not path.exists():
         return []
     try:
         with open(path) as f:
-            return json.load(f)
+            recs = json.load(f)
+        return [r for r in recs if r.get("action") != "hold"]
     except Exception:
         return []
 
