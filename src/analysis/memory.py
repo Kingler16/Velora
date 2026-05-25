@@ -65,16 +65,53 @@ def save_briefing_summary(summary: str, recommendations: list[dict], market_regi
     _save_json("briefings.json", briefings)
 
 
+def _is_actionable(rec: dict) -> tuple[bool, str]:
+    """Prüft ob eine Empfehlung eine echte Aktion ist — sonst Noise.
+
+    Returns (ok, reason_if_dropped). Filter sind absichtlich strikt, damit die
+    Empfehlungs-UI nicht mit halbgaren "schau mal"-Einträgen vollläuft.
+    """
+    action = rec.get("action")
+    ticker = rec.get("ticker", "?")
+
+    if action == "hold":
+        return False, "action=hold (Position behalten ist keine Aktion)"
+    if action not in ("buy", "sell", "watch"):
+        return False, f"action='{action}' ist kein gültiger Wert (buy/sell/watch)"
+
+    reasoning = (rec.get("reasoning") or "").strip()
+    if len(reasoning) < 20:
+        return False, f"reasoning fehlt oder zu kurz ({len(reasoning)} Zeichen)"
+
+    if action == "watch" and not rec.get("entry_price"):
+        return False, "watch ohne entry_price (= keine konkrete Limit-Order, nur Notiz)"
+
+    if action in ("buy", "sell"):
+        has_size = rec.get("shares") or rec.get("sell_pct")
+        if not has_size:
+            return False, "buy/sell ohne shares UND ohne sell_pct (= unklare Order-Größe)"
+
+    return True, ""
+
+
 def save_recommendations(recommendations: list[dict]):
     """Speichert neue Empfehlungen. Ersetzt offene Duplikate für denselben Ticker.
 
-    'hold' wird verworfen — "Position behalten" ist keine Aktion, gehört in den Briefing-Fließtext, nicht in die Recommendations-Liste.
+    Verwirft alles was nicht actionable ist (hold, watch ohne Order, leeres Reasoning,
+    fehlende Stückzahl). Was gedroppt wurde, steht im Log — damit transparent ist
+    warum eine vermeintliche Empfehlung nicht in der UI auftaucht.
     """
     existing = _load_json("recommendations.json", [])
+    accepted = 0
+    dropped = 0
 
     for rec in recommendations:
-        if rec.get("action") == "hold":
+        ok, reason = _is_actionable(rec)
+        if not ok:
+            logger.info("Recommendation dropped (%s): %s", rec.get("ticker", "?"), reason)
+            dropped += 1
             continue
+
         rec["date"] = datetime.now().isoformat()
         rec["status"] = "open"
         rec["outcome"] = None
@@ -88,21 +125,48 @@ def save_recommendations(recommendations: list[dict]):
                 break
         if not replaced:
             existing.append(rec)
+        accepted += 1
 
+    logger.info("save_recommendations: %d accepted, %d dropped", accepted, dropped)
     # Nur die letzten 50 behalten
     existing = existing[-50:]
     _save_json("recommendations.json", existing)
 
 
+WATCH_EXPIRE_DAYS = 30
+
+
 def update_recommendation_outcomes(market_data: dict):
-    """Aktualisiert Outcomes offener Empfehlungen basierend auf aktuellen Kursen."""
+    """Aktualisiert Outcomes offener Empfehlungen basierend auf aktuellen Kursen.
+
+    Zusätzlich: offene watch-Empfehlungen, deren entry_price nach 30 Tagen nicht erreicht
+    wurde, werden auf 'cancelled' gesetzt — sonst sammeln sich tote Limit-Order-Vorschläge
+    in der UI an. Buy/Sell laufen nicht ab (klare Marktorder mit Stop/Target tracking).
+    """
     recs = _load_json("recommendations.json", [])
     updated = False
+    now = datetime.now()
 
     for rec in recs:
         if rec.get("status") != "open":
             continue
         ticker = rec.get("ticker")
+
+        # Auto-Expire alter watch-Empfehlungen (unabhängig von market_data)
+        if rec.get("action") == "watch":
+            date_str = rec.get("date", "")
+            try:
+                rec_date = datetime.fromisoformat(date_str)
+                age_days = (now - rec_date).days
+                if age_days >= WATCH_EXPIRE_DAYS:
+                    rec["status"] = "cancelled"
+                    rec["outcome"] = f"Auto-abgelaufen nach {age_days} Tagen — Limit nie erreicht"
+                    logger.info("Watch-Empfehlung %s nach %d Tagen auto-cancelled", ticker, age_days)
+                    updated = True
+                    continue
+            except (ValueError, TypeError):
+                pass
+
         if not ticker or ticker not in market_data.get("positions", {}):
             continue
 

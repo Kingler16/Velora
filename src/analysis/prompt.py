@@ -133,7 +133,7 @@ Erstelle das Briefing. Struktur:
 1. MARKTLAGE (2-3 Sätze, was hat sich VERÄNDERT seit dem letzten Briefing? Nutze die Makro-Daten: Yield Curve, Credit Spreads, Inflation, Zinsen. Nutze Benchmark-Vergleich.)
 2. PORTFOLIO-CHECK (nur Positionen erwähnen wo sich etwas RELEVANTES getan hat. Fonds-Positionen einordnen falls vorhanden. EUR/USD Auswirkung auf USD-Positionen berechnen. KRITISCH: Verwende für die Performance jeder Position IMMER die "P/L: ...€ (...%)" Werte aus dem PORTFOLIO-Abschnitt oben — diese basieren auf dem persönlichen Buy-In. Die "Kursperf. 1M/6M/1Y" Werte aus den MARKTDATEN zeigen die allgemeine Aktienperformance und sind NICHT identisch mit der Position-Performance!)
 3. EARNINGS & EVENTS (welche Positionen reporten bald? Was ist zu erwarten? Kommende Katalysatoren.)
-4. EMPFEHLUNGEN (nur wenn begründet! "Nichts tun" ist ok — das beschreibst du im Fließtext, aber gibst KEINEN JSON-Eintrag dafür aus. Wenn Aktion, dann konkret: Einstieg, Stop-Loss, Ziel, Risk/Reward, UND Stückzahl. Bei Kauf: Anzahl Stück. Bei Verkauf: Prozent der Position ODER Anzahl Stück. Berücksichtige Tax-Loss-Harvesting wenn sinnvoll.)
+4. EMPFEHLUNGEN — STRENG: max. 3 Einträge pro Briefing, nur High-Conviction. Wenn nichts überzeugt: 0 Empfehlungen ist die richtige Antwort. "Halten" / "Beobachten ohne Order" gehört in den Fließtext, NICHT in die JSON-Liste. Jede Empfehlung MUSS konkret sein: Einstieg, Stop-Loss, Ziel, Risk/Reward UND Stückzahl. Bei Kauf: Anzahl Stück. Bei Verkauf: Prozent der Position ODER Anzahl Stück. Berücksichtige Tax-Loss-Harvesting wenn sinnvoll.
 5. NEUE IDEEN (nur wenn wirklich überzeugend. Eigene Analyse, keine Morningstar-Listen.)
 6. RISIKEN AUF DEM RADAR (was könnte schiefgehen?)
 7. EMPFEHLUNGS-BILANZ (wenn es offene Empfehlungen gibt: wie haben sie sich entwickelt?)
@@ -141,7 +141,14 @@ Erstelle das Briefing. Struktur:
 Am Ende: Gib eine JSON-Zusammenfassung aus, eingepackt in ```json ... ```, mit:
 - "summary": kurze Zusammenfassung des Briefings (1-2 Sätze)
 - "market_regime": aktuelle Marktlage in einem Satz
-- "recommendations": Liste von {{"ticker": "...", "action": "buy/sell/watch", "entry_price": ..., "target_price": ..., "stop_loss": ..., "shares": ..., "sell_pct": ..., "reasoning": "..."}} — WICHTIG: NUR konkrete Aktionen aufnehmen, KEIN "hold"! Wenn eine Position einfach gehalten werden soll, gehört das in den Fließtext (Abschnitt PORTFOLIO-CHECK), NICHT in diese Liste. action darf nur "buy", "sell" oder "watch" sein. "watch" nur verwenden, wenn ein konkretes entry_price (Limit-Order) gesetzt ist — sonst weglassen. shares = Stückzahl bei Kauf/Verkauf, sell_pct = Prozent der Position bei Verkauf (z.B. 50 für 50%). Eines von beiden MUSS bei buy/sell gesetzt sein.
+- "recommendations": MAXIMAL 3 Einträge. Lieber leere Liste als halbgare Vorschläge. Jeder Eintrag MUSS dieser Pflicht-Checkliste folgen — sonst wird er beim Speichern verworfen:
+  Format: {{"ticker": "...", "action": "buy/sell/watch", "entry_price": ..., "target_price": ..., "stop_loss": ..., "shares": ..., "sell_pct": ..., "reasoning": "..."}}
+  PFLICHT:
+    * action ∈ {{"buy", "sell", "watch"}} — KEIN "hold"! "Halten" gehört in den Fließtext (PORTFOLIO-CHECK).
+    * reasoning ≥ 20 Zeichen, konkrete Begründung (Katalysator / Bewertung / Risiko/Reward).
+    * "watch" NUR mit gesetztem entry_price (= konkrete Limit-Order-Idee). Ohne entry_price weglassen — ein vager "schau dir mal X an"-Eintrag wird gedroppt.
+    * "buy"/"sell" MÜSSEN shares ODER sell_pct gesetzt haben (sell_pct = % der Position, z.B. 50). Ohne Order-Größe wird der Eintrag gedroppt.
+  Wiederhole KEINE Empfehlung, die schon offen aus einem vorherigen Briefing existiert (siehe Memory-Sektion) — es sei denn, sich hat etwas Wesentliches geändert.
 - "new_insights": Liste von neuen Key Insights die gemerkt werden sollen
 - "position_theses_updates": {{"TICKER": "aktualisierte These"}} nur wenn sich etwas geändert hat
 
