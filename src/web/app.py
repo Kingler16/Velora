@@ -68,8 +68,13 @@ def _ticker_currency(ticker: str) -> str:
     return "USD"
 
 
+def _de_num(value: float) -> str:
+    """Zahl im deutschen Format: 1.234,56."""
+    return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 def format_price(value, ticker=None):
-    """Jinja2 Filter: Preis ticker-aware formatieren (EUR für DE/AS/PA-Ticker, USD sonst).
+    """Jinja2 Filter: Preis in Quote-Währung des Tickers (EUR für DE/AS/PA-Ticker, USD sonst).
 
     Verwendung im Template: {{ rec.entry_price|price(rec.ticker) }}
     Vermeidet den kritischen Fehler, USD-Preise (META=$610) als EUR (610€) zu rendern.
@@ -77,8 +82,22 @@ def format_price(value, ticker=None):
     if value is None:
         return "–"
     curr = _ticker_currency(ticker)
-    formatted = f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"{formatted}€" if curr == "EUR" else f"${formatted}"
+    return f"{_de_num(value)}€" if curr == "EUR" else f"${_de_num(value)}"
+
+
+def format_price_alt(value, ticker=None, eur_usd: float = None):
+    """Jinja2 Filter: Preis in der jeweils ANDEREN Währung umgerechnet.
+
+    Für USD-Ticker → EUR-Wert (value / eur_usd). Für EUR-Ticker → USD-Wert (value * eur_usd).
+    Verwendung: {{ rec.entry_price|price_alt(rec.ticker, eur_usd) }}
+    Gibt "" zurück wenn eur_usd fehlt — Template kann dann den Sekundär-Block überspringen.
+    """
+    if value is None or not eur_usd:
+        return ""
+    curr = _ticker_currency(ticker)
+    if curr == "EUR":
+        return f"${_de_num(value * eur_usd)}"
+    return f"{_de_num(value / eur_usd)}€"
 
 
 def format_pct(value):
@@ -122,6 +141,7 @@ templates.env.filters["eur"] = format_eur
 templates.env.filters["pct"] = format_pct
 templates.env.filters["number"] = format_number
 templates.env.filters["price"] = format_price
+templates.env.filters["price_alt"] = format_price_alt
 
 # Chat-Router
 from src.chat.routes import router as chat_router
@@ -269,8 +289,10 @@ async def briefings_page(request: Request):
 
 @app.get("/recommendations", response_class=HTMLResponse)
 async def recommendations_page(request: Request):
+    md = get_market_data()
+    eur_usd = (md.get("indices", {}).get("EUR/USD", {}).get("value") or 1.0) if md else 1.0
     return templates.TemplateResponse(request, "recommendations.html", _ctx(request, "recommendations",
-        recommendations=get_recommendations(), notes=get_notes(),
+        recommendations=get_recommendations(), notes=get_notes(), eur_usd=eur_usd,
     ))
 
 
