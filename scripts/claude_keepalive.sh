@@ -31,7 +31,7 @@ fi
 OUTPUT=$("$CLAUDE_BIN" --print \
     --tools "" \
     --no-session-persistence \
-    --model claude-opus-4-6 \
+    --model claude-opus-4-8 \
     --effort low \
     "ok" 2>&1)
 EXIT=$?

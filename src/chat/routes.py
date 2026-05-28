@@ -216,7 +216,7 @@ async def send_message(thread_id: str, body: MessageSend, request: Request):
         new_session_id = str(uuid.uuid4()) if not resume_id else None
 
         effort = body.effort or "high"
-        model = body.model or "claude-opus-4-6"
+        model = body.model or "claude-opus-4-8"
 
         assistant_text_parts: list[str] = []
         tool_use_log: list[dict] = []
