@@ -57,10 +57,13 @@ def _resolve_claude_bin() -> str:
     return claude_bin
 
 
-def ask_claude(system_prompt: str, user_prompt: str, timeout: int = 1200) -> dict:
+def ask_claude(system_prompt: str, user_prompt: str, timeout: int = 1200, web_tools: bool = False) -> dict:
     """
     Ruft Claude Code CLI auf und gibt Analyse + strukturierte Daten zurück.
     Prompt wird via stdin übergeben.
+
+    web_tools=True: erlaubt NUR die read-only Web-Tools (WebSearch, WebFetch), damit Claude
+    selbst recherchieren + Factsheets (auch PDF) öffnen kann. Keine Edit-/Bash-/Write-Tools.
 
     Raises:
         ClaudeCLIError: Bei exit≠0, leerer Antwort, Timeout, Binary fehlt oder Auth-Fehler.
@@ -71,11 +74,15 @@ def ask_claude(system_prompt: str, user_prompt: str, timeout: int = 1200) -> dic
         claude_bin,
         "--print",
         "--system-prompt", system_prompt,
-        "--tools", "",
         "--no-session-persistence",
         "--model", "claude-opus-4-8",
         "--effort", "high",
     ]
+    if web_tools:
+        # Read-only Web-Recherche — Claude darf selbst suchen + Factsheets/PDFs öffnen.
+        cmd += ["--allowedTools", "WebSearch,WebFetch", "--permission-mode", "acceptEdits"]
+    else:
+        cmd += ["--tools", ""]
 
     # File-Lock serialisiert parallele Aufrufe aus diesem Projekt (bot + web + briefing).
     # Verhindert Race Conditions beim Token-Refresh, die die .credentials.json korrumpieren.

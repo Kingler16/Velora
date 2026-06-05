@@ -94,23 +94,6 @@ def _is_stale(entry: dict) -> bool:
         return True
 
 
-# ─── Web-Fetch (best-effort) ─────────────────────────────────
-
-def _fetch_url_text(url: str, max_chars: int = 5000) -> str:
-    """Holt eine HTML-Seite und strippt sie zu Plaintext (best-effort, kurzer Timeout)."""
-    try:
-        import requests
-        r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0 (Velora research)"})
-        if r.status_code != 200 or "html" not in r.headers.get("content-type", ""):
-            return ""
-        text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", r.text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r"<[^>]+>", " ", text)
-        text = re.sub(r"\s+", " ", text).strip()
-        return text[:max_chars]
-    except Exception:
-        return ""
-
-
 # ─── Research ────────────────────────────────────────────────
 
 _RESEARCH_SYSTEM = (
@@ -138,36 +121,27 @@ Bei einer reinen Einzelaktie: instrument_type="stock", asset_class="equity", top
 Regionen-Summe = 100. Bei einem Laufzeitfonds/Rentenfonds: asset_class="bond", fülle das "bond"-Objekt."""
 
 
-def research_holding(name: str, isin: str, ticker: str, brave_key: str = "") -> dict | None:
-    """Recherchiert eine einzelne Position (web-augmentiert) → strukturiertes Dict.
-    Gibt None bei hartem Fehler (Caller behält dann den alten Eintrag)."""
+def research_holding(name: str, isin: str, ticker: str, *_legacy) -> dict | None:
+    """Recherchiert eine Position AGENTISCH: Claude sucht selbst das aktuelle Factsheet
+    (auch als PDF) und extrahiert die ECHTEN Holdings/Gewichte daraus — kein Raten aus
+    Such-Snippets. Gibt None bei hartem Fehler (Caller behält dann den alten Eintrag)."""
     from src.analysis.claude import ask_claude, extract_json_block, ClaudeCLIError
-    from src.data.news import search_brave
-
-    # 1. Websuche nach Factsheet/Holdings
-    web_context = ""
-    if brave_key:
-        query = f"{name} {isin} Fonds ETF Zusammensetzung holdings factsheet"
-        results = search_brave(query, brave_key, count=6, freshness="py")
-        if results:
-            snippets = [f"- {r['title']}: {r['description']} [{r.get('url','')}]" for r in results]
-            web_context = "SUCHERGEBNISSE:\n" + "\n".join(snippets)
-            # Top-1-HTML-Seite best-effort nachladen für mehr Detail
-            for r in results[:2]:
-                page = _fetch_url_text(r.get("url", ""))
-                if page:
-                    web_context += f"\n\nSEITENINHALT ({r.get('url')}):\n{page}"
-                    break
 
     prompt = (
-        f"Recherchiere die Zusammensetzung dieser Portfolio-Position:\n"
+        f"Recherchiere die genaue Zusammensetzung dieser Portfolio-Position:\n"
         f"Name: {name}\nISIN: {isin}\nTicker: {ticker}\n\n"
-        f"{web_context or '(Keine Websuche verfügbar — nutze dein Wissen, confidence niedriger.)'}\n\n"
-        f"{_RESEARCH_SCHEMA_HINT}"
+        f"Suche im Web nach dem OFFIZIELLEN, aktuellsten Factsheet (Fondsgesellschaft wie "
+        f"Erste AM / iShares / Vanguard, sonst justETF, fondsweb, extraETF). ÖFFNE es — auch wenn "
+        f"es ein PDF ist (WebFetch kann PDFs lesen) — und nutze die ECHTEN Holdings und Gewichte "
+        f"daraus, nicht geschätzte. Wenn du die echten Factsheet-Zahlen hast: confidence='high' und "
+        f"source = konkrete Quelle inkl. Stichtag/Stand. Findest du nur ungefähre Daten: "
+        f"confidence='medium'/'low' und sag in source ehrlich, dass es eine Schätzung ist.\n\n"
+        f"{_RESEARCH_SCHEMA_HINT}\n\n"
+        f"WICHTIG: Nach deiner Recherche gib am ENDE NUR den ```json ... ``` Block aus, sonst nichts."
     )
 
     try:
-        result = ask_claude(_RESEARCH_SYSTEM, prompt, timeout=300)
+        result = ask_claude(_RESEARCH_SYSTEM, prompt, timeout=420, web_tools=True)
     except ClaudeCLIError as e:
         logger.error("Research für %s (%s) fehlgeschlagen: %s", name, isin, e)
         return None
@@ -189,8 +163,6 @@ def research_portfolio_holdings(portfolio: dict, settings: dict, force: bool = F
     """Recherchiert alle Fonds/ETF/Bond-Positionen, die noch keine (frische) Research haben.
     Gibt die aktualisierte Research-Tabelle zurück. Läuft seriell (Claude-Lock)."""
     research = load_holdings_research()
-    brave_key = (settings.get("brave_search", {}) or {}).get("api_key", "")
-
     candidates = []
     seen = set()
     for acc in portfolio.get("accounts", {}).values():
@@ -213,7 +185,7 @@ def research_portfolio_holdings(portfolio: dict, settings: dict, force: bool = F
     logger.info("Holdings-Research: %d Kandidaten", len(candidates))
     for key, name, isin, ticker in candidates:
         logger.info("Recherchiere %s (%s)...", name, isin)
-        data = research_holding(name, isin, ticker, brave_key)
+        data = research_holding(name, isin, ticker)
         if data:
             research[key] = data
             save_holdings_research(research)  # inkrementell speichern (Fortschritt sichern)
