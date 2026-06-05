@@ -115,6 +115,7 @@ def _build_price_dict(ticker: str, info: dict, hist_1y) -> dict | None:
     return {
         "ticker": ticker,
         "current_price": current_price,
+        "currency": info.get("currency"),
         "previous_close": prev_close,
         "change_pct": round((current_price / prev_close - 1) * 100, 2) if current_price and prev_close else None,
         "52w_high": week_52_high,

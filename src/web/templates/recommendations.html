@@ -125,9 +125,9 @@
                     Neuer Stop
                 </div>
                 <div style="font-size: 18px; font-weight: 700; color: var(--yellow);">
-                    {{ rec.stop_loss|price(rec.ticker) }}
+                    {{ rec.stop_loss|price(rec.ticker, rec._ccy) }}
                 </div>
-                {% set alt = rec.stop_loss|price_alt(rec.ticker, eur_usd) %}
+                {% set alt = rec.stop_loss|price_alt(rec.ticker, eur_usd, rec._ccy) %}
                 {% if alt %}<div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">≈ {{ alt }}</div>{% endif %}
             </div>
             {% elif rec.entry_price or rec.stop_loss or rec.target_price %}
@@ -137,9 +137,9 @@
                         {{ 'Limit' if is_limit else 'Markt' }}
                     </div>
                     <div style="font-size: 15px; font-weight: 700;">
-                        {% if rec.entry_price %}{{ rec.entry_price|price(rec.ticker) }}{% else %}<span class="text-muted">—</span>{% endif %}
+                        {% if rec.entry_price %}{{ rec.entry_price|price(rec.ticker, rec._ccy) }}{% else %}<span class="text-muted">—</span>{% endif %}
                     </div>
-                    {% if rec.entry_price %}{% set alt = rec.entry_price|price_alt(rec.ticker, eur_usd) %}
+                    {% if rec.entry_price %}{% set alt = rec.entry_price|price_alt(rec.ticker, eur_usd, rec._ccy) %}
                     {% if alt %}<div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">≈ {{ alt }}</div>{% endif %}{% endif %}
                 </div>
                 <div style="background: var(--bg-secondary); border-radius: 8px; padding: 10px 12px;">
@@ -147,9 +147,9 @@
                         Stop
                     </div>
                     <div style="font-size: 15px; font-weight: 700; color: {% if rec.stop_loss %}var(--red){% else %}var(--text-muted){% endif %};">
-                        {% if rec.stop_loss %}{{ rec.stop_loss|price(rec.ticker) }}{% else %}—{% endif %}
+                        {% if rec.stop_loss %}{{ rec.stop_loss|price(rec.ticker, rec._ccy) }}{% else %}—{% endif %}
                     </div>
-                    {% if rec.stop_loss %}{% set alt = rec.stop_loss|price_alt(rec.ticker, eur_usd) %}
+                    {% if rec.stop_loss %}{% set alt = rec.stop_loss|price_alt(rec.ticker, eur_usd, rec._ccy) %}
                     {% if alt %}<div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">≈ {{ alt }}</div>{% endif %}{% endif %}
                 </div>
                 <div style="background: var(--bg-secondary); border-radius: 8px; padding: 10px 12px;">
@@ -157,9 +157,9 @@
                         Ziel
                     </div>
                     <div style="font-size: 15px; font-weight: 700; color: {% if rec.target_price %}var(--green){% else %}var(--text-muted){% endif %};">
-                        {% if rec.target_price %}{{ rec.target_price|price(rec.ticker) }}{% else %}—{% endif %}
+                        {% if rec.target_price %}{{ rec.target_price|price(rec.ticker, rec._ccy) }}{% else %}—{% endif %}
                     </div>
-                    {% if rec.target_price %}{% set alt = rec.target_price|price_alt(rec.ticker, eur_usd) %}
+                    {% if rec.target_price %}{% set alt = rec.target_price|price_alt(rec.ticker, eur_usd, rec._ccy) %}
                     {% if alt %}<div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">≈ {{ alt }}</div>{% endif %}{% endif %}
                 </div>
             </div>

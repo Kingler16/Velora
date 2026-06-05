@@ -98,7 +98,11 @@ def _execute_log_trade(params: dict) -> dict:
     if not updated:
         # Fall: neue Position bei Kauf → manuell hinzufügen
         if action == "buy":
-            updated = _add_new_position(ticker, shares, price, params.get("account"))
+            ok, err = _add_new_position(ticker, shares, price, params.get("account"))
+            if not ok and err:
+                # Klarer Fehler (z.B. USD-Kauf ohne EUR/USD-Kurs) statt generisch "nicht gefunden"
+                return {"message": err, "error": True}
+            updated = ok
     if updated:
         try:
             close_recommendation_on_trade(ticker, action)
@@ -112,20 +116,53 @@ def _execute_log_trade(params: dict) -> dict:
         return {"message": f"Position {ticker} nicht gefunden (weder vorhanden noch neu angelegt).", "error": True}
 
 
-def _add_new_position(ticker: str, shares: float, price: float, account: str | None) -> bool:
-    """Legt eine komplett neue Position im angegebenen Depot an. Mit File-Lock + atomic write."""
+def _add_new_position(ticker: str, shares: float, price: float, account: str | None) -> tuple[bool, str | None]:
+    """Legt eine komplett neue Position im angegebenen Depot an. Mit File-Lock + atomic write.
+
+    Returns (ok, error_message). buy_in_eur wird zum Kaufzeitpunkt FIXIERT (analog
+    portfolio_io.add_new_position) — kein None mehr für USD-Käufe, das verfälschte
+    später jede EUR-Bewertung. Bei USD-Kauf ohne gültigen EUR/USD-Kurs wird der
+    Vorgang abgelehnt statt einen falschen Buy-In zu persistieren."""
     from datetime import datetime
     from src.delivery.portfolio_io import portfolio_write_lock
     from src.delivery.telegram import update_cash_on_trade
+    from src.data.fx import get_eur_usd
+    from src.web.services.cache_service import get_market_data
 
-    currency = "EUR" if "." in ticker else "USD"
+    market_data = get_market_data()
+
+    # Echte Quote-Währung bevorzugen (positions/watchlist), sonst Heuristik.
+    currency = None
+    for bucket in ("positions", "watchlist"):
+        entry = (market_data.get(bucket) or {}).get(ticker)
+        if entry:
+            currency = (entry.get("price") or {}).get("currency")
+            if currency:
+                break
+    if not currency:
+        currency = "USD" if not any(c in ticker for c in [".", "AT0"]) else "EUR"
+
+    # buy_in_eur zum Kaufzeitpunkt fixieren.
+    if currency == "EUR":
+        buy_in_eur = float(price)
+    else:
+        eur_usd = get_eur_usd(market_data)
+        if eur_usd is None:
+            return False, (
+                f"{currency}-Kauf von {ticker} abgelehnt: EUR/USD-Kurs nicht verfügbar — "
+                "bitte Daten aktualisieren und erneut versuchen."
+            )
+        buy_in_eur = float(price) / eur_usd
+
+    # Cash-Tracking läuft in EUR — bei Nicht-EUR den umgerechneten Wert nutzen.
+    price_eur = float(price) if currency == "EUR" else buy_in_eur
     added = False
 
     with portfolio_write_lock() as portfolio:
         acc_key = account or next(iter(portfolio.get("accounts", {}).keys()), None)
         if not acc_key or acc_key not in portfolio.get("accounts", {}):
             logger.error("Konto %s nicht in portfolio.json", acc_key)
-            return False
+            return False, f"Konto {acc_key} nicht gefunden."
 
         new_pos = {
             "ticker": ticker,
@@ -133,12 +170,12 @@ def _add_new_position(ticker: str, shares: float, price: float, account: str | N
             "isin": "",
             "shares": float(shares),
             "buy_in": float(price),
-            "buy_in_eur": float(price) if currency == "EUR" else None,
+            "buy_in_eur": float(buy_in_eur),
             "currency": currency,
         }
         portfolio["accounts"][acc_key]["positions"].append(new_pos)
         try:
-            update_cash_on_trade(portfolio, acc_key, "buy", shares, price)
+            update_cash_on_trade(portfolio, acc_key, "buy", shares, price_eur)
         except Exception as e:
             logger.warning("Cash-Update fehlgeschlagen: %s", e)
         portfolio["last_updated"] = datetime.now().strftime("%Y-%m-%d")
@@ -150,7 +187,7 @@ def _add_new_position(ticker: str, shares: float, price: float, account: str | N
             update_region_on_trade("buy", ticker)
         except Exception:
             pass
-    return added
+    return added, None
 
 
 def _execute_update_watchlist(params: dict) -> dict:

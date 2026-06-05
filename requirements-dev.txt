@@ -1,0 +1,3 @@
+# Dev-/Test-Abhängigkeiten (nicht für Produktion nötig).
+# Installation:  source venv/bin/activate && pip install -r requirements-dev.txt
+pytest>=8.0

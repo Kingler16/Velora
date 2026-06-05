@@ -174,10 +174,13 @@ def update_recommendation_outcomes(market_data: dict):
             except (ValueError, TypeError):
                 pass
 
-        if not ticker or ticker not in market_data.get("positions", {}):
+        # Lookup auf gehaltene Ticker UND Watchlist — watch/buy-Limit-Empfehlungen
+        # auf neue Ideen sind nicht im Portfolio, müssen aber getrackt werden.
+        pos = market_data.get("positions", {}).get(ticker) or market_data.get("watchlist", {}).get(ticker)
+        if not ticker or not pos:
             continue
 
-        current_price = market_data["positions"][ticker].get("price", {}).get("current_price")
+        current_price = pos.get("price", {}).get("current_price")
         if not current_price:
             continue
 
@@ -185,16 +188,22 @@ def update_recommendation_outcomes(market_data: dict):
         stop_loss = rec.get("stop_loss")
         entry_price = rec.get("entry_price")
 
-        if target and current_price >= target:
+        # Sell-Empfehlungen sind invertiert: Ziel liegt UNTER, Stop ÜBER dem Kurs.
+        is_sell = rec.get("action") == "sell"
+        hit_target = (current_price <= target) if is_sell else (current_price >= target)
+        hit_stop = (current_price >= stop_loss) if is_sell else (current_price <= stop_loss)
+
+        if target and hit_target:
             rec["status"] = "target_hit"
             rec["outcome"] = f"Ziel erreicht bei {current_price}"
             updated = True
-        elif stop_loss and current_price <= stop_loss:
+        elif stop_loss and hit_stop:
             rec["status"] = "stop_hit"
-            rec["outcome"] = f"Stop-Loss ausgelöst bei {current_price}"
+            rec["outcome"] = f"Stop ausgelöst bei {current_price}"
             updated = True
         elif entry_price:
-            rec["unrealized_pct"] = round((current_price / entry_price - 1) * 100, 2)
+            raw = (current_price / entry_price - 1) * 100
+            rec["unrealized_pct"] = round(-raw if is_sell else raw, 2)
 
     if updated:
         _save_json("recommendations.json", recs)

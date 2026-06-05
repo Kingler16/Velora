@@ -7,6 +7,8 @@ import json
 import logging
 from pathlib import Path
 
+from src.data.fx import safe_eur_usd
+
 logger = logging.getLogger(__name__)
 
 CONFIG_DIR = Path(__file__).parent.parent.parent.parent / "config"
@@ -135,11 +137,8 @@ def compute_portfolio_overview(portfolio: dict, market_data: dict) -> dict:
     total_value_eur = 0
     total_invested_eur = 0
 
-    # EUR/USD Kurs
-    indices = market_data.get("indices", {})
-    eur_usd = 1.0
-    if "EUR/USD" in indices:
-        eur_usd = indices["EUR/USD"].get("value", 1.0) or 1.0
+    # EUR/USD Kurs (validiert, mit 1.0-Fallback — reiner Anzeige-Pfad)
+    eur_usd = safe_eur_usd(market_data)
 
     for account_name, account in portfolio.get("accounts", {}).items():
         for pos in account.get("positions", []):

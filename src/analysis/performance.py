@@ -8,6 +8,8 @@ import math
 from datetime import datetime
 from pathlib import Path
 
+from src.data.fx import safe_eur_usd
+
 logger = logging.getLogger(__name__)
 
 MEMORY_DIR = Path(__file__).parent.parent.parent / "memory"
@@ -67,8 +69,7 @@ def compute_tax_loss_data(portfolio: dict, market_data: dict, tax_rate: float = 
     gains = []
     losses = []
 
-    indices = market_data.get("indices", {})
-    eur_usd = indices.get("EUR/USD", {}).get("value", 1.0)
+    eur_usd = safe_eur_usd(market_data)
 
     for account_name, account in portfolio.get("accounts", {}).items():
         for pos in account.get("positions", []):
@@ -187,19 +188,24 @@ def find_tax_loss_harvesting(portfolio: dict, market_data: dict, tax_rate: float
 
 def compute_recommendation_data(market_data: dict) -> dict:
     """Berechnet Empfehlungs-Performance als strukturiertes Dict."""
+    empty = {
+        "open": [], "wins": [], "losses": [], "expired": [],
+        "hit_rate": 0, "total_closed": 0, "open_count": 0, "expired_count": 0,
+    }
     recs_path = MEMORY_DIR / "recommendations.json"
     if not recs_path.exists():
-        return {"open": [], "wins": [], "losses": [], "hit_rate": 0, "total_closed": 0}
+        return dict(empty)
 
     with open(recs_path) as f:
         recs = json.load(f)
 
     if not recs:
-        return {"open": [], "wins": [], "losses": [], "hit_rate": 0, "total_closed": 0}
+        return dict(empty)
 
     open_recs = []
     wins = []
     losses = []
+    expired = []
 
     for rec in recs:
         status = rec.get("status", "open")
@@ -209,17 +215,24 @@ def compute_recommendation_data(market_data: dict) -> dict:
             wins.append(rec)
         elif status == "stop_hit":
             losses.append(rec)
+        elif status == "cancelled":
+            # Auto-abgelaufene watch-Empfehlungen: Limit nie erreicht, nie getriggert.
+            # Weder Win noch Loss — aber sichtbar machen (Survivorship-Bias).
+            expired.append(rec)
 
     total_closed = len(wins) + len(losses)
+    # Verfallene zählen NICHT als Loss — sie wurden nie getriggert.
     hit_rate = (len(wins) / total_closed * 100) if total_closed > 0 else 0
 
     return {
         "open": open_recs,
         "wins": wins,
         "losses": losses,
+        "expired": expired,
         "hit_rate": round(hit_rate, 0),
         "total_closed": total_closed,
         "open_count": len(open_recs),
+        "expired_count": len(expired),
     }
 
 
@@ -227,11 +240,15 @@ def track_recommendation_performance(market_data: dict) -> str:
     """Trackt wie vergangene Empfehlungen performt haben (String-Format für Prompts)."""
     data = compute_recommendation_data(market_data)
 
-    if not data["open"] and not data["wins"] and not data["losses"]:
+    if not data["open"] and not data["wins"] and not data["losses"] and not data["expired"]:
         return "Noch keine Empfehlungen zum Tracken."
 
     lines = ["EMPFEHLUNGS-BILANZ:"]
     lines.append(f"  Abgeschlossen: {data['total_closed']} (Hit-Rate: {data['hit_rate']:.0f}%) | Offen: {data['open_count']}")
+    if data["expired_count"]:
+        # Survivorship-Bias sichtbar machen: verfallene Limits sind weder Win noch Loss,
+        # zählen NICHT in die Hit-Rate — aber der Berater muss sie kennen.
+        lines.append(f"  ⊘ verfallen (Limit nie erreicht): {data['expired_count']}")
 
     for rec in data["open"]:
         ticker = rec.get("ticker", "?")

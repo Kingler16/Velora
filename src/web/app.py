@@ -8,8 +8,10 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import hmac
+
 from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -33,6 +35,7 @@ from src.web.services.cache_service import (
 )
 from src.analysis.performance import compute_benchmark_data, compute_tax_loss_data, compute_recommendation_data
 from src.data.cache import save_cache
+from src.data.fx import get_eur_usd, safe_eur_usd
 
 logger = logging.getLogger(__name__)
 
@@ -54,17 +57,28 @@ def format_eur(value):
     return f"{value:,.2f}€".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def _ticker_currency(ticker: str) -> str:
-    """Leitet Quote-Währung aus dem Ticker-Suffix ab.
+_EUR_SUFFIXES = (".DE", ".AS", ".PA", ".VI", ".MI", ".MC", ".BR", ".LS", ".HE", ".ST", ".OL", ".F", ".DU")
+_EUR_ISIN_PREFIXES = ("AT0", "DE0", "FR0", "NL0", "IE0", "ES0", "IT0", "BE0", "FI0", "PT0", "LU0")
 
-    EUR: ".AS" (AEX), ".DE" (Xetra), ".PA" (Paris), ".VI" (Wien), ".MI" (Mailand), AT0xxx
-    USD: alles ohne Suffix (NYSE/Nasdaq), z.B. AAPL, META, TSLA.
-    Heuristik konsistent mit chat/actions.py:121.
+
+def _ticker_currency(ticker: str) -> str:
+    """Leitet die Quote-Währung aus dem Ticker-Suffix / ISIN-Präfix ab (CODE-Rückgabe).
+
+    Achtung: gepunktete US-Share-Classes (BRK.B, BF.B) sind USD — daher kein
+    pauschales "." → EUR mehr. Wo eine echte currency aus market_data vorliegt,
+    hat diese Vorrang (siehe Filter unten / recommendations_page).
     """
     if not ticker:
         return "USD"
-    if ticker.startswith("AT0") or "." in ticker:
+    tk = ticker.upper()
+    if tk.endswith(_EUR_SUFFIXES) or tk.startswith(_EUR_ISIN_PREFIXES):
         return "EUR"
+    if tk.endswith(".L"):
+        return "GBP"
+    if tk.endswith((".SW", ".VX")):
+        return "CHF"
+    if tk.endswith((".TO", ".V")):
+        return "CAD"
     return "USD"
 
 
@@ -73,31 +87,49 @@ def _de_num(value: float) -> str:
     return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def format_price(value, ticker=None):
-    """Jinja2 Filter: Preis in Quote-Währung des Tickers (EUR für DE/AS/PA-Ticker, USD sonst).
+def _symbolize(value, currency: str) -> str:
+    """Formatiert value mit dem korrekten Währungs-Symbol (deutsches Zahlenformat)."""
+    num = _de_num(value)
+    if currency in ("GBP", "GBp"):
+        return f"£{num}"
+    if currency == "CHF":
+        return f"{num} CHF"
+    if currency == "CAD":
+        return f"C${num}"
+    if currency == "EUR":
+        return f"{num}€"
+    return f"${num}"  # USD (Default)
 
-    Verwendung im Template: {{ rec.entry_price|price(rec.ticker) }}
+
+def format_price(value, ticker=None, currency=None):
+    """Jinja2 Filter: Preis in der korrekten Quote-Währung.
+
+    Wenn `currency` (echter Code aus market_data) übergeben ist, hat sie Vorrang;
+    sonst Fallback auf die Heuristik _ticker_currency(ticker). Backward-kompatibel.
+    Verwendung: {{ rec.entry_price|price(rec.ticker, rec._ccy) }}
     Vermeidet den kritischen Fehler, USD-Preise (META=$610) als EUR (610€) zu rendern.
     """
     if value is None:
         return "–"
-    curr = _ticker_currency(ticker)
-    return f"{_de_num(value)}€" if curr == "EUR" else f"${_de_num(value)}"
+    curr = currency or _ticker_currency(ticker)
+    return _symbolize(value, curr)
 
 
-def format_price_alt(value, ticker=None, eur_usd: float = None):
-    """Jinja2 Filter: Preis in der jeweils ANDEREN Währung umgerechnet.
+def format_price_alt(value, ticker=None, eur_usd: float = None, currency=None):
+    """Jinja2 Filter: ≈-Sekundärumrechnung — NUR für EUR/USD (dafür haben wir den Kurs).
 
     Für USD-Ticker → EUR-Wert (value / eur_usd). Für EUR-Ticker → USD-Wert (value * eur_usd).
-    Verwendung: {{ rec.entry_price|price_alt(rec.ticker, eur_usd) }}
-    Gibt "" zurück wenn eur_usd fehlt — Template kann dann den Sekundär-Block überspringen.
+    Für GBP/CHF/CAD "" (kein Kurs vorhanden). Verwendung: {{ x|price_alt(ticker, eur_usd, rec._ccy) }}
+    Gibt "" zurück wenn eur_usd fehlt — Template überspringt dann den Sekundär-Block.
     """
     if value is None or not eur_usd:
         return ""
-    curr = _ticker_currency(ticker)
+    curr = currency or _ticker_currency(ticker)
     if curr == "EUR":
         return f"${_de_num(value * eur_usd)}"
-    return f"{_de_num(value / eur_usd)}€"
+    if curr == "USD":
+        return f"{_de_num(value / eur_usd)}€"
+    return ""  # GBP/CHF/CAD: kein Umrechnungskurs vorhanden
 
 
 def format_pct(value):
@@ -287,13 +319,137 @@ async def briefings_page(request: Request):
     ))
 
 
+def _resolve_ticker_currency(ticker: str, md: dict) -> str:
+    """Echte Quote-Währung eines Tickers aus market_data (positions/watchlist) auflösen,
+    sonst Fallback auf die Suffix-Heuristik. Gibt einen Währungs-CODE zurück."""
+    if ticker and md:
+        for bucket in ("positions", "watchlist"):
+            entry = (md.get(bucket) or {}).get(ticker)
+            if entry:
+                ccy = (entry.get("price") or {}).get("currency")
+                if ccy:
+                    return ccy
+    return _ticker_currency(ticker)
+
+
 @app.get("/recommendations", response_class=HTMLResponse)
 async def recommendations_page(request: Request):
     md = get_market_data()
-    eur_usd = (md.get("indices", {}).get("EUR/USD", {}).get("value") or 1.0) if md else 1.0
+    eur_usd = safe_eur_usd(md)
+    recommendations = get_recommendations()
+    # Anzeige-Währung pro Empfehlung serverseitig auflösen (echte currency hat Vorrang).
+    for rec in recommendations:
+        if isinstance(rec, dict):
+            rec["_ccy"] = _resolve_ticker_currency(rec.get("ticker", ""), md)
     return templates.TemplateResponse(request, "recommendations.html", _ctx(request, "recommendations",
-        recommendations=get_recommendations(), notes=get_notes(), eur_usd=eur_usd,
+        recommendations=recommendations, notes=get_notes(), eur_usd=eur_usd,
     ))
+
+
+# ─── Secrets-Maskierung & Auth-Gate ──────────────────────────
+# Secrets dürfen nie im Klartext ins ausgelieferte HTML. Auth-Gate ist OFF
+# solange kein web.auth_token in settings.json steht (kein Lockout beim Deploy);
+# sobald gesetzt, verlangt jede nicht-öffentliche Route ein Cookie.
+
+_SECRET_PATHS = (("telegram", "bot_token"), ("brave_search", "api_key"),
+                 ("fred", "api_key"), ("finnhub", "api_key"))
+
+
+def _mask_secret(value: str) -> str:
+    """4 Anfang + 4 Ende, Rest verdeckt. Kurze Werte (<8) unverändert (kein Key)."""
+    if not value or len(value) < 8:
+        return value
+    return value[:4] + "..." + value[-4:]
+
+
+def _mask_settings(settings: dict) -> dict:
+    """Kopie mit maskierten Secret-Feldern — für die server-gerenderte Settings-Seite."""
+    import copy
+    masked = copy.deepcopy(settings)
+    for sec, key in _SECRET_PATHS:
+        node = masked.get(sec)
+        if isinstance(node, dict) and node.get(key):
+            node[key] = _mask_secret(node[key])
+    return masked
+
+
+def _keep_or_update(stored: str, incoming) -> str:
+    """Beim Speichern: maskierten Platzhalter oder Leerwert NICHT übernehmen —
+    sonst überschreibt die maskierte Anzeige das echte Secret."""
+    incoming = (incoming or "").strip()
+    if not incoming or incoming == _mask_secret(stored or ""):
+        return stored or ""
+    return incoming
+
+
+def _auth_token() -> str:
+    return ((_load_settings().get("web", {}) or {}).get("auth_token") or "").strip()
+
+
+_AUTH_PUBLIC = ("/static", "/login", "/sw.js", "/manifest", "/offline",
+                "/favicon", "/apple-touch-icon", "/icons")
+
+
+@app.middleware("http")
+async def _auth_guard(request: Request, call_next):
+    token = _auth_token()
+    if token:
+        path = request.url.path
+        if not any(path == p or path.startswith(p) for p in _AUTH_PUBLIC):
+            cookie = request.cookies.get("velora_auth", "")
+            if not (cookie and hmac.compare_digest(cookie, token)):
+                if path.startswith("/api"):
+                    return JSONResponse({"error": "Authentifizierung erforderlich"}, status_code=401)
+                return RedirectResponse("/login", status_code=302)
+    return await call_next(request)
+
+
+_LOGIN_HTML = """<!doctype html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Velora · Login</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+background:#0d0f12;color:#e8eaed;font-family:Inter,system-ui,sans-serif}
+.card{background:#161a1f;border:1px solid #232830;border-radius:16px;padding:32px;width:min(360px,90vw)}
+h1{font-size:18px;margin:0 0 4px}p.sub{color:#8b929c;font-size:13px;margin:0 0 20px}
+input{width:100%;padding:12px 14px;border-radius:10px;border:1px solid #2a2f37;background:#0d0f12;
+color:#e8eaed;font-size:15px;margin-bottom:12px;font-family:inherit}
+button{width:100%;padding:12px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-size:15px;
+font-weight:600;cursor:pointer;font-family:inherit}button:active{opacity:.85}
+.err{color:#e5484d;font-size:13px;margin:8px 0 0;min-height:18px}
+</style></head><body><div class="card">
+<h1>Velora</h1><p class="sub">Zugang geschützt — bitte Passwort eingeben.</p>
+<input id="tok" type="password" placeholder="Passwort" autofocus autocomplete="current-password">
+<button onclick="go()">Anmelden</button><p class="err" id="err"></p>
+<script>
+const go=async()=>{const t=document.getElementById('tok').value;
+const r=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:t})});
+if(r.ok){location.href='/'}else{document.getElementById('err').textContent='Falsches Passwort'}};
+document.getElementById('tok').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
+</script></div></body></html>"""
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    if not _auth_token():
+        return RedirectResponse("/", status_code=302)
+    return HTMLResponse(_LOGIN_HTML)
+
+
+@app.post("/login")
+async def login_submit(request: Request):
+    token = _auth_token()
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    supplied = (body.get("token") or "").strip()
+    if token and hmac.compare_digest(supplied, token):
+        resp = JSONResponse({"status": "ok"})
+        resp.set_cookie("velora_auth", token, max_age=60 * 60 * 24 * 30,
+                        httponly=True, samesite="lax")
+        return resp
+    return JSONResponse({"error": "Falsches Passwort"}, status_code=401)
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -303,6 +459,9 @@ async def settings_page(request: Request):
     with open(settings_path) as f:
         settings = _json.load(f)
     portfolio = load_portfolio()
+
+    # Secrets NICHT im Klartext ins HTML — nur maskiert anzeigen.
+    settings = _mask_settings(settings)
 
     return templates.TemplateResponse(request, "settings.html", _ctx(request, "settings",
         settings=settings, accounts=list(portfolio.get("accounts", {}).keys()), portfolio=portfolio,
@@ -441,12 +600,18 @@ async def api_log_trade(request: Request):
     if shares <= 0 or price <= 0:
         return JSONResponse({"error": "shares und price müssen > 0 sein"}, status_code=400)
 
-    # USD → EUR umrechnen für buy_in_eur und Cash-Tracking
+    # USD → EUR umrechnen für buy_in_eur und Cash-Tracking.
+    # Trade-Pfad: bei fehlendem/unplausiblem EUR/USD-Kurs den USD-Trade ABLEHNEN,
+    # statt einen falschen, steuerrelevanten Buy-In 1:1 als EUR zu verbuchen.
     price_eur = price
+    md = get_market_data()
     if trade_currency == "USD":
-        from src.data.cache import get_market_data as _get_md
-        md = _get_md()
-        eur_usd = md.get("indices", {}).get("EUR/USD", {}).get("value", 1.0) or 1.0
+        eur_usd = get_eur_usd(md)
+        if eur_usd is None:
+            return JSONResponse(
+                {"error": "EUR/USD-Kurs nicht verfügbar — USD-Trade abgelehnt, bitte Daten aktualisieren"},
+                status_code=400,
+            )
         price_eur = price / eur_usd
 
     from src.delivery.telegram import update_portfolio_position, close_recommendation_on_trade
@@ -475,7 +640,16 @@ async def api_log_trade(request: Request):
         # Position nicht gefunden — bei Kauf neue Position anlegen (mit Lock + Cash-Update)
         if action == "buy":
             from src.delivery.portfolio_io import add_new_position
-            pos_currency = "USD" if not any(c in ticker for c in [".", "AT0"]) else "EUR"
+            from src.data.market import fetch_price_data
+            # Ticker gegen yfinance validieren — None = ungültiger Ticker (Tippfehler).
+            price_data = fetch_price_data(ticker)
+            if price_data is None:
+                return JSONResponse(
+                    {"error": f"Ticker '{ticker}' nicht gefunden — Tippfehler? Keine Position angelegt"},
+                    status_code=404,
+                )
+            # Echte Quote-Währung aus dem Lookup übernehmen statt aus dem Ticker zu raten.
+            pos_currency = price_data.get("currency") or _ticker_currency(ticker)
             created = add_new_position(ticker, shares, price_eur, account, trade_currency=pos_currency)
             if created:
                 close_recommendation_on_trade(ticker, action)
@@ -555,19 +729,24 @@ async def api_save_settings(request: Request):
     with open(settings_path) as f:
         settings = _json.load(f)
 
-    # Nur erlaubte Felder updaten
+    # Nur erlaubte Felder updaten. Secrets: maskierten Platzhalter / Leerwert
+    # NICHT übernehmen (sonst überschreibt die maskierte Anzeige das echte Secret).
     if "telegram" in body:
         tg = body["telegram"]
         if "bot_token" in tg:
-            settings.setdefault("telegram", {})["bot_token"] = tg["bot_token"]
+            cur = settings.setdefault("telegram", {}).get("bot_token", "")
+            settings["telegram"]["bot_token"] = _keep_or_update(cur, tg["bot_token"])
         if "chat_id" in tg:
             settings.setdefault("telegram", {})["chat_id"] = tg["chat_id"]
     if "brave_search" in body:
-        settings.setdefault("brave_search", {})["api_key"] = body["brave_search"].get("api_key", "")
+        cur = settings.setdefault("brave_search", {}).get("api_key", "")
+        settings["brave_search"]["api_key"] = _keep_or_update(cur, body["brave_search"].get("api_key", ""))
     if "fred" in body:
-        settings.setdefault("fred", {})["api_key"] = body["fred"].get("api_key", "")
+        cur = settings.setdefault("fred", {}).get("api_key", "")
+        settings["fred"]["api_key"] = _keep_or_update(cur, body["fred"].get("api_key", ""))
     if "finnhub" in body:
-        settings.setdefault("finnhub", {})["api_key"] = body["finnhub"].get("api_key", "")
+        cur = settings.setdefault("finnhub", {}).get("api_key", "")
+        settings["finnhub"]["api_key"] = _keep_or_update(cur, body["finnhub"].get("api_key", ""))
     if "user" in body:
         user = body["user"]
         settings.setdefault("user", {})
@@ -604,20 +783,15 @@ async def api_get_settings():
     with open(settings_path) as f:
         settings = _json.load(f)
 
-    # API Keys maskieren für die Anzeige
-    def mask(key):
-        if not key or len(key) < 8:
-            return key
-        return key[:4] + "..." + key[-4:]
-
+    # API Keys maskieren für die Anzeige (geteilter Helfer mit der Settings-Seite)
     safe = {
         "telegram": {
-            "bot_token": mask(settings.get("telegram", {}).get("bot_token", "")),
+            "bot_token": _mask_secret(settings.get("telegram", {}).get("bot_token", "")),
             "chat_id": settings.get("telegram", {}).get("chat_id", ""),
         },
-        "brave_search": {"api_key": mask(settings.get("brave_search", {}).get("api_key", ""))},
-        "fred": {"api_key": mask(settings.get("fred", {}).get("api_key", ""))},
-        "finnhub": {"api_key": mask(settings.get("finnhub", {}).get("api_key", ""))},
+        "brave_search": {"api_key": _mask_secret(settings.get("brave_search", {}).get("api_key", ""))},
+        "fred": {"api_key": _mask_secret(settings.get("fred", {}).get("api_key", ""))},
+        "finnhub": {"api_key": _mask_secret(settings.get("finnhub", {}).get("api_key", ""))},
         "schedule": settings.get("schedule", {}),
         "user": settings.get("user", {}),
         "web": settings.get("web", {}),

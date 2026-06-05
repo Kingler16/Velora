@@ -5,6 +5,8 @@ System-Prompt und Daten-Formatting für den Vermögensberater.
 import json
 from datetime import datetime
 
+from src.data.fx import safe_eur_usd
+
 
 SYSTEM_PROMPT_TEMPLATE = """Du bist ein erfahrener, unabhängiger Vermögensberater (CFA Level III, 15 Jahre Erfahrung Multi-Asset).
 
@@ -223,11 +225,8 @@ def build_portfolio_summary(portfolio: dict, market_data: dict) -> str:
     total_value_eur = 0
     total_invested_eur = 0
 
-    # EUR/USD Kurs aus Indizes holen
-    eur_usd = 1.0
-    indices = market_data.get("indices", {})
-    if "EUR/USD" in indices:
-        eur_usd = indices["EUR/USD"].get("value", 1.0)
+    # EUR/USD Kurs (validiert, mit 1.0-Fallback — reiner Anzeige-/Prompt-Pfad)
+    eur_usd = safe_eur_usd(market_data)
     lines.append(f"[EUR/USD: {eur_usd}]")
 
     for account_name, account in portfolio["accounts"].items():

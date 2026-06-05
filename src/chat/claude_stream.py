@@ -9,6 +9,7 @@ History nicht erneut im Prompt transportieren müssen.
 from __future__ import annotations
 
 import asyncio
+import fcntl
 import json
 import logging
 import os
@@ -17,6 +18,8 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import AsyncIterator, Optional
+
+from src.analysis.claude import _LOCK_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -170,13 +173,28 @@ async def stream_chat(
     logger.info("Claude CLI start: session=%s resume=%s tools=%s",
                 session_id, resume_session_id, allowed_tools)
 
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=cwd,
-    )
+    # Denselben File-Lock wie ask_claude (src/analysis/claude.py) nur um den
+    # Subprozess-START nehmen: der OAuth-Token-Refresh passiert beim CLI-Start,
+    # und ohne Serialisierung korrumpieren parallele Refreshes die .credentials.json
+    # (z.B. Web-Chat während ein Cron-Briefing läuft). Der Lock wird SOFORT nach
+    # dem Spawn freigegeben — nicht über die minutenlange Stream-Dauer gehalten,
+    # sonst würden Briefings blockieren.
+    _LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    lock_fd = open(_LOCK_PATH, "w")
+    try:
+        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd,
+        )
+    finally:
+        try:
+            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+        finally:
+            lock_fd.close()
 
     assert proc.stdin and proc.stdout and proc.stderr
     proc.stdin.write(user_prompt.encode("utf-8"))
