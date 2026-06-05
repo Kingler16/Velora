@@ -190,15 +190,22 @@ async def run_briefing():
                     full_text=briefing_text,
                 )
             if structured.get("recommendations"):
-                save_recommendations(structured["recommendations"], overview)
+                save_recommendations(structured["recommendations"], overview, market_data)
             if structured.get("market_regime"):
                 update_notes("market_regime", structured["market_regime"])
             if structured.get("new_insights"):
                 memory = load_memory()
                 existing = memory["notes"].get("key_insights", [])
                 existing.extend(structured["new_insights"])
-                existing = existing[-20:]
-                update_notes("key_insights", existing)
+                # Dedupen (Reihenfolge wahren) — sonst wandern dieselben Insights mehrfach
+                # rein und [-20:] schneidet wertvolle ältere blind weg.
+                seen, deduped = set(), []
+                for ins in existing:
+                    k = str(ins).strip().lower()
+                    if k and k not in seen:
+                        seen.add(k)
+                        deduped.append(ins)
+                update_notes("key_insights", deduped[-20:])
             if structured.get("position_theses_updates"):
                 for ticker, thesis in structured["position_theses_updates"].items():
                     add_position_thesis(ticker, thesis)

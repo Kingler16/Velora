@@ -102,7 +102,36 @@ def _is_actionable(rec: dict) -> tuple[bool, str]:
     return True, ""
 
 
-def save_recommendations(recommendations: list[dict], overview: dict | None = None):
+def _plausi_check(rec: dict, market_data: dict | None) -> tuple[bool, str]:
+    """Deterministischer Sanity-Check der Order-Levels gegen Live-Kurse — fängt
+    halluzinierte/vertippte Preise ab, bevor sie als Order in der UI landen.
+    0 LLM-Zeit. Returns (ok, grund_wenn_gedroppt)."""
+    if not market_data:
+        return True, ""
+    ticker = rec.get("ticker")
+    pos = (market_data.get("positions") or {}).get(ticker) or (market_data.get("watchlist") or {}).get(ticker)
+    live = (pos or {}).get("price", {}).get("current_price")
+    entry = rec.get("entry_price")
+    if live and entry:
+        try:
+            if abs(float(entry) / float(live) - 1) > 0.30:
+                return False, f"entry_price {entry} weicht >30% vom Live-Kurs {live} ab (Tippfehler/Halluzination?)"
+        except (ValueError, ZeroDivisionError, TypeError):
+            pass
+    stop = rec.get("stop_loss")
+    target = rec.get("target_price")
+    if entry and stop and target:
+        is_sell = rec.get("action") == "sell"
+        try:
+            ok_order = (target < entry < stop) if is_sell else (stop < entry < target)
+        except TypeError:
+            ok_order = True
+        if not ok_order:
+            return False, f"Order-Levels unplausibel (stop={stop}, entry={entry}, target={target}, sell={is_sell})"
+    return True, ""
+
+
+def save_recommendations(recommendations: list[dict], overview: dict | None = None, market_data: dict | None = None):
     """Speichert neue Empfehlungen. Ersetzt offene Duplikate für denselben Ticker.
 
     Verwirft alles was nicht actionable ist (hold, watch ohne Order, leeres Reasoning,
@@ -136,6 +165,12 @@ def save_recommendations(recommendations: list[dict], overview: dict | None = No
             if verdict == "warn":
                 rec["mandate_warnings"] = violations
 
+        ok_p, reason_p = _plausi_check(rec, market_data)
+        if not ok_p:
+            logger.info("Recommendation plausi-dropped (%s): %s", rec.get("ticker", "?"), reason_p)
+            dropped += 1
+            continue
+
         rec["date"] = datetime.now().isoformat()
         rec["status"] = "open"
         rec["outcome"] = None
@@ -152,8 +187,12 @@ def save_recommendations(recommendations: list[dict], overview: dict | None = No
         accepted += 1
 
     logger.info("save_recommendations: %d accepted, %d dropped", accepted, dropped)
-    # Nur die letzten 50 behalten
-    existing = existing[-50:]
+    # Truncation nach Status trennen: alle offenen behalten + die letzten 40 geschlossenen.
+    # Vorher kürzte existing[-50:] rein FIFO — das warf die abgeschlossenen Recs (= die
+    # Lern-Daten mit echten Outcomes) zuerst weg, sobald viele offene nachrückten.
+    open_r = [r for r in existing if r.get("status") == "open"]
+    closed_r = [r for r in existing if r.get("status") != "open"]
+    existing = open_r + closed_r[-40:]
     _save_json("recommendations.json", existing)
 
 
@@ -213,10 +252,18 @@ def update_recommendation_outcomes(market_data: dict):
         if target and hit_target:
             rec["status"] = "target_hit"
             rec["outcome"] = f"Ziel erreicht bei {current_price}"
+            rec["closed_date"] = now.isoformat()
+            if entry_price:
+                raw = (current_price / entry_price - 1) * 100
+                rec["realized_pct"] = round(-raw if is_sell else raw, 2)
             updated = True
         elif stop_loss and hit_stop:
             rec["status"] = "stop_hit"
             rec["outcome"] = f"Stop ausgelöst bei {current_price}"
+            rec["closed_date"] = now.isoformat()
+            if entry_price:
+                raw = (current_price / entry_price - 1) * 100
+                rec["realized_pct"] = round(-raw if is_sell else raw, 2)
             updated = True
         elif entry_price:
             raw = (current_price / entry_price - 1) * 100
@@ -245,15 +292,27 @@ def update_notes(key: str, value):
     _save_json("notes.json", notes)
 
 
-def add_position_thesis(ticker: str, thesis: str):
-    """Speichert die Investment-These für eine Position."""
+def add_position_thesis(ticker: str, thesis: str, price_target=None):
+    """Hängt eine NEUE Thesen-Version an (statt die alte zu überschreiben).
+
+    So bleibt die Prognose-Historie erhalten: beim nächsten Briefing kann die alte
+    These gegen den tatsächlichen Verlauf geprüft werden. Migrationssicher gegen das
+    alte Single-Dict-Format."""
     notes = _load_json("notes.json", {})
-    if "position_theses" not in notes:
-        notes["position_theses"] = {}
-    notes["position_theses"][ticker] = {
+    theses = notes.setdefault("position_theses", {})
+    entry = theses.get(ticker)
+    if isinstance(entry, list):
+        history = entry
+    elif isinstance(entry, dict):
+        history = [entry]  # Migration: altes Single-Dict in Liste überführen
+    else:
+        history = []
+    history.append({
         "thesis": thesis,
         "date": datetime.now().isoformat(),
-    }
+        "price_target": price_target,
+    })
+    theses[ticker] = history[-5:]  # letzte 5 Versionen behalten
     _save_json("notes.json", notes)
 
 
@@ -282,17 +341,27 @@ def get_context_for_prompt() -> str:
             parts.append(f"- {r['date'][:10]} {r.get('ticker','?')}: {r.get('action','?')} bei {r.get('entry_price','?')}{pnl}")
 
     if closed_recs:
-        parts.append("\n=== ABGESCHLOSSENE EMPFEHLUNGEN (lerne daraus) ===")
+        parts.append("\n=== ABGESCHLOSSENE EMPFEHLUNGEN (lerne daraus — mach ein kurzes Post-Mortem in der BILANZ: war die These richtig/falsch, warum?) ===")
         for r in closed_recs[-5:]:
-            parts.append(f"- {r['date'][:10]} {r.get('ticker','?')}: {r.get('action','?')} -> {r.get('outcome','?')}")
+            rp = f" [{r['realized_pct']:+.1f}%]" if r.get("realized_pct") is not None else ""
+            why = f" | These war: {r['reasoning'][:90]}" if r.get("reasoning") else ""
+            parts.append(f"- {r['date'][:10]} {r.get('ticker','?')}: {r.get('action','?')} -> {r.get('outcome','?')}{rp}{why}")
 
-    # Position-Thesen
+    # Position-Thesen (versioniert — alte Prognose gegen Realität prüfen)
     notes = memory["notes"]
     theses = notes.get("position_theses", {})
     if theses:
-        parts.append("\n=== INVESTMENT-THESEN PRO POSITION ===")
+        parts.append("\n=== INVESTMENT-THESEN PRO POSITION (prüfe ob alte Prognosen eingetreten sind) ===")
         for ticker, t in theses.items():
-            parts.append(f"- {ticker}: {t['thesis']} ({t['date'][:10]})")
+            if isinstance(t, list) and t:
+                latest = t[-1]
+                line = f"- {ticker}: {latest.get('thesis','')} ({latest.get('date','')[:10]})"
+                if len(t) > 1:
+                    prev = t[-2]
+                    line += f"\n    [vorherige These {prev.get('date','')[:10]}: {(prev.get('thesis') or '')[:80]} — eingetreten?]"
+                parts.append(line)
+            elif isinstance(t, dict):
+                parts.append(f"- {ticker}: {t.get('thesis','')} ({t.get('date','')[:10]})")
 
     # Market Regime
     if notes.get("market_regime"):

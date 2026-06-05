@@ -193,11 +193,73 @@ def find_tax_loss_harvesting(portfolio: dict, market_data: dict, tax_rate: float
     return "\n".join(lines)
 
 
+def _rec_realized_pct(rec: dict):
+    """Realisierte Rendite (%) einer geschlossenen Rec — oder None.
+
+    Bevorzugt das gespeicherte Feld `realized_pct` (bei sell vom memory.py-Agenten
+    schon vorzeichen-korrekt). Fehlt es (ältere Recs), wird aus entry vs. Exit-Level
+    rekonstruiert: target_hit -> (target/entry-1)*100, stop_hit -> (stop/entry-1)*100.
+    Bei action=="sell" wird das Vorzeichen invertiert (ein fallendes Ziel ist Gewinn).
+    None, wenn weder realized_pct noch entry+Level brauchbar sind.
+    """
+    val = rec.get("realized_pct")
+    if val is not None:
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            pass
+
+    status = rec.get("status")
+    try:
+        entry = float(rec.get("entry_price"))
+    except (TypeError, ValueError):
+        return None
+    if not entry:
+        return None
+
+    if status == "target_hit":
+        level = rec.get("target_price")
+    elif status == "stop_hit":
+        level = rec.get("stop_loss")
+    else:
+        return None
+
+    try:
+        level = float(level)
+    except (TypeError, ValueError):
+        return None
+
+    pct = (level / entry - 1) * 100
+    if rec.get("action") == "sell":
+        pct = -pct
+    return pct
+
+
+def _parse_iso(value):
+    """Robustes ISO-Datum-Parsing -> datetime oder None (Fehler schlucken)."""
+    if not isinstance(value, str) or not value:
+        return None
+    raw = value.strip()
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        # Häufige Varianten tolerieren: trailing 'Z', reines Datum.
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            try:
+                return datetime.fromisoformat(raw[:10])
+            except ValueError:
+                return None
+
+
 def compute_recommendation_data(market_data: dict) -> dict:
     """Berechnet Empfehlungs-Performance als strukturiertes Dict."""
     empty = {
         "open": [], "wins": [], "losses": [], "expired": [],
         "hit_rate": 0, "total_closed": 0, "open_count": 0, "expired_count": 0,
+        "avg_win_pct": None, "avg_loss_pct": None, "avg_realized_pct": None,
+        "expectancy_pct": None, "avg_holding_days": None,
     }
     recs_path = MEMORY_DIR / "recommendations.json"
     if not recs_path.exists():
@@ -231,6 +293,40 @@ def compute_recommendation_data(market_data: dict) -> dict:
     # Verfallene zählen NICHT als Loss — sie wurden nie getriggert.
     hit_rate = (len(wins) / total_closed * 100) if total_closed > 0 else 0
 
+    # --- Ehrliche Rendite-Statistik ---------------------------------------
+    # Pro Win/Loss eine realisierte Rendite ermitteln (defensiv: Recs ohne
+    # brauchbaren Wert fallen aus der Renditestatistik, zählen aber weiter in
+    # die Hit-Rate). Hinweis: ein echter Benchmark-Alpha (vs. S&P im selben
+    # Zeitraum) bräuchte den Index-Stand zum Einstiegszeitpunkt — der wird NICHT
+    # gespeichert. Deshalb wird hier bewusst KEIN (Fake-)Alpha berechnet.
+    win_pcts = [p for p in (_rec_realized_pct(r) for r in wins) if p is not None]
+    loss_pcts = [p for p in (_rec_realized_pct(r) for r in losses) if p is not None]
+
+    avg_win_pct = round(sum(win_pcts) / len(win_pcts), 1) if win_pcts else None
+    avg_loss_pct = round(sum(loss_pcts) / len(loss_pcts), 1) if loss_pcts else None
+
+    all_pcts = win_pcts + loss_pcts
+    avg_realized_pct = round(sum(all_pcts) / len(all_pcts), 1) if all_pcts else None
+
+    # Expectancy = p(win)*Ø-Gewinn + p(loss)*Ø-Verlust. Nur sinnvoll, wenn für
+    # beide Seiten eine Rendite vorliegt (sonst verzerrt eine fehlende Seite).
+    expectancy_pct = None
+    if total_closed > 0 and avg_win_pct is not None and avg_loss_pct is not None:
+        p_win = len(wins) / total_closed
+        expectancy_pct = round(p_win * avg_win_pct + (1 - p_win) * avg_loss_pct, 1)
+
+    # --- Ø Haltedauer in Tagen --------------------------------------------
+    holding_days = []
+    for rec in wins + losses + expired:
+        start = _parse_iso(rec.get("date"))
+        end = _parse_iso(rec.get("closed_date"))
+        if start is None or end is None:
+            continue
+        delta = (end - start).days
+        if delta >= 0:
+            holding_days.append(delta)
+    avg_holding_days = round(sum(holding_days) / len(holding_days), 1) if holding_days else None
+
     return {
         "open": open_recs,
         "wins": wins,
@@ -240,6 +336,11 @@ def compute_recommendation_data(market_data: dict) -> dict:
         "total_closed": total_closed,
         "open_count": len(open_recs),
         "expired_count": len(expired),
+        "avg_win_pct": avg_win_pct,
+        "avg_loss_pct": avg_loss_pct,
+        "avg_realized_pct": avg_realized_pct,
+        "expectancy_pct": expectancy_pct,
+        "avg_holding_days": avg_holding_days,
     }
 
 
@@ -256,6 +357,18 @@ def track_recommendation_performance(market_data: dict) -> str:
         # Survivorship-Bias sichtbar machen: verfallene Limits sind weder Win noch Loss,
         # zählen NICHT in die Hit-Rate — aber der Berater muss sie kennen.
         lines.append(f"  ⊘ verfallen (Limit nie erreicht): {data['expired_count']}")
+
+    # Ehrliche Rendite-Metriken (nur rendern, wenn Datenbasis vorhanden).
+    # Kein Benchmark-Alpha — der Entry-Index-Stand wird nicht gespeichert.
+    if data.get("expectancy_pct") is not None:
+        lines.append(
+            f"  Ø Gewinn-Trade {data['avg_win_pct']:+.1f}% / Ø Verlust-Trade {data['avg_loss_pct']:+.1f}%"
+            f" / Expectancy {data['expectancy_pct']:+.1f}% pro Empfehlung"
+        )
+    elif data.get("avg_realized_pct") is not None:
+        lines.append(f"  Ø realisierte Rendite {data['avg_realized_pct']:+.1f}% pro Empfehlung")
+    if data.get("avg_holding_days") is not None:
+        lines.append(f"  Ø Haltedauer {data['avg_holding_days']:.0f} Tage")
 
     for rec in data["open"]:
         ticker = rec.get("ticker", "?")
