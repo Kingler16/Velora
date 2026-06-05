@@ -55,10 +55,40 @@ _SECTOR_CANON = {
 
 
 def _norm_sector(name: str) -> str:
-    """Vereinheitlicht Sektor-Bezeichnungen, damit yfinance- und Fonds-Labels zusammenfallen."""
+    """Vereinheitlicht Sektor-Bezeichnungen, damit yfinance- und Fonds-Labels zusammenfallen.
+    Exakt-Match zuerst, dann Teilstring-Fallback für verbose/kombinierte Factsheet-Labels."""
     if not name:
         return "Unbekannt"
-    return _SECTOR_CANON.get(name.strip().lower(), name)
+    key = name.strip().lower()
+    if key in _SECTOR_CANON:
+        return _SECTOR_CANON[key]
+    if "gold" in key or "edelmetall" in key or "precious" in key:
+        return "Rohstoffe"
+    if "staples" in key or "nichtzyklisch" in key or ("defensiv" in key and "konsum" in key):
+        return "Konsum (defensiv)"
+    if "discretionary" in key or "cyclical" in key or "zyklisch" in key:
+        return "Konsum (zyklisch)"
+    if "communication" in key or "kommunikation" in key:
+        return "Kommunikation"
+    if "health" in key or "gesundheit" in key:
+        return "Gesundheit"
+    if "financ" in key or "finanz" in key:
+        return "Finanzen"
+    if "technolog" in key or key == "it":
+        return "Technologie"
+    if "industr" in key:
+        return "Industrie"
+    if "energ" in key:
+        return "Energie"
+    if "material" in key or "grundstoff" in key:
+        return "Grundstoffe"
+    if "utilit" in key or "versorg" in key:
+        return "Versorger"
+    if "real estate" in key or "immobil" in key:
+        return "Immobilien"
+    if "other" in key or "sonstig" in key or "diversif" in key or "übrige" in key:
+        return "Sonstige"
+    return name
 
 
 def _load_region_exposure() -> dict:
