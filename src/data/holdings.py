@@ -71,6 +71,10 @@ def save_holdings_research(data: dict):
         with os.fdopen(fd, "w") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         os.replace(tmp, RESEARCH_PATH)
+        try:
+            os.chmod(RESEARCH_PATH, 0o664)  # les-/backup-bar auch ausserhalb von root
+        except OSError:
+            pass
     except Exception:
         try:
             os.unlink(tmp)
