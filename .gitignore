@@ -6,6 +6,7 @@ config/settings.json
 config/portfolio.json
 config/mandate.json
 config/watchlist.json
+config/region_exposure.json
 config/portfolio.bak.*.json
 config/.portfolio.lock
 memory/
