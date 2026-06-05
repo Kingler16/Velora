@@ -37,6 +37,7 @@ from src.analysis.prompt import (
     format_risk_metrics,
     format_correlation,
     format_strategy_drift,
+    format_lookthrough,
     MONTHLY_REPORT_TEMPLATE,
 )
 from src.analysis.claude import ask_claude, strip_json_block, ClaudeCLIError
@@ -132,6 +133,9 @@ async def run_briefing():
         from src.analysis.mandate import load_mandate, compute_strategy_drift
         drift_str = format_strategy_drift(compute_strategy_drift(overview, load_mandate()))
         drift_section = f"\n=== STRATEGIE-DRIFT (Soll vs. Ist deines Mandats) ===\n\n{drift_str}\n" if drift_str else ""
+        from src.data.holdings import compute_lookthrough
+        lookthrough_str = format_lookthrough(compute_lookthrough(portfolio, market_data))
+        lookthrough_section = f"\n=== ECHTE EXPOSURE (Fonds/Anleihen durchgerechnet) ===\n\n{lookthrough_str}\n" if lookthrough_str else ""
 
         # 3. Memory laden + offene Empfehlungen updaten
         logger.info("Lade Memory...")
@@ -156,7 +160,7 @@ async def run_briefing():
 === KORRELATION & KLUMPENRISIKO ===
 
 {format_correlation(correlation)}
-{drift_section}
+{drift_section}{lookthrough_section}
 === FINANZKALENDER (Börsen, Earnings, Makro-Events) ===
 
 {calendar_str}

@@ -446,6 +446,29 @@ def format_strategy_drift(drift: dict | None) -> str:
     return "\n".join(lines)
 
 
+_ASSET_LABELS = {"equity": "Aktien", "bond": "Anleihen", "commodity": "Rohstoffe", "mixed": "Gemischt", "cash": "Cash"}
+
+
+def format_lookthrough(lt: dict | None) -> str:
+    """Rendert die echte Look-Through-Exposure (Fonds in Einzeltitel zerlegt) für den Prompt.
+    Gibt "" zurück wenn keine Daten."""
+    if not lt or not lt.get("asset_class"):
+        return ""
+    lines = []
+    ac = " · ".join(f"{_ASSET_LABELS.get(a['name'], a['name'])} {a['pct']}%" for a in lt["asset_class"])
+    lines.append(f"Asset-Klassen (durchgerechnet inkl. Fonds): {ac}")
+    tt = lt.get("top_titles") or []
+    if tt:
+        lines.append("Top-Einzeltitel (Direktbestand + in Fonds versteckt): "
+                     + " · ".join(f"{t['name']} {t['pct']}%" for t in tt[:10]))
+    regs = lt.get("regions") or []
+    if regs:
+        lines.append("Regionen (durchgerechnet): " + " · ".join(f"{r['name']} {r['pct']}%" for r in regs[:6]))
+    if lt.get("unresearched_funds"):
+        lines.append(f"HINWEIS: {lt['unresearched_funds']} Fonds noch nicht recherchiert — Durchschau unvollständig.")
+    return "\n".join(lines)
+
+
 def format_index_data(indices: dict) -> str:
     lines = []
     for name, data in indices.items():

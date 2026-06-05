@@ -48,6 +48,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 # Background refresh state
 _refresh_running = False
 _refresh_lock = asyncio.Lock()
+_holdings_research_running = False
 
 
 def format_eur(value):
@@ -396,6 +397,34 @@ async def strategy_page(request: Request):
         drift = compute_strategy_drift(overview, mandate)
     return templates.TemplateResponse(request, "strategy.html",
         _ctx(request, "strategy", mandate=mandate, drift=drift))
+
+
+@app.get("/holdings", response_class=HTMLResponse)
+async def holdings_page(request: Request):
+    """Durchschau: Zusammensetzung jedes Fonds/ETF/Bonds + echte Look-Through-Exposure."""
+    from src.data.holdings import load_holdings_research, compute_lookthrough, needs_lookthrough
+    portfolio = load_portfolio()
+    market_data = get_market_data()
+    research = load_holdings_research()
+
+    funds, seen = [], set()
+    for acc in portfolio.get("accounts", {}).values():
+        for pos in acc.get("positions", []):
+            isin = (pos.get("isin") or "").strip()
+            ticker = pos.get("ticker", "")
+            name = pos.get("name", "")
+            key = isin or ticker or name
+            if key in seen or not needs_lookthrough(name, ticker, isin):
+                continue
+            seen.add(key)
+            funds.append({"name": name, "isin": isin, "ticker": ticker,
+                          "shares": pos.get("shares"), "research": research.get(key)})
+    funds.sort(key=lambda f: f["research"] is None)  # noch-nicht-recherchierte zuerst
+
+    lookthrough = compute_lookthrough(portfolio, market_data, research)
+    return templates.TemplateResponse(request, "holdings.html",
+        _ctx(request, "holdings", funds=funds, lookthrough=lookthrough,
+             research_running=_holdings_research_running))
 
 
 # ─── Secrets-Maskierung & Auth-Gate ──────────────────────────
@@ -1008,6 +1037,43 @@ async def api_refresh(background_tasks: BackgroundTasks):
 @app.get("/api/refresh/status")
 async def api_refresh_status():
     return JSONResponse({"running": _refresh_running})
+
+
+@app.post("/api/holdings/research")
+async def api_holdings_research(request: Request, background_tasks: BackgroundTasks):
+    """Startet die Durchschau-Research für alle (oder eine) Fonds/Bond-Position."""
+    global _holdings_research_running
+    if _holdings_research_running:
+        return JSONResponse({"status": "already_running"})
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    force = bool(body.get("force"))
+    only_isin = body.get("isin") or None
+    _holdings_research_running = True
+    background_tasks.add_task(_run_holdings_research, force, only_isin)
+    return JSONResponse({"status": "started"})
+
+
+@app.get("/api/holdings/research/status")
+async def api_holdings_research_status():
+    return JSONResponse({"running": _holdings_research_running})
+
+
+async def _run_holdings_research(force: bool = False, only_isin=None):
+    """Background-Task: recherchiert Fonds/Bond-Zusammensetzungen (seriell, Claude-Lock)."""
+    global _holdings_research_running
+    try:
+        from src.data.holdings import research_portfolio_holdings
+        portfolio = load_portfolio()
+        settings = _load_settings()
+        await asyncio.to_thread(research_portfolio_holdings, portfolio, settings, force, only_isin)
+        logger.info("Holdings-Research abgeschlossen")
+    except Exception:
+        logger.exception("Holdings-Research fehlgeschlagen")
+    finally:
+        _holdings_research_running = False
 
 
 async def _run_refresh():

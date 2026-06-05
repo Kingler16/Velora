@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% block title %}Durchschau — Velora{% endblock %}
+
+{% block head %}
+<style>
+/* ─── Durchschau (Look-Through) ───────────────────────────────
+   Eigene Atoms, alle aus Design-System-Variablen, KEIN Grün
+   (Exposure ist kein P/L → Akzent/Amber/neutral). */
+
+.lt-section { margin-bottom: var(--space-6); }
+
+/* Balken-Liste (Asset-Klasse, Regionen, Sektoren) */
+.lt-bars { display: flex; flex-direction: column; gap: var(--space-3); }
+.lt-bar-row { display: grid; grid-template-columns: 130px 1fr auto; gap: var(--space-3); align-items: center; }
+.lt-bar-label { font-size: var(--text-sm); font-weight: 500; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lt-bar-track { height: 8px; border-radius: var(--radius-full); background: var(--glass-bg-strong); overflow: hidden; }
+.lt-bar-fill { height: 100%; border-radius: var(--radius-full); background: linear-gradient(90deg, var(--color-cyan-500), var(--color-indigo-500)); min-width: 2px; }
+.lt-bar-fill.amber { background: linear-gradient(90deg, var(--color-amber-500), var(--color-amber-400)); }
+.lt-bar-fill.neutral { background: var(--glass-border-strong); }
+.lt-bar-pct { font-size: var(--text-sm); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); min-width: 48px; text-align: right; }
+
+/* Top-Titel Liste (Kern-Mehrwert) */
+.lt-titles { display: flex; flex-direction: column; }
+.lt-title-row { display: grid; grid-template-columns: 1fr auto; gap: var(--space-3); align-items: center; padding: 10px 0; border-bottom: 1px solid var(--glass-border); }
+.lt-title-row:last-child { border-bottom: none; }
+.lt-title-name { font-size: var(--text-base); font-weight: 600; color: var(--text-primary); }
+.lt-title-val { font-size: var(--text-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.lt-title-pct { font-size: var(--text-md); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); min-width: 56px; text-align: right; }
+
+/* Kompakte Breakdown-Wolke (Region/Sektor inline) */
+.lt-inline { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.lt-inline-chip { font-size: var(--text-xs); color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-full); padding: 3px 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lt-inline-chip b { color: var(--text-primary); font-weight: 600; }
+
+/* Fonds-Karten */
+.fund-card { margin-bottom: var(--space-4); }
+.fund-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); flex-wrap: wrap; }
+.fund-head-main { min-width: 0; }
+.fund-name { font-size: var(--text-lg); font-weight: 700; color: var(--text-primary); letter-spacing: var(--letter-tight); }
+.fund-meta { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px; }
+.fund-badges { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+
+/* Confidence-Badge nach CONTRACT: high→accent, medium→yellow, low→muted */
+.conf-badge { display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px 8px; border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: 600; font-family: var(--font-mono); line-height: 1.4; }
+.conf-badge.high { background: var(--accent-bg); color: var(--accent); }
+.conf-badge.medium { background: var(--warn-bg); color: var(--warn); }
+.conf-badge.low { background: var(--glass-bg-strong); color: var(--text-muted); }
+.conf-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.type-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: 600; background: var(--glass-bg-strong); color: var(--text-secondary); border: 1px solid var(--glass-border); white-space: nowrap; }
+
+.fund-summary { font-size: var(--text-base); color: var(--text-secondary); line-height: 1.6; margin: var(--space-3) 0; }
+.fund-stats { display: flex; flex-wrap: wrap; gap: var(--space-4); font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-3); }
+.fund-stats b { color: var(--text-secondary); font-weight: 600; }
+
+.fund-subtitle { font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin: var(--space-4) 0 var(--space-2); }
+
+/* Bond-Detail-Grid */
+.bond-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--space-3); }
+.bond-cell { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-sm); padding: 10px 12px; }
+.bond-cell .k { font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.bond-cell .v { font-size: var(--text-base); font-weight: 600; color: var(--text-primary); margin-top: 2px; }
+
+.holdings-mini-bar { display: inline-block; width: 56px; height: 6px; border-radius: var(--radius-full); background: var(--glass-bg-strong); overflow: hidden; vertical-align: middle; margin-right: 8px; }
+.holdings-mini-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--color-cyan-500), var(--color-indigo-500)); border-radius: var(--radius-full); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Durchschau</h1>
+        <div class="page-subtitle">Was wirklich in deinen Fonds &amp; ETFs steckt — Look-Through-Exposure</div>
+    </div>
+    <button class="btn btn-accent" id="research-btn" onclick="triggerResearch()"
+            {% if research_running %}disabled{% endif %}>
+        <span class="spinner"></span>
+        <span class="research-label">{% if research_running %}Läuft…{% else %}Fonds recherchieren{% endif %}</span>
+    </button>
+</div>
+
+{# ─── 1) ECHTE EXPOSURE (DURCHSCHAU) — das Highlight ──────────────── #}
+{% if lookthrough %}
+<div class="card lt-section">
+    <div class="card-title">Echte Exposure (Durchschau)</div>
+
+    {% if lookthrough.unresearched_funds and lookthrough.unresearched_funds > 0 %}
+    <div style="font-size: var(--text-xs); color: var(--warn); margin-bottom: var(--space-4);">
+        {{ lookthrough.unresearched_funds }} Fonds noch nicht recherchiert — Durchschau unvollständig
+    </div>
+    {% endif %}
+
+    {# Asset-Klassen-Mix #}
+    {% set ac_labels = {'equity':'Aktien','bond':'Anleihen','commodity':'Rohstoffe','mixed':'Gemischt','cash':'Cash'} %}
+    {% if lookthrough.asset_class %}
+    <div class="fund-subtitle" style="margin-top: 0;">Anlageklassen</div>
+    <div class="lt-bars" style="margin-bottom: var(--space-5);">
+        {% for row in lookthrough.asset_class %}
+        <div class="lt-bar-row">
+            <div class="lt-bar-label">{{ ac_labels.get(row.name, row.name|capitalize) }}</div>
+            <div class="lt-bar-track"><div class="lt-bar-fill" style="width: {{ row.pct|round(1) }}%;"></div></div>
+            <div class="lt-bar-pct">{{ row.pct|round(1) }}%</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# Top-Einzeltitel inkl. der in Fonds versteckten — KERN-MEHRWERT #}
+    {% if lookthrough.top_titles %}
+    <div class="fund-subtitle">Top-Einzeltitel (direkt + über Fonds)</div>
+    <div class="lt-titles">
+        {% for t_ in lookthrough.top_titles %}
+        <div class="lt-title-row">
+            <div>
+                <div class="lt-title-name">{{ t_.name }}</div>
+                {% if t_.value_eur is not none %}<div class="lt-title-val">{{ t_.value_eur|eur }}</div>{% endif %}
+            </div>
+            <div class="lt-title-pct">{{ t_.pct|round(1) }}%</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# Kompakt: Regionen + Sektoren #}
+    {% if lookthrough.regions or lookthrough.sectors %}
+    <div class="charts-grid" style="margin-top: var(--space-5); margin-bottom: 0;">
+        {% if lookthrough.regions %}
+        <div>
+            <div class="fund-subtitle" style="margin-top: 0;">Regionen</div>
+            <div class="lt-inline">
+                {% for r in lookthrough.regions[:8] %}
+                <span class="lt-inline-chip"><b>{{ r.name }}</b> {{ r.pct|round(1) }}%</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% if lookthrough.sectors %}
+        <div>
+            <div class="fund-subtitle" style="margin-top: 0;">Sektoren</div>
+            <div class="lt-inline">
+                {% for s in lookthrough.sectors[:8] %}
+                <span class="lt-inline-chip"><b>{{ s.name }}</b> {{ s.pct|round(1) }}%</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if lookthrough.fund_count is not none %}
+    <div class="fund-stats" style="margin-top: var(--space-5); margin-bottom: 0; border-top: 1px solid var(--glass-border); padding-top: var(--space-3);">
+        <span><b>{{ lookthrough.fund_count }}</b> Fonds/ETFs</span>
+        <span><b>{{ lookthrough.researched_funds }}</b> recherchiert</span>
+        {% if lookthrough.total_invested_eur is not none %}<span>investiert <b>{{ lookthrough.total_invested_eur|eur }}</b></span>{% endif %}
+        {% if lookthrough.grand_total_eur is not none %}<span>Gesamt <b>{{ lookthrough.grand_total_eur|eur }}</b></span>{% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{# ─── 2) PRO FONDS EINE KARTE ─────────────────────────────────────── #}
+<div class="card-title" style="margin-top: var(--space-6);">Fonds &amp; ETFs im Detail</div>
+
+{% if funds %}
+{% set type_labels = {'etf':'ETF','fund':'Fonds','bond_fund':'Anleihenfonds','bond':'Anleihe','commodity':'Rohstoff','stock':'Aktie'} %}
+{% set class_labels = {'equity':'Aktienfonds','bond':'Anleihen','commodity':'Rohstoff','mixed':'Gemischt','cash':'Cash'} %}
+{% for f in funds %}
+{% set r = f.research %}
+<div class="card fund-card">
+    <div class="fund-head">
+        <div class="fund-head-main">
+            <div class="fund-name">{{ f.name }}</div>
+            <div class="fund-meta">
+                {% if f.isin %}{{ f.isin }}{% endif %}
+                {% if f.ticker %} · {{ f.ticker }}{% endif %}
+                {% if f.shares is not none %} · {{ f.shares|round(2) }} Stk{% endif %}
+            </div>
+        </div>
+        <div class="fund-badges">
+            {% if r %}
+                {% set tlabel = type_labels.get(r.instrument_type) %}
+                {% if not tlabel %}{% set tlabel = class_labels.get(r.asset_class, r.asset_class or 'Fonds') %}{% endif %}
+                <span class="type-badge">{{ tlabel }}</span>
+                {% if r.confidence %}
+                <span class="conf-badge {{ r.confidence }}"><span class="dot"></span>{{ {'high':'Hohe','medium':'Mittlere','low':'Geringe'}.get(r.confidence, r.confidence) }} Sicherheit</span>
+                {% endif %}
+                {% if r.researched_at %}<span class="fund-meta">zuletzt: {{ r.researched_at[:10] }}</span>{% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    {% if not r %}
+    {# Empty-State: noch nicht recherchiert #}
+    <div class="empty-state-v2" style="padding: var(--space-5) var(--space-4);">
+        <div class="empty-state-icon">◌</div>
+        <div class="empty-state-title">Noch nicht recherchiert</div>
+        <div class="empty-state-body">Velora kennt die Zusammensetzung dieses Fonds noch nicht.</div>
+        <button class="btn btn-sm" style="margin-top: var(--space-3);"
+                onclick="triggerResearch({{ f.isin|tojson }})">recherchieren</button>
+    </div>
+    {% else %}
+    {# Recherchierte Daten #}
+    {% if r.summary %}<p class="fund-summary">{{ r.summary }}</p>{% endif %}
+
+    <div class="fund-stats">
+        {% if r.ter_pct is not none %}<span>TER <b>{{ r.ter_pct|round(2) }}%</b></span>{% endif %}
+        {% if r.source %}<span>Quelle <b>{{ r.source }}</b></span>{% endif %}
+    </div>
+
+    {# Bond-Detail (nur bond / bond_fund) #}
+    {% if r.bond %}
+    <div class="fund-subtitle">Anleihe-Profil</div>
+    <div class="bond-grid">
+        {% if r.bond.issuer %}<div class="bond-cell"><div class="k">Emittent</div><div class="v">{{ r.bond.issuer }}</div></div>{% endif %}
+        {% if r.bond.type %}<div class="bond-cell"><div class="k">Typ</div><div class="v">{{ r.bond.type }}</div></div>{% endif %}
+        {% if r.bond.avg_maturity %}<div class="bond-cell"><div class="k">Ø-Laufzeit</div><div class="v">{{ r.bond.avg_maturity }}</div></div>{% endif %}
+        {% if r.bond.avg_rating %}<div class="bond-cell"><div class="k">Rating</div><div class="v">{{ r.bond.avg_rating }}</div></div>{% endif %}
+        {% if r.bond.duration_years is not none %}<div class="bond-cell"><div class="k">Duration</div><div class="v">{{ r.bond.duration_years }} J</div></div>{% endif %}
+        {% if r.bond.currency %}<div class="bond-cell"><div class="k">Währung</div><div class="v">{{ r.bond.currency }}</div></div>{% endif %}
+    </div>
+    {% endif %}
+
+    {# Top-Holdings-Tabelle: Zerlegung in Einzeltitel #}
+    {% if r.top_holdings %}
+    <div class="fund-subtitle">Top-Holdings</div>
+    <div class="table-wrapper">
+        <table class="data-table-stack">
+            <thead>
+                <tr>
+                    <th class="text-right" style="width: 1%;">Gewicht</th>
+                    <th>Titel</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for h in r.top_holdings|sort(attribute='weight_pct', reverse=true) %}
+                <tr>
+                    <td class="text-right tabular-nums" data-label="Gewicht" style="font-weight: 600; color: var(--accent);">
+                        <span class="holdings-mini-bar"><span style="width: {{ h.weight_pct|round(1) }}%;"></span></span>{{ h.weight_pct|round(1) }}%
+                    </td>
+                    <td class="primary" data-label="Titel">
+                        {{ h.name }}{% if h.ticker %} <span class="ticker-badge" style="margin-left: 4px;">{{ h.ticker }}</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {# Region- / Sektor-Breakdown kompakt #}
+    {% if r.region_breakdown %}
+    <div class="fund-subtitle">Regionen</div>
+    <div class="lt-inline">
+        {% for region, pct in r.region_breakdown.items() %}
+        <span class="lt-inline-chip"><b>{{ region }}</b> {{ pct|round(1) }}%</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% if r.sector_breakdown %}
+    <div class="fund-subtitle">Sektoren</div>
+    <div class="lt-inline">
+        {% for sector, pct in r.sector_breakdown.items() %}
+        <span class="lt-inline-chip"><b>{{ sector }}</b> {{ pct|round(1) }}%</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div style="margin-top: var(--space-4);">
+        <button class="btn btn-sm btn-ghost" onclick="triggerResearch({{ f.isin|tojson }})">neu recherchieren</button>
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state-v2">
+    <div class="empty-state-icon">○</div>
+    <div class="empty-state-title">Keine Fonds im Depot</div>
+    <div class="empty-state-body">Sobald du Fonds, ETFs oder Anleihen hältst, erscheint hier ihre Durchschau.</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const RESEARCH_RUNNING = {{ research_running|tojson }};
+
+// Research anstoßen + auf /api/holdings/research/status pollen (alle 3s), dann reload.
+// isin optional: ohne → alle Fonds, mit → einzelner Fonds (force).
+function triggerResearch(isin) {
+    const btn = document.getElementById('research-btn');
+    const labelEl = btn ? btn.querySelector('.research-label') : null;
+    const originalLabel = labelEl ? labelEl.textContent : '';
+    const POLL_INTERVAL = 3000;
+    const MAX_WAIT_MS = 600000; // 10 min hard cap — Research mit Websuche dauert
+    const startTime = Date.now();
+    let poll = null, tick = null, consecutiveErrors = 0;
+
+    const stop = ({ success, message, detail }) => {
+        if (poll) clearInterval(poll);
+        if (tick) clearInterval(tick);
+        if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
+        if (labelEl) labelEl.textContent = originalLabel;
+        if (success) location.reload();
+        else if (message && window.toast) window.toast.warn(message, { detail });
+    };
+
+    if (btn) { btn.classList.add('loading'); btn.disabled = true; }
+    tick = setInterval(() => {
+        if (!labelEl) return;
+        const secs = Math.floor((Date.now() - startTime) / 1000);
+        labelEl.textContent = secs < 20 ? 'Läuft…' : 'Läuft… ' + secs + 's';
+    }, 1000);
+
+    const body = isin ? JSON.stringify({ isin: isin, force: true }) : '{}';
+    fetch('/api/holdings/research', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body })
+        .then(r => r.json())
+        .then(() => {
+            poll = setInterval(() => {
+                if (Date.now() - startTime > MAX_WAIT_MS) {
+                    stop({ success: false, message: 'Research läuft weiter — dauert länger als erwartet', detail: 'Die Seite lädt automatisch neu sobald fertig.' });
+                    const bgPoll = setInterval(() => {
+                        fetch('/api/holdings/research/status').then(r => r.json()).then(s => {
+                            if (!s.running) { clearInterval(bgPoll); location.reload(); }
+                        }).catch(() => {});
+                    }, 5000);
+                    return;
+                }
+                fetch('/api/holdings/research/status')
+                    .then(r => r.json())
+                    .then(s => { consecutiveErrors = 0; if (!s.running) stop({ success: true }); })
+                    .catch(() => { consecutiveErrors++; if (consecutiveErrors >= 5) stop({ success: false, message: 'Verbindung unterbrochen' }); });
+            }, POLL_INTERVAL);
+        })
+        .catch(() => { stop({ success: false, message: 'Research konnte nicht gestartet werden' }); });
+}
+
+// Falls beim Laden bereits eine Research läuft: direkt ins Polling einsteigen.
+if (RESEARCH_RUNNING) {
+    const btn = document.getElementById('research-btn');
+    const labelEl = btn ? btn.querySelector('.research-label') : null;
+    const startTime = Date.now();
+    if (btn) btn.classList.add('loading');
+    let tick = setInterval(() => {
+        if (!labelEl) return;
+        const secs = Math.floor((Date.now() - startTime) / 1000);
+        labelEl.textContent = secs < 20 ? 'Läuft…' : 'Läuft… ' + secs + 's';
+    }, 1000);
+    const bgPoll = setInterval(() => {
+        fetch('/api/holdings/research/status').then(r => r.json()).then(s => {
+            if (!s.running) { clearInterval(bgPoll); clearInterval(tick); location.reload(); }
+        }).catch(() => {});
+    }, 3000);
+}
+</script>
+{% endblock %}
