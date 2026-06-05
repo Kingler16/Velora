@@ -50,10 +50,50 @@
     document.getElementById('tradePreviewAccount').textContent = accSelect.options[accSelect.selectedIndex]?.text || state.account;
   };
 
-  const open = () => {
-    setStep(1);
-    modalEl()?.classList.add('open');
-    setTimeout(() => document.getElementById('tradeTicker')?.focus(), 80);
+  // open() ohne Argument = bisheriges Verhalten (leeres Formular, Schritt 1).
+  // open({action, ticker, shares, price, currency}) = Prefill aus z.B. einer Empfehlung;
+  // springt bei gesetztem Ticker direkt zu Schritt 2 (Menge).
+  const open = (prefill = {}) => {
+    if (!modalEl()) return;
+    modalEl().classList.add('open');
+
+    const { action, ticker, shares, price, currency } = prefill || {};
+
+    // Action vorauswählen (Buttons + State)
+    if (action === 'buy' || action === 'sell') {
+      state.action = action;
+      document.querySelectorAll('.trade-action-btn').forEach((b) =>
+        b.classList.toggle('active', b.dataset.action === action));
+    }
+
+    // Currency übernehmen (Radio falls vorhanden, sonst State)
+    if (currency) {
+      state.currency = currency;
+      const radio = document.querySelector(`input[name=trade_currency][value="${currency}"]`);
+      if (radio) radio.checked = true;
+      const curLabel = document.getElementById('tradePriceCur');
+      if (curLabel) curLabel.textContent = currency;
+    }
+
+    // Felder befüllen
+    const tickerEl = document.getElementById('tradeTicker');
+    if (tickerEl && ticker) { state.ticker = String(ticker).toUpperCase(); tickerEl.value = state.ticker; }
+    const sharesEl = document.getElementById('tradeShares');
+    if (sharesEl) sharesEl.value = (shares !== undefined && shares !== null && shares !== '') ? shares : '';
+    const priceEl = document.getElementById('tradePrice');
+    if (priceEl) priceEl.value = (price !== undefined && price !== null && price !== '') ? price : '';
+    if (shares) state.shares = parseFloat(shares) || 0;
+    if (price) state.price = parseFloat(price) || 0;
+
+    // Mit Ticker direkt zur Menge, sonst klassisch bei Schritt 1 starten.
+    if (ticker) {
+      setStep(2);
+      renderStep2();
+      setTimeout(() => sharesEl?.focus(), 80);
+    } else {
+      setStep(1);
+      setTimeout(() => tickerEl?.focus(), 80);
+    }
   };
 
   const close = () => { modalEl()?.classList.remove('open'); };

@@ -231,11 +231,46 @@ def _compute_asset_version() -> str:
 _ASSET_VERSION = _compute_asset_version()
 
 
+def _actionable_recommendations() -> list:
+    """Offene, konkret umsetzbare Empfehlungen — gleiche Logik wie recommendations.html:
+    buy/sell, watch mit entry_price, hold mit stop_loss."""
+    try:
+        recs = get_recommendations() or []
+    except Exception:
+        return []
+    out = []
+    for r in recs:
+        if not isinstance(r, dict) or r.get("status") != "open":
+            continue
+        action = r.get("action")
+        if action in ("buy", "sell"):
+            out.append(r)
+        elif action == "watch" and r.get("entry_price"):
+            out.append(r)
+        elif action == "hold" and r.get("stop_loss"):
+            out.append(r)
+    return out
+
+
+def _latest_briefing() -> dict | None:
+    """Neuestes Briefing (nach Datum), oder None."""
+    try:
+        briefings = get_briefings() or []
+        return max(briefings, key=lambda b: b.get("date", "")) if briefings else None
+    except Exception:
+        return None
+
+
 def _ctx(request, page: str, **extra) -> dict:
-    """Baut den Template-Kontext mit Übersetzungen."""
+    """Baut den Template-Kontext mit Übersetzungen. actionable_count steht global zur
+    Verfügung (Nav-Badge auf jeder Seite)."""
     lang = _get_lang()
     t = get_translations(lang)
-    return {"request": request, "page": page, "t": t, "lang": lang, "asset_v": _ASSET_VERSION, **extra}
+    ctx = {"request": request, "page": page, "t": t, "lang": lang, "asset_v": _ASSET_VERSION}
+    if "actionable_count" not in extra:
+        ctx["actionable_count"] = len(_actionable_recommendations())
+    ctx.update(extra)
+    return ctx
 
 
 # ─── HTML Pages ──────────────────────────────────────────────
@@ -248,9 +283,14 @@ async def dashboard(request: Request):
     indices = compute_index_data(market_data)
     snapshots = get_monthly_snapshots()
     cache_status = get_cache_status()
+    benchmarks = compute_benchmark_data(market_data)
+    actionable = _actionable_recommendations()
+    latest_briefing = _latest_briefing()
 
     return templates.TemplateResponse(request, "dashboard.html", _ctx(request, "dashboard",
         overview=overview, indices=indices, snapshots=snapshots, cache_status=cache_status,
+        benchmarks=benchmarks, actionable=actionable, actionable_count=len(actionable),
+        latest_briefing=latest_briefing,
     ))
 
 

@@ -6,8 +6,9 @@
  *  - Touch-Gestik nach unten mit > 80px overshoot
  *
  * Visueller Indikator unter Safe-Area-Top, rotiert während Pull und spinnt
- * während Refresh.  Refresh = window.location.reload() (einfachster Weg,
- * respektiert HTMX-State über Browser-Cache des SW).
+ * während Refresh.  Refresh = POST /api/refresh (holt FRISCHE Daten vom
+ * Backend), danach kurzes Polling auf /api/refresh/status und reload.
+ * Fällt bei Fehlern auf einen reload zurück, damit der Pull nie "hängt".
  */
 
 (function () {
@@ -93,6 +94,39 @@
     indicator.style.opacity = '0';
   }
 
+  // Echter Refresh: triggert das Backend-Sammeln frischer Daten, pollt kurz
+  // den Status und lädt dann neu. Robust — bei jedem Fehler einfach reload,
+  // damit der Pull niemals dauerhaft im Spin hängt.
+  function doRefresh() {
+    const MAX_WAIT_MS = 60000;   // 1 min hard cap, dann trotzdem reload
+    const POLL_MS = 2000;
+    const startTime = Date.now();
+
+    const finish = () => { location.reload(); };
+
+    fetch('/api/refresh', { method: 'POST' })
+      .then((r) => r.json())
+      .then(() => {
+        const poll = setInterval(() => {
+          if (Date.now() - startTime > MAX_WAIT_MS) {
+            clearInterval(poll);
+            finish();
+            return;
+          }
+          fetch('/api/refresh/status')
+            .then((r) => r.json())
+            .then((s) => {
+              if (!s || !s.running) { clearInterval(poll); finish(); }
+            })
+            .catch(() => { clearInterval(poll); finish(); });
+        }, POLL_MS);
+      })
+      .catch(() => {
+        // /api/refresh nicht erreichbar — wenigstens neu laden (Cache)
+        finish();
+      });
+  }
+
   document.addEventListener('touchstart', (e) => {
     if (refreshing) return;
     if (window.scrollY !== 0) return;
@@ -115,8 +149,8 @@
       refreshing = true;
       startSpin();
       if (window.VeloraHaptics) window.VeloraHaptics.medium();
-      // kleine Delay damit User den Spin sieht
-      setTimeout(() => location.reload(), 350);
+      // kleine Delay damit User den Spin sieht, dann echten Refresh auslösen
+      setTimeout(doRefresh, 350);
     } else {
       reset();
     }

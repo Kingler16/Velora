@@ -300,6 +300,10 @@ def compute_portfolio_overview(portfolio: dict, market_data: dict) -> dict:
         "total_pnl_eur": round(total_pnl_eur, 2),
         "total_pnl_pct": round(total_pnl_pct, 1),
         "position_count": len(positions),
+        "top_position": ({"name": positions[0]["name"], "ticker": positions[0]["ticker"],
+                          "pct": round(positions[0]["current_value_eur"] / total_value_eur * 100, 1)}
+                         if positions and total_value_eur else None),
+        "cash_pct": round(cash_total / total_value_eur * 100, 1) if total_value_eur else 0,
         "positions": positions,
         "bank_accounts": bank_accounts,
         "eur_usd_rate": eur_usd,

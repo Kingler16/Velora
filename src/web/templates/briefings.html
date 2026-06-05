@@ -164,7 +164,72 @@ document.addEventListener('DOMContentLoaded', () => {
             try { hljs.highlightElement(c); } catch (_) {}
         });
     }
+    document.querySelectorAll('.briefing-content').forEach(makeBriefingScannable);
 });
+
+// Bekannte Briefing-Sektionen — Erkennung tolerant: mit/ohne führende Nummer,
+// Gross/Kleinschreibung egal. Reihenfolge = Anzeige-Reihenfolge der Chips.
+// "Bilanz" steht vor "Empfehlungen", und die Empfehlungen-Regex schliesst
+// "EMPFEHLUNGS-BILANZ" via Negative-Lookahead aus, damit nichts doppelt matcht.
+const SECTION_DEFS = [
+    { key: 'marktlage',    label: 'Marktlage',    re: /^\s*(?:\d+\.\s*)?MARKTLAGE\b.*$/im },
+    { key: 'portfolio',    label: 'Portfolio',    re: /^\s*(?:\d+\.\s*)?PORTFOLIO[-\s]?CHECK\b.*$/im },
+    { key: 'earnings',     label: 'Earnings',     re: /^\s*(?:\d+\.\s*)?EARNINGS\b.*$/im },
+    { key: 'bilanz',       label: 'Bilanz',       re: /^\s*(?:\d+\.\s*)?EMPFEHLUNGS[-\s]?BILANZ\b.*$/im },
+    { key: 'empfehlungen', label: 'Empfehlungen', re: /^\s*(?:\d+\.\s*)?EMPFEHLUNGEN\b(?!\S*BILANZ).*$/im },
+    { key: 'ideen',        label: 'Neue Ideen',   re: /^\s*(?:\d+\.\s*)?NEUE\s+IDEEN\b.*$/im },
+    { key: 'risiken',      label: 'Risiken',      re: /^\s*(?:\d+\.\s*)?RISIKEN\b.*$/im },
+];
+
+let _briefingAnchorSeq = 0;
+
+function makeBriefingScannable(el) {
+    if (!el || el.dataset.scannable === 'done') return;
+    // Auf dem reinen Text arbeiten — robust gegen <b>/<strong>-Wrapping, das
+    // der Backend-Filter setzt. Wir matchen zeilenweise gegen die Section-Regexes.
+    const lines = el.innerHTML.split(/\r?\n/);
+    const found = [];
+
+    const stripTags = (s) => s.replace(/<[^>]*>/g, '').trim();
+
+    const rebuilt = lines.map((line) => {
+        const plain = stripTags(line);
+        if (!plain) return line;
+        for (const def of SECTION_DEFS) {
+            // Regex ohne 'm'/'i'-Multiline auf die Einzelzeile anwenden:
+            const single = new RegExp(def.re.source, 'i');
+            if (single.test(plain)) {
+                const id = 'brief-' + def.key + '-' + (++_briefingAnchorSeq);
+                found.push({ id, label: def.label });
+                // Header als anspringbare Ueberschrift rendern (Original-Markup als Inhalt).
+                return '<h4 class="briefing-section" id="' + id + '">' + line.trim() + '</h4>';
+            }
+        }
+        return line;
+    }).join('\n');
+
+    if (found.length < 2) return; // Keine sinnvolle Struktur — Textwand belassen.
+
+    el.innerHTML = rebuilt;
+    el.dataset.scannable = 'done';
+
+    // Chip-Leiste oben einsetzen.
+    const bar = document.createElement('div');
+    bar.className = 'briefing-chipbar';
+    found.forEach((s) => {
+        const chip = document.createElement('a');
+        chip.className = 'briefing-chip';
+        chip.href = '#' + s.id;
+        chip.textContent = s.label;
+        chip.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            const target = document.getElementById(s.id);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        bar.appendChild(chip);
+    });
+    el.parentNode.insertBefore(bar, el);
+}
 </script>
 
 <style>
@@ -186,6 +251,54 @@ document.addEventListener('DOMContentLoaded', () => {
 }
 .briefing-full.open {
     max-height: 1000rem;   /* praktisch unbegrenzt — auch lange Briefings nicht abschneiden */
+}
+
+/* Scanbares Briefing: Sprung-Chips + Sektions-Ueberschriften */
+.briefing-chipbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+.briefing-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 11px;
+    border-radius: var(--radius-full, 999px);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background var(--dur-fast, 0.15s) var(--ease-apple, ease), color var(--dur-fast, 0.15s) var(--ease-apple, ease), border-color var(--dur-fast, 0.15s) var(--ease-apple, ease);
+    -webkit-tap-highlight-color: transparent;
+}
+.briefing-chip:hover,
+.briefing-chip:active {
+    background: var(--accent-bg);
+    color: var(--accent);
+    border-color: var(--accent-ring, var(--accent));
+}
+.briefing-content h4.briefing-section {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--accent-light, var(--accent));
+    margin: 22px 0 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--glass-border);
+    scroll-margin-top: calc(var(--safe-top, 0px) + 16px);
+}
+.briefing-content h4.briefing-section:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
 }
 </style>
 {% endblock %}

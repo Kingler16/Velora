@@ -22,11 +22,47 @@
 
 <div class="hero-greeting" id="heroGreeting"></div>
 
+{# „Heute"-Karte: offene Aktionen + letztes Briefing auf einen Blick #}
+<a class="today-card{% if actionable_count > 0 %} today-card--active{% endif %}" href="/recommendations">
+    <div class="today-card-main">
+        <div class="today-card-eyebrow">{{ t.dashboard.today }}</div>
+        {% if actionable_count > 0 %}
+        <div class="today-card-headline today-card-headline--alert">
+            {{ (t.dashboard.open_actions_n if actionable_count == 1 else t.dashboard.open_actions_n_plural).replace('{n}', actionable_count|string) }}
+            <span class="today-card-arrow">→</span>
+        </div>
+        {% else %}
+        <div class="today-card-headline">
+            {{ t.dashboard.nothing_todo }} <span class="today-card-sub">— {{ t.dashboard.nothing_todo_sub }}</span>
+        </div>
+        {% endif %}
+    </div>
+    {% if latest_briefing and latest_briefing.summary %}
+    <div class="today-card-briefing">
+        {% if latest_briefing.market_regime %}
+        <span class="today-regime">{{ latest_briefing.market_regime }}</span>
+        {% endif %}
+        <span class="today-briefing-text">{{ latest_briefing.summary }}</span>
+        <a href="/briefings" class="today-briefing-link" onclick="event.stopPropagation();">{{ t.dashboard.view_briefings }} →</a>
+    </div>
+    {% endif %}
+</a>
+
 <div class="kpi-hero">
     <div>
         <div class="kpi-hero-label">{{ t.dashboard.total_assets }}</div>
         <div class="kpi-hero-value tabular-nums">{{ overview.total_value_eur|eur }}</div>
         <div class="kpi-hero-delta tabular-nums" id="heroDelta"></div>
+        {% if benchmarks %}
+        <div class="hero-benchmarks">
+            {% for b in benchmarks if b.name in ['S&P 500', 'NASDAQ', 'DAX'] %}
+            <span class="hero-benchmark">
+                <span class="hero-benchmark-name">{{ b.name }}</span>
+                <span class="hero-benchmark-change tabular-nums {{ 'positive' if b.change_pct >= 0 else 'negative' }}">{{ b.change_pct|pct }}</span>
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
     <div class="kpi-hero-spark" id="heroSparkContainer">
         <span class="sparkline" data-sparkline="{{ hero_sparkline_data|default([1,1])|tojson }}" data-width="160" data-height="40"></span>
@@ -45,6 +81,24 @@
     <div class="kpi-card">
         <div class="kpi-label">{{ t.dashboard.total_return }}</div>
         <div class="kpi-value tabular-nums {{ 'positive' if overview.total_pnl_pct >= 0 else 'negative' }}">{{ overview.total_pnl_pct|pct }}</div>
+    </div>
+</div>
+
+<div class="kpi-grid grid-cols-2" style="margin-top: var(--space-3);">
+    <div class="kpi-card">
+        <div class="kpi-label">{{ t.dashboard.largest_position }}</div>
+        {% if overview.top_position %}
+        {% set top_warn = overview.top_position.pct > 25 %}
+        <div class="kpi-value tabular-nums" {% if top_warn %}style="color: var(--warn);"{% endif %}>
+            {{ overview.top_position.ticker or '–' }} <span style="color: var(--text-secondary); font-weight: 600;">{{ overview.top_position.pct }}%</span>
+        </div>
+        {% else %}
+        <div class="kpi-value tabular-nums">–</div>
+        {% endif %}
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">{{ t.dashboard.cash_quote }}</div>
+        <div class="kpi-value tabular-nums">{{ overview.cash_pct }}%</div>
     </div>
 </div>
 

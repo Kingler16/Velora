@@ -346,4 +346,22 @@
   } else {
     init();
   }
+
+  // ── Öffentliche API ─────────────────────────────────
+  // VeloraWidget.ask(text): öffnet das Panel, befüllt den Input mit `text`
+  // und sendet ab. Genutzt z.B. von /recommendations ("Velora fragen").
+  const ask = async (text) => {
+    if (!text) return;
+    // Falls init() noch nicht lief (DOM noch nicht ready), nachholen.
+    if (!$panel || !$input) init();
+    if (!$panel || !$input) return;
+    if (!$panel.classList.contains('open')) {
+      await openPanel();
+    }
+    $input.value = text;
+    autoResize();
+    send();
+  };
+
+  window.VeloraWidget = { ask, open: openPanel, close: closePanel };
 })();

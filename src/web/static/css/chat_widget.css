@@ -265,11 +265,16 @@
 }
 
 @media (max-width: 640px) {
+    /* FAB über die Bottom-Nav heben, damit er die 60px-Leiste nicht überlappt.
+       --bottom-nav-h (60px) + --safe-bottom + 12px Luft. */
+    .velora-widget-toggle {
+        right: 14px;
+        bottom: calc(var(--bottom-nav-h, 60px) + var(--safe-bottom, 0px) + 12px);
+    }
     .velora-widget-panel {
         width: calc(100vw - 24px);
         right: 12px;
-        bottom: 80px;
+        bottom: calc(var(--bottom-nav-h, 60px) + var(--safe-bottom, 0px) + 68px);
         height: min(70vh, 520px);
     }
-    .velora-widget-toggle { right: 14px; bottom: 14px; }
 }

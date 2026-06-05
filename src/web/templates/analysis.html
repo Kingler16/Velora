@@ -9,8 +9,15 @@
 <div class="page-header">
     <div>
         <h1 class="page-title">{{ t.analyse.title }}</h1>
-        <div class="page-subtitle">{{ t.analyse.title_sub }}</div>
+        <div class="page-subtitle" id="cache-status-header"
+             hx-get="/api/partial/cache-status" hx-trigger="load, every 60s" hx-swap="innerHTML">
+            {{ t.analyse.title_sub }}
+        </div>
     </div>
+    <button class="btn btn-ghost" id="refresh-btn" onclick="triggerRefresh()" title="{{ t.dashboard.refresh }}">
+        <span class="spinner"></span>
+        <span class="refresh-label">{{ t.dashboard.refresh }}</span>
+    </button>
 </div>
 
 <div class="kpi-grid grid-cols-3" style="margin-bottom: var(--space-5);">
@@ -186,6 +193,55 @@
 
 {% block scripts %}
 <script>
+const LANG = {{ lang|tojson }};
+function triggerRefresh() {
+    const btn = document.getElementById('refresh-btn');
+    if (!btn) return;
+    const labelEl = btn.querySelector('.refresh-label');
+    const originalLabel = labelEl.textContent;
+    const MAX_WAIT_MS = 120000;
+    const POLL_INTERVAL = 2000;
+    const startTime = Date.now();
+    let poll = null, tick = null, consecutiveErrors = 0;
+    const stop = ({ success, message, detail }) => {
+        if (poll) clearInterval(poll);
+        if (tick) clearInterval(tick);
+        btn.classList.remove('loading');
+        btn.disabled = false;
+        labelEl.textContent = originalLabel;
+        if (success) location.reload();
+        else if (message && window.toast) window.toast.warn(message, { detail });
+    };
+    btn.classList.add('loading');
+    btn.disabled = true;
+    const STR_UPDATING = LANG === 'en' ? 'Updating…' : 'Aktualisiere…';
+    const STR_STILL = LANG === 'en' ? 'Still running — data may take a bit longer' : 'Läuft weiter — Daten brauchen länger als erwartet';
+    tick = setInterval(() => {
+        const secs = Math.floor((Date.now() - startTime) / 1000);
+        labelEl.textContent = secs < 20 ? STR_UPDATING : STR_UPDATING + ' ' + secs + 's';
+    }, 1000);
+    fetch('/api/refresh', { method: 'POST' })
+        .then(r => r.json())
+        .then(() => {
+            poll = setInterval(() => {
+                if (Date.now() - startTime > MAX_WAIT_MS) {
+                    stop({ success: false, message: STR_STILL, detail: LANG === 'en' ? 'Reloading the page in the background once done.' : 'Die Seite lädt automatisch neu sobald fertig.' });
+                    const bgPoll = setInterval(() => {
+                        fetch('/api/refresh/status').then(r => r.json()).then(s => {
+                            if (!s.running) { clearInterval(bgPoll); location.reload(); }
+                        }).catch(() => {});
+                    }, 5000);
+                    return;
+                }
+                fetch('/api/refresh/status')
+                    .then(r => r.json())
+                    .then(s => { consecutiveErrors = 0; if (!s.running) stop({ success: true }); })
+                    .catch(() => { consecutiveErrors++; if (consecutiveErrors >= 5) stop({ success: false, message: LANG === 'en' ? 'Connection lost' : 'Verbindung unterbrochen' }); });
+            }, POLL_INTERVAL);
+        })
+        .catch(() => { stop({ success: false, message: LANG === 'en' ? 'Failed to start refresh' : 'Refresh konnte nicht gestartet werden' }); });
+}
+
 (function(){
     const snaps = {{ snapshots|tojson }};
     const benchmarks = {{ benchmarks|tojson if benchmarks else '[]' }};

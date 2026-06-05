@@ -1,7 +1,101 @@
 {% extends "base.html" %}
 {% block title %}Empfehlungen — Velora{% endblock %}
 
+{% block head %}
+<script src="/static/js/trade-modal.js?v={{ asset_v }}" defer></script>
+{% endblock %}
+
 {% block content %}
+{#
+  Eigenständiges Trade-Modal für /recommendations.
+  Bewusst NICHT das Markup aus portfolio.html wiederverwendet, da jenes
+  overview.positions / overview.accounts_grouped / default_currency braucht —
+  hier nicht verfügbar. Gleiche Element-IDs wie trade-modal.js erwartet.
+  Konto = freies Textfeld, Currency = immer EUR/USD-Radio (Prefill aus rec._ccy).
+#}
+<div id="tradeModal" class="modal-overlay" onclick="if(event.target===this)TradeModal.close()">
+    <div class="card glass-strong glass-elevated" style="width: 440px; max-width: 95vw; padding: 24px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
+            <div id="tradeStepTitle" style="font-family:var(--font-ui); font-weight: 700; font-size: var(--text-lg); color: var(--text-primary); letter-spacing: var(--letter-tight);">Trade loggen</div>
+            <span style="cursor:pointer; font-size:20px; color:var(--text-muted);" onclick="TradeModal.close()" aria-label="Schliessen">×</span>
+        </div>
+        <div id="tradeProgress" style="display:flex; gap:6px; margin-bottom: 20px;">
+            <span class="trade-dot active"></span>
+            <span class="trade-dot"></span>
+            <span class="trade-dot"></span>
+        </div>
+
+        <div id="tradeStep1" class="trade-step">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px;">
+                <button type="button" class="trade-action-btn active" data-action="buy">KAUFEN</button>
+                <button type="button" class="trade-action-btn" data-action="sell">VERKAUFEN</button>
+            </div>
+            <label class="field-label" style="display:block; margin-bottom:4px;">Ticker</label>
+            <input type="text" id="tradeTicker" class="input" placeholder="z.B. AAPL, ASML.AS" autocomplete="off" inputmode="text">
+            <div style="display:flex; justify-content:flex-end; margin-top:20px;">
+                <button type="button" class="btn btn-accent" id="tradeNext1">Weiter →</button>
+            </div>
+        </div>
+
+        <div id="tradeStep2" class="trade-step" hidden>
+            <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 12px;">Du <span id="tradeActionWord">kaufst</span>: <strong id="tradeTickerDisplay" style="color: var(--text-primary);">—</strong></div>
+            <div style="display:flex; gap:10px; margin-bottom:12px;">
+                <div style="flex:1;">
+                    <label class="field-label" style="display:block; margin-bottom:4px;">Stueck</label>
+                    <input type="number" id="tradeShares" class="input" step="0.01" min="0.01" placeholder="10.00" inputmode="decimal">
+                </div>
+                <div style="flex:1;">
+                    <label class="field-label" style="display:block; margin-bottom:4px;">Preis (<span id="tradePriceCur">EUR</span>)</label>
+                    <input type="number" id="tradePrice" class="input" step="0.01" min="0.01" placeholder="150.00" inputmode="decimal">
+                </div>
+            </div>
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+                <label style="flex:1; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="radio" name="trade_currency" value="EUR" checked>
+                    <span style="font-weight:600;">EUR</span>
+                </label>
+                <label style="flex:1; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="radio" name="trade_currency" value="USD">
+                    <span style="font-weight:600;">USD</span>
+                </label>
+            </div>
+            <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom:12px;">Total: <strong id="tradeTotal" class="tabular-nums" style="color: var(--text-primary);">—</strong></div>
+            <label class="field-label" style="display:block; margin-bottom:4px;">Konto</label>
+            <input type="text" id="tradeAccount" class="input" placeholder="z.B. Trade Republic, Scalable" autocomplete="off">
+            <div style="display:flex; justify-content:space-between; margin-top:20px;">
+                <button type="button" class="btn btn-ghost" id="tradeBack2">← Zurueck</button>
+                <button type="button" class="btn btn-accent" id="tradeNext2">Weiter →</button>
+            </div>
+        </div>
+
+        <div id="tradeStep3" class="trade-step" hidden>
+            <div style="padding: 16px; background: var(--glass-bg-strong); border: 1px solid var(--glass-border); border-radius: var(--radius-md); margin-bottom:16px;">
+                <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom:8px;" id="tradePreviewLabel">KAUF</div>
+                <div style="font-size: var(--text-lg); font-weight: 700; color: var(--text-primary); margin-bottom:4px;" id="tradePreviewMain">—</div>
+                <div style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom:8px;" id="tradePreviewTotal">= —</div>
+                <div style="font-size: var(--text-xs); color: var(--text-muted);">Konto: <span id="tradePreviewAccount">—</span></div>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+                <button type="button" class="btn btn-ghost" id="tradeBack3">← Zurueck</button>
+                <button type="button" class="btn btn-accent" id="tradeSubmitBtn">
+                    <span class="spinner"></span>
+                    Bestaetigen & speichern
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.trade-dot { display: inline-block; width: 28px; height: 4px; border-radius: 2px; background: var(--glass-border); transition: background var(--dur-fast) var(--ease-apple); position: relative; }
+.trade-dot::before { content: ''; position: absolute; inset: -14px -2px; }
+.trade-dot.active { background: var(--accent); }
+.trade-action-btn { padding: 14px 8px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-sm); font-family: var(--font-ui); font-size: var(--text-sm); font-weight: 700; letter-spacing: 0.5px; color: var(--text-secondary); cursor: pointer; transition: all var(--dur-fast) var(--ease-apple); }
+.trade-action-btn:hover { background: var(--glass-bg-strong); color: var(--text-primary); }
+.trade-action-btn.active[data-action="buy"] { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-ring); box-shadow: 0 0 0 1px var(--accent-ring); }
+.trade-action-btn.active[data-action="sell"] { background: var(--loss-bg); color: var(--loss); border-color: var(--loss); }
+</style>
+
 <div class="page-header">
     <div>
         <h1 class="page-title">{{ t.empfehlungen.title }}</h1>
@@ -43,9 +137,9 @@
         <div class="kpi-label">Offene Aktionen</div>
         <div class="kpi-value text-accent">{{ actionable|length }}</div>
     </div>
-    <div class="kpi-card" style="border-left: 3px solid var(--green);">
+    <div class="kpi-card" style="border-left: 3px solid var(--accent);">
         <div class="kpi-label">Ausgeführt</div>
-        <div class="kpi-value text-green">{{ (wins|length + executed|length) }}</div>
+        <div class="kpi-value text-accent">{{ (wins|length + executed|length) }}</div>
     </div>
     <div class="kpi-card" style="border-left: 3px solid var(--red);">
         <div class="kpi-label">Stop ausgelöst</div>
@@ -53,7 +147,11 @@
     </div>
     <div class="kpi-card">
         <div class="kpi-label">Hit-Rate</div>
-        <div class="kpi-value {% if hit_rate >= 60 %}text-green{% elif hit_rate >= 40 %}text-yellow{% else %}text-red{% endif %}">{{ hit_rate|int }}%</div>
+        {% if total_closed >= 3 %}
+        <div class="kpi-value {% if hit_rate >= 60 %}text-accent{% elif hit_rate >= 40 %}text-yellow{% else %}text-red{% endif %}">{{ hit_rate|int }}%</div>
+        {% else %}
+        <div class="kpi-value text-muted" style="font-size: 13px; font-weight: 600; line-height: 1.3;">Noch zu wenig Daten</div>
+        {% endif %}
     </div>
 </div>
 
@@ -80,12 +178,12 @@
             {% set accent_bg = 'var(--yellow-bg)' %}
         {% elif is_limit %}
             {% set order_label = 'LIMIT KAUF' if is_buy else 'LIMIT VERKAUF' %}
-            {% set accent = 'var(--green)' if is_buy else 'var(--red)' %}
-            {% set accent_bg = 'var(--green-bg)' if is_buy else 'var(--red-bg)' %}
+            {% set accent = 'var(--accent)' if is_buy else 'var(--red)' %}
+            {% set accent_bg = 'var(--accent-bg)' if is_buy else 'var(--red-bg)' %}
         {% else %}
             {% set order_label = 'KAUFEN' if is_buy else 'VERKAUFEN' %}
-            {% set accent = 'var(--green)' if is_buy else 'var(--red)' %}
-            {% set accent_bg = 'var(--green-bg)' if is_buy else 'var(--red-bg)' %}
+            {% set accent = 'var(--accent)' if is_buy else 'var(--red)' %}
+            {% set accent_bg = 'var(--accent-bg)' if is_buy else 'var(--red-bg)' %}
         {% endif %}
 
         <div id="rec-{{ rec.ticker|replace('.','_') }}"
@@ -110,7 +208,7 @@
                     {% endif %}
                 </div>
                 <div style="display: flex; gap: 6px; flex-shrink: 0;">
-                    <button class="btn" style="padding:6px 12px; font-size:12px; color:var(--gain); border-color:var(--gain);"
+                    <button class="btn" style="padding:6px 10px; font-size:12px;"
                             onclick="closeRec('{{ rec.ticker }}', 'executed')" title="Als ausgeführt markieren">&#10003; Erledigt</button>
                     <button class="btn" style="padding:6px 10px; font-size:12px;"
                             onclick="closeRec('{{ rec.ticker }}', 'cancelled')" title="Verwerfen">&#10005;</button>
@@ -156,7 +254,7 @@
                     <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
                         Ziel
                     </div>
-                    <div style="font-size: 15px; font-weight: 700; color: {% if rec.target_price %}var(--green){% else %}var(--text-muted){% endif %};">
+                    <div style="font-size: 15px; font-weight: 700; color: {% if rec.target_price %}var(--accent){% else %}var(--text-muted){% endif %};">
                         {% if rec.target_price %}{{ rec.target_price|price(rec.ticker, rec._ccy) }}{% else %}—{% endif %}
                     </div>
                     {% if rec.target_price %}{% set alt = rec.target_price|price_alt(rec.ticker, eur_usd, rec._ccy) %}
@@ -174,6 +272,23 @@
                 {% if rec.get('unrealized_pct') is not none and rec.unrealized_pct is number %}
                 <span>aktuell <strong class="{{ 'positive' if rec.unrealized_pct >= 0 else 'negative' }}">{{ rec.unrealized_pct|pct }}</strong></span>
                 {% endif %}
+            </div>
+
+            <!-- Aktionen: 1-Klick Trade-Log + Velora-Drilldown -->
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);">
+                {% if not is_stop_adjust %}
+                <button type="button" class="btn"
+                        style="flex: 1; min-width: 140px; padding: 9px 12px; font-size: 13px; font-weight: 700; justify-content: center;
+                               background: {{ accent_bg }}; color: {{ accent }}; border: 1px solid {{ accent }};"
+                        onclick="logTrade('{{ 'buy' if is_buy else 'sell' }}', '{{ rec.ticker }}', {{ rec.shares or 'null' }}, {{ rec.entry_price or 'null' }}, '{{ rec._ccy or 'EUR' }}')">
+                    {{ 'Kauf loggen' if is_buy else 'Verkauf loggen' }}
+                </button>
+                {% endif %}
+                <button type="button" class="btn btn-ghost"
+                        style="padding: 9px 12px; font-size: 13px; justify-content: center;{% if is_stop_adjust %} flex: 1;{% endif %}"
+                        onclick="askVelora('{{ rec.ticker }}')">
+                    Velora fragen
+                </button>
             </div>
         </div>
         {% endfor %}
@@ -202,6 +317,7 @@
                     <th>Ticker</th>
                     <th>Aktion</th>
                     <th>Status</th>
+                    <th>Rendite</th>
                     <th>Ergebnis</th>
                 </tr>
             </thead>
@@ -219,6 +335,12 @@
                             {% elif rec.status == 'cancelled' %}Verworfen
                             {% else %}{{ rec.status }}{% endif %}
                         </span>
+                    </td>
+                    <td data-label="Rendite">
+                        {% set rret = rec.get('realized_pct') if rec.get('realized_pct') is not none else rec.get('unrealized_pct') %}
+                        {% if rret is not none and rret is number %}
+                        <strong class="{{ 'positive' if rret >= 0 else 'negative' }}">{{ rret|pct }}</strong>
+                        {% else %}<span class="text-muted">–</span>{% endif %}
                     </td>
                     <td data-label="Ergebnis" style="font-size: 12px; color: var(--text-muted);">{{ rec.outcome or '–' }}</td>
                 </tr>
@@ -263,6 +385,35 @@
 
 {% block scripts %}
 <script>
+// Empfehlung → Trade-Modal (1-Klick). Prefill aus der Card; springt direkt zu Schritt 2.
+// price/shares können null sein (z.B. Markt-Order ohne Limit) — Modal lässt das Feld dann leer.
+function logTrade(action, ticker, shares, price, currency) {
+    if (!window.TradeModal || typeof window.TradeModal.open !== 'function') {
+        if (window.toast && window.toast.error) window.toast.error('Trade-Dialog nicht verfügbar');
+        return;
+    }
+    window.TradeModal.open({
+        action: action,
+        ticker: ticker,
+        shares: (shares === null || shares === undefined) ? '' : shares,
+        price: (price === null || price === undefined) ? '' : price,
+        currency: currency || 'EUR',
+    });
+}
+
+// Empfehlung → Velora-Chat-Widget mit vorformulierter Frage.
+function askVelora(ticker) {
+    const q = 'Erklär deine ' + ticker + '-Empfehlung: warum Limit/Stop, was ist das Downside, wie passt das zu meinem Portfolio?';
+    if (window.VeloraWidget && typeof window.VeloraWidget.ask === 'function') {
+        window.VeloraWidget.ask(q);
+    } else {
+        // Fallback (sollte praktisch nie greifen — Widget ist global eingebunden):
+        // Frage in die Zwischenablage legen und Full-Page-Chat öffnen.
+        if (navigator.clipboard) navigator.clipboard.writeText(q).catch(() => {});
+        location.href = '/chat';
+    }
+}
+
 function closeRec(ticker, status) {
     const label = status === 'executed' ? 'Ausgeführt' : status === 'cancelled' ? 'Verworfen' : status;
     if (!confirm(ticker + ' als "' + label + '" markieren?')) return;

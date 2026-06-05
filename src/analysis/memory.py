@@ -56,6 +56,7 @@ def save_briefing_summary(summary: str, recommendations: list[dict], market_regi
     briefings.append({
         "date": datetime.now().isoformat(),
         "summary": summary,
+        "market_regime": market_regime,
         "recommendation_count": len(recommendations),
         "had_actions": any(r.get("action") not in (None, "hold", "watch") for r in recommendations),
         "full_text": full_text,
