@@ -346,6 +346,12 @@ async def recommendations_page(request: Request):
     ))
 
 
+@app.get("/strategy", response_class=HTMLResponse)
+async def strategy_page(request: Request):
+    from src.analysis.mandate import load_mandate
+    return templates.TemplateResponse(request, "strategy.html", _ctx(request, "strategy", mandate=load_mandate()))
+
+
 # ─── Secrets-Maskierung & Auth-Gate ──────────────────────────
 # Secrets dürfen nie im Klartext ins ausgelieferte HTML. Auth-Gate ist OFF
 # solange kein web.auth_token in settings.json steht (kein Lockout beim Deploy);

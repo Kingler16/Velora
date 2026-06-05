@@ -4,6 +4,7 @@ config/settings.json
 
 # Personal data
 config/portfolio.json
+config/mandate.json
 config/watchlist.json
 config/portfolio.bak.*.json
 config/.portfolio.lock

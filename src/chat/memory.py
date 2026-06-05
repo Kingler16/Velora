@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 import json
 
+from src.analysis.mandate import build_mandate_block, load_mandate
 from src.chat import db
 
 CONFIG_DIR = Path(__file__).parent.parent.parent / "config"
@@ -248,7 +249,12 @@ def build_full_system_prompt(thread_id: str, page_context: dict | None = None) -
     sticky = _sticky_memory_block()
     thread_mem = _thread_memory_block(thread_id)
 
+    # §0-Mandat ganz oben (oberste Direktive, bei jedem Turn). Opt-in: leer wenn kein Mandat → keine Änderung.
+    mandate_block = build_mandate_block(load_mandate())
+
     parts = [base, "", sticky]
+    if mandate_block:
+        parts = [mandate_block, "", base, "", sticky]
     if thread_mem:
         parts.append(thread_mem)
 

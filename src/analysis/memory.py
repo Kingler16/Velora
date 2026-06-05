@@ -101,14 +101,21 @@ def _is_actionable(rec: dict) -> tuple[bool, str]:
     return True, ""
 
 
-def save_recommendations(recommendations: list[dict]):
+def save_recommendations(recommendations: list[dict], overview: dict | None = None):
     """Speichert neue Empfehlungen. Ersetzt offene Duplikate für denselben Ticker.
 
     Verwirft alles was nicht actionable ist (hold, watch ohne Order, leeres Reasoning,
-    fehlende Stückzahl). Was gedroppt wurde, steht im Log — damit transparent ist
-    warum eine vermeintliche Empfehlung nicht in der UI auftaucht.
+    fehlende Stückzahl). Was gedroppt wurde, steht im Log.
+
+    Wenn ein Mandat existiert (config/mandate.json), wird zusätzlich gegen die
+    strukturierten Regeln geprüft: block-Verstöße werden verworfen, warn-Verstöße
+    landen als rec["mandate_warnings"] (UI zeigt sie als Hinweis). `overview` =
+    compute_portfolio_overview, damit Allokations-Regeln gegen echte Werte rechnen.
     """
+    from src.analysis.mandate import load_mandate, validate_against_mandate
+
     existing = _load_json("recommendations.json", [])
+    mandate = load_mandate()
     accepted = 0
     dropped = 0
 
@@ -118,6 +125,15 @@ def save_recommendations(recommendations: list[dict]):
             logger.info("Recommendation dropped (%s): %s", rec.get("ticker", "?"), reason)
             dropped += 1
             continue
+
+        if mandate:
+            verdict, violations = validate_against_mandate(rec, mandate, overview)
+            if verdict == "block":
+                logger.info("Recommendation mandate-blocked (%s): %s", rec.get("ticker", "?"), "; ".join(violations))
+                dropped += 1
+                continue
+            if verdict == "warn":
+                rec["mandate_warnings"] = violations
 
         rec["date"] = datetime.now().isoformat()
         rec["status"] = "open"

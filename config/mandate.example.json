@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "updated_at": "2026-06-05T20:00:00",
+
+  "summary_human": "Maximaler langfristiger Vermögensaufbau über 20+ Jahre. Ich bin jung, habe Zeit und vertrage Schwankungen. Kern: breite Welt-ETFs als Fundament, drumherum 4-6 Qualitäts-/Wachstumsaktien, die ich verstehe. Kein Hebel, keine Optionen, keine CFDs. Krypto höchstens 5%. Mindestens 8% Cash-Puffer. Gewinne nur realisieren, wenn die These bricht — nicht für Rebalancing-Kosmetik. Lieber nichts tun als hektisch handeln.",
+  "philosophy": "Buy-and-hold, breit über ETF, langer Atem. Einzelaktien nur bei echter Überzeugung. Volatilität ist der Preis, nicht das Risiko — ich verkaufe nicht in Panik.",
+  "soft_preferences": [
+    "Tech/KI-Klumpen im Auge behalten — nicht weiter aufstocken wenn schon >35% Tech",
+    "Sparrate bevorzugt in den ETF-Kern, nicht in Einzelwetten",
+    "Neue Einzelaktie nur wenn ich das Geschäftsmodell in 2 Sätzen erklären kann",
+    "Thesaurierende ETFs bevorzugt (Zinseszins, weniger Steuer-Reibung)"
+  ],
+  "tax_directives": [
+    "KESt 27,5% AT: Gewinne nur realisieren wenn die These bricht, nicht für Kosmetik",
+    "Verluste im selben Kalenderjahr zur Verrechnung nutzen"
+  ],
+
+  "objective": {
+    "horizon_years": 25,
+    "primary_goal": "max_growth",
+    "monthly_contribution_eur": 300
+  },
+  "targets": {
+    "regions": { "USA": 55, "Europa": 30, "Asien": 12, "Sonstige": 3 },
+    "cash_pct": 8
+  },
+  "hard_rules": [
+    { "id": "max_single_stock", "type": "max_position_pct", "value": 12, "exceptions": {}, "rule": "block" },
+    { "id": "no_leverage", "type": "forbidden_instrument", "match": ["hebel", "leverage", "2x", "3x", "margin", "cfd", "option", "futures", "knock-out"], "rule": "block" },
+    { "id": "ticker_ban", "type": "forbidden_ticker", "tickers": [], "rule": "block" },
+    { "id": "min_cash", "type": "min_cash_pct", "value": 8, "rule": "warn" },
+    { "id": "crypto_cap", "type": "max_keyword_pct", "keywords": ["btc", "eth", "crypto", "bitcoin", "coin"], "value": 5, "rule": "warn" },
+    { "id": "max_tech", "type": "max_sector_pct", "sector": "Technology", "value": 38, "rule": "warn" }
+  ],
+  "single_trade_cap_pct": 8,
+  "review_cadence": "quarterly",
+  "change_log": [
+    { "version": 1, "at": "2026-06-05T20:00:00", "summary": "Initiales Beispiel-Mandat" }
+  ]
+}

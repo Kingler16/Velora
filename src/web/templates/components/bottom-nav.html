@@ -29,7 +29,7 @@
         </span>
         <span class="label">Briefs</span>
     </a>
-    <button type="button" class="bottom-nav-item bottom-nav-more {{ 'active' if page in ('analysis','recommendations','settings','install') }}"
+    <button type="button" class="bottom-nav-item bottom-nav-more {{ 'active' if page in ('analysis','recommendations','strategy','settings','install') }}"
             aria-label="Mehr" aria-expanded="false"
             onclick="(function(b){var s=document.getElementById('bottom-more-sheet');var open=!s.classList.contains('open');s.classList.toggle('open',open);b.setAttribute('aria-expanded',open);document.body.classList.toggle('bottom-more-open',open);})(this)">
         <span class="icon">
@@ -48,6 +48,10 @@
     <a href="/recommendations" class="bottom-more-item {{ 'active' if page == 'recommendations' }}" role="menuitem">
         <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 4.5 4.5 2-4.5 2L12 16l-2-4.5L5.5 9.5 10 7.5z"/><path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/></svg></span>
         <span>{{ t.nav.empfehlungen }}</span>
+    </a>
+    <a href="/strategy" class="bottom-more-item {{ 'active' if page == 'strategy' }}" role="menuitem">
+        <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.5" fill="currentColor"/></svg></span>
+        <span>{{ t.nav.get('strategy', 'Strategie') }}</span>
     </a>
     <a href="/settings" class="bottom-more-item {{ 'active' if page in ('settings', 'install') }}" role="menuitem">
         <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.36.166.68.42.93.74.251.32.44.7.53 1.11"/></svg></span>

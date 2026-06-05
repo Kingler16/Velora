@@ -126,6 +126,8 @@ async def run_briefing():
         regime = classify_regime(market_data, macro_data)
         risk_metrics = compute_risk_metrics(market_data, macro_data)
         correlation = compute_correlation_data(market_data)
+        from src.web.services.portfolio_service import compute_portfolio_overview
+        overview = compute_portfolio_overview(portfolio, market_data)
 
         # 3. Memory laden + offene Empfehlungen updaten
         logger.info("Lade Memory...")
@@ -184,7 +186,7 @@ async def run_briefing():
                     full_text=briefing_text,
                 )
             if structured.get("recommendations"):
-                save_recommendations(structured["recommendations"])
+                save_recommendations(structured["recommendations"], overview)
             if structured.get("market_regime"):
                 update_notes("market_regime", structured["market_regime"])
             if structured.get("new_insights"):
