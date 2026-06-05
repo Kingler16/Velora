@@ -61,10 +61,12 @@ VELORA_TOOLS = [
     "mcp__velora__get_watchlist",
     "mcp__velora__search_memory",
     "mcp__velora__pin_memory",
+    "mcp__velora__get_strategy_drift",
     # Write (legen pending_actions an, brauchen User-Bestätigung)
     "mcp__velora__log_trade",
     "mcp__velora__update_watchlist",
     "mcp__velora__close_recommendation",
+    "mcp__velora__propose_mandate",
 ]
 
 # Tools die Write-Confirmation erfordern
@@ -72,4 +74,5 @@ CONFIRMATION_REQUIRED_TOOLS = {
     "mcp__velora__log_trade",
     "mcp__velora__update_watchlist",
     "mcp__velora__close_recommendation",
+    "mcp__velora__propose_mandate",
 }

@@ -243,6 +243,18 @@ def _thread_memory_block(thread_id: str) -> str:
     return "\n".join(parts)
 
 
+_MANDATE_EDITOR_HINT = (
+    "\n=== STRATEGIE-EDITOR ===\n"
+    "Du kannst die Anlage-Strategie des Users (\"Mein Mandat\") gemeinsam mit ihm definieren oder ändern. "
+    "Wenn er über seine Strategie/Regeln/Ziele reden oder etwas ändern will: interviewe ihn kurz "
+    "(Ziel, Horizont, Risikotragfähigkeit, Tabus, max % je Einzelposition, Cash-Minimum, Soll-Allokation), "
+    "formuliere den Vorschlag in PROSA (kein JSON für den User). Wenn er zustimmt, rufe "
+    "propose_mandate(mandate_json, change_summary) mit dem KOMPLETTEN neuen Mandat-JSON auf — der User "
+    "bestätigt in der UI, erst dann wird gespeichert. Schreibe das Mandat NIE direkt. "
+    "Mit get_strategy_drift siehst du die aktuelle Soll-vs-Ist-Abweichung."
+)
+
+
 def build_full_system_prompt(thread_id: str, page_context: dict | None = None) -> str:
     """Vollständiger System-Prompt inkl. Sticky-Memory, Thread-Memory, Page-Context."""
     base = build_system_prompt()
@@ -255,6 +267,7 @@ def build_full_system_prompt(thread_id: str, page_context: dict | None = None) -
     parts = [base, "", sticky]
     if mandate_block:
         parts = [mandate_block, "", base, "", sticky]
+    parts.append(_MANDATE_EDITOR_HINT)
     if thread_mem:
         parts.append(thread_mem)
 

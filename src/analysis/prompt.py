@@ -433,6 +433,19 @@ def format_correlation(corr: dict) -> str:
     return "\n".join(lines) if lines else "Keine auffälligen Korrelationen."
 
 
+def format_strategy_drift(drift: dict | None) -> str:
+    """Rendert die Strategie-Drift (Soll vs. Ist) für den Briefing-Prompt.
+    Gibt "" zurück wenn kein Mandat / keine Abweichungs-Dimensionen."""
+    if not drift or not drift.get("dimensions"):
+        return ""
+    lines = [f"Status: {drift.get('status')} — {drift.get('breaches', 0)} Abweichung(en), {drift.get('warnings', 0)} Warnung(en)"]
+    for d in drift["dimensions"]:
+        soll = f"Soll {d['soll']}%" if d.get("soll") is not None else "Limit"
+        lines.append(f"  {d['name']}: Ist {d['ist']}% vs {soll} ({d['abweichung_pp']:+.1f}pp) [{d['severity']}]")
+    lines.append("→ Bevorzuge Aktionen, die das Depot näher an die Soll-Allokation bringen (ohne Steuer-/Aktionismus-Kosten zu ignorieren).")
+    return "\n".join(lines)
+
+
 def format_index_data(indices: dict) -> str:
     lines = []
     for name, data in indices.items():

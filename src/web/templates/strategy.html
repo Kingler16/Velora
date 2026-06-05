@@ -66,6 +66,79 @@
     </div>
 </div>
 
+<!-- ─── Strategie-Drift (Soll-vs-Ist) ───────────────────────── -->
+{% if drift %}
+{% set status_color = 'var(--text-muted)' if drift.status == 'ok' else ('var(--yellow)' if drift.status == 'warn' else 'var(--red)') %}
+{% set status_bg = 'var(--bg-secondary)' if drift.status == 'ok' else ('var(--yellow-bg)' if drift.status == 'warn' else 'var(--red-bg)') %}
+<div class="card" style="margin-bottom: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+        <div class="card-title" style="margin-bottom: 0;">Strategie-Status</div>
+        <span style="display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px;
+                     border-radius: 999px; font-size: 12px; font-weight: 700;
+                     background: {{ status_bg }}; color: {{ status_color }};">
+            <span style="width: 8px; height: 8px; border-radius: 999px; background: {{ status_color }}; flex-shrink: 0;"></span>
+            {% if drift.status == 'ok' %}im Soll
+            {% else %}{{ drift.breaches }} Abweichung{{ '' if drift.breaches == 1 else 'en' }}, {{ drift.warnings }} Warnung{{ '' if drift.warnings == 1 else 'en' }}
+            {% endif %}
+        </span>
+    </div>
+
+    {% if not drift.dimensions %}
+    <div style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+        Keine Abweichungen — Portfolio im Rahmen der Strategie.
+    </div>
+    {% else %}
+    {# Gruppierung nach kind: Region / Cash / Einzelposition #}
+    {% set kind_labels = {'region': 'Regionen', 'cash': 'Cash', 'position': 'Einzelpositionen'} %}
+    {% for kind in ['region', 'cash', 'position'] %}
+    {% set group = drift.dimensions|selectattr('kind', 'equalto', kind)|list %}
+    {% if group %}
+    <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase;
+                color: var(--text-muted); margin: {{ '0' if loop.first else '20px' }} 0 10px;">
+        {{ kind_labels[kind] }}
+    </div>
+    <div style="display: grid; gap: 14px;">
+        {% for d in group %}
+        {% set sev_color = 'var(--text-muted)' if d.severity == 'ok' else ('var(--yellow)' if d.severity == 'warn' else 'var(--red)') %}
+        {% set fill_color = 'var(--accent)' if d.severity == 'ok' else sev_color %}
+        {# Balken-Skala: max von soll/ist (mind. 1), damit beide Balken sichtbar bleiben. #}
+        {% set scale = [d.soll, d.ist, 1]|max %}
+        <div>
+            <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px;">
+                <span style="font-size: 13px; color: var(--text-primary); font-weight: 500;">{{ d.name }}</span>
+                <span style="font-size: 12px; color: var(--text-muted); display: flex; gap: 12px; flex-shrink: 0;">
+                    <span>Soll <strong style="color: var(--text-secondary);">{{ d.soll }}%</strong></span>
+                    <span>Ist <strong style="color: {{ sev_color }};">{{ d.ist }}%</strong></span>
+                    <span style="color: {{ sev_color }}; font-weight: 700; min-width: 52px; text-align: right;">
+                        {{ '+' if d.abweichung_pp > 0 else '' }}{{ d.abweichung_pp }} pp
+                    </span>
+                </span>
+            </div>
+            {# Ist-Balken (gefüllt, nach severity) #}
+            <div style="position: relative; height: 8px; border-radius: 999px; background: var(--bg-secondary); overflow: hidden;">
+                <div style="height: 100%; width: {{ (d.ist / scale * 100)|round(1) }}%; background: {{ fill_color }}; border-radius: 999px;"></div>
+            </div>
+            {# Soll-Marker (heller Hintergrund-Balken darunter, als Referenz) #}
+            <div style="position: relative; height: 4px; border-radius: 999px; background: var(--bg-secondary); overflow: hidden; margin-top: 4px;">
+                <div style="height: 100%; width: {{ (d.soll / scale * 100)|round(1) }}%; background: var(--text-muted); opacity: 0.55; border-radius: 999px;"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+    <div style="margin-top: 16px; display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted);">
+        <span style="display: inline-flex; align-items: center; gap: 6px;">
+            <span style="width: 18px; height: 6px; border-radius: 999px; background: var(--accent);"></span> Ist (gefüllt)
+        </span>
+        <span style="display: inline-flex; align-items: center; gap: 6px;">
+            <span style="width: 18px; height: 4px; border-radius: 999px; background: var(--text-muted); opacity: 0.55;"></span> Soll (Referenz)
+        </span>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- Harte Regeln -->
 {% if mandate.hard_rules %}
 <div class="card" style="margin-bottom: 24px;">

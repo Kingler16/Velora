@@ -348,8 +348,14 @@ async def recommendations_page(request: Request):
 
 @app.get("/strategy", response_class=HTMLResponse)
 async def strategy_page(request: Request):
-    from src.analysis.mandate import load_mandate
-    return templates.TemplateResponse(request, "strategy.html", _ctx(request, "strategy", mandate=load_mandate()))
+    from src.analysis.mandate import load_mandate, compute_strategy_drift
+    mandate = load_mandate()
+    drift = None
+    if mandate:
+        overview = compute_portfolio_overview(load_portfolio(), get_market_data())
+        drift = compute_strategy_drift(overview, mandate)
+    return templates.TemplateResponse(request, "strategy.html",
+        _ctx(request, "strategy", mandate=mandate, drift=drift))
 
 
 # ─── Secrets-Maskierung & Auth-Gate ──────────────────────────

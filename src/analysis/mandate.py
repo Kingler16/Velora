@@ -313,3 +313,82 @@ def validate_against_mandate(rec: dict, mandate: dict | None, overview: dict | N
     if warn_violations:
         return "warn", warn_violations
     return "pass", []
+
+
+# ─── Strategie-Drift (Soll vs. Ist) ──────────────────────────
+
+DRIFT_WARN_PP = 5.0    # Abweichung in Prozentpunkten ab der gewarnt wird
+DRIFT_BREACH_PP = 10.0  # … ab der es eine echte Abweichung ist
+
+
+def _severity(dev_pp: float) -> str:
+    a = abs(dev_pp)
+    if a > DRIFT_BREACH_PP:
+        return "breach"
+    if a > DRIFT_WARN_PP:
+        return "warn"
+    return "ok"
+
+
+def compute_strategy_drift(overview: dict | None, mandate: dict | None) -> dict | None:
+    """Deterministische Soll-vs-Ist-Abweichung (kein LLM). None wenn kein Mandat/Overview.
+
+    Vergleicht die Ist-Allokation (aus compute_portfolio_overview) mit den targets +
+    max_position_pct des Mandats. Liefert eine Liste von Dimensionen mit severity.
+    """
+    if not mandate or not overview:
+        return None
+    total = overview.get("total_value_eur") or 0
+    if not total:
+        return None
+
+    dims = []
+    targets = mandate.get("targets") or {}
+
+    # Region-Drift (Ist = % der investierten Summe; region_exposure sind EUR-Werte)
+    soll_regions = targets.get("regions") or {}
+    if soll_regions:
+        region_vals = overview.get("region_exposure") or {}
+        region_total = sum(region_vals.values()) or 0
+        if region_total:
+            for region, soll in soll_regions.items():
+                ist = region_vals.get(region, 0) / region_total * 100
+                dev = ist - soll
+                dims.append({
+                    "name": region, "kind": "region",
+                    "soll": round(soll, 1), "ist": round(ist, 1),
+                    "abweichung_pp": round(dev, 1), "severity": _severity(dev),
+                })
+
+    # Cash-Drift (Ist = % vom Gesamtvermögen)
+    if targets.get("cash_pct") is not None:
+        ist_cash = (overview.get("cash_total") or 0) / total * 100
+        dev = ist_cash - targets["cash_pct"]
+        dims.append({
+            "name": "Cash", "kind": "cash",
+            "soll": round(targets["cash_pct"], 1), "ist": round(ist_cash, 1),
+            "abweichung_pp": round(dev, 1), "severity": _severity(dev),
+        })
+
+    # Einzelpositions-Übergewicht vs. max_position_pct
+    max_pos_rule = next((r for r in mandate.get("hard_rules", []) if r.get("type") == "max_position_pct"), None)
+    if max_pos_rule and max_pos_rule.get("value"):
+        limit = max_pos_rule["value"]
+        for p in overview.get("positions", []):
+            pct = (p.get("current_value_eur") or 0) / total * 100
+            if pct > limit:
+                dims.append({
+                    "name": f"{p.get('name')} ({p.get('ticker')})", "kind": "position",
+                    "soll": round(limit, 1), "ist": round(pct, 1),
+                    "abweichung_pp": round(pct - limit, 1), "severity": "breach",
+                })
+
+    breaches = sum(1 for d in dims if d["severity"] == "breach")
+    warnings = sum(1 for d in dims if d["severity"] == "warn")
+    status = "breach" if breaches else ("warn" if warnings else "ok")
+    return {
+        "dimensions": dims,
+        "breaches": breaches,
+        "warnings": warnings,
+        "status": status,
+    }

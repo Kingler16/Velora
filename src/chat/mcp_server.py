@@ -447,6 +447,63 @@ def close_recommendation(ticker: str, outcome: str) -> dict:
     }
 
 
+@mcp.tool()
+def propose_mandate(mandate_json: str, change_summary: str) -> dict:
+    """Schlägt eine NEUE/aktualisierte Anlage-Strategie ("Mein Mandat") vor. Der User
+    bestätigt im Web-UI — erst dann wird config/mandate.json geschrieben. Schreibe NIE direkt.
+
+    So arbeitest du: interviewe den User zu seiner Strategie (Ziel, Horizont, Risiko,
+    Tabus, max Einzelposition, Cash-Minimum, Soll-Allokation), formuliere den Vorschlag
+    in Prosa. Wenn er zustimmt, ruf dieses Tool mit dem KOMPLETTEN neuen Mandat-JSON auf.
+
+    Parameter:
+      mandate_json: vollständiges Mandat als JSON-String. Felder: summary_human, philosophy,
+        soft_preferences[], tax_directives[], objective{horizon_years,primary_goal,
+        monthly_contribution_eur}, targets{regions{},cash_pct}, hard_rules[{id,type,...,
+        rule:"block"|"warn"}]. Erlaubte rule-types: max_position_pct (value), forbidden_instrument
+        (match[]), forbidden_ticker (tickers[]), min_cash_pct (value), max_keyword_pct
+        (keywords[],value), max_sector_pct (sector,value). Wenn der User nur Teile ändert:
+        hol das aktuelle Mandat (get_strategy_drift bzw. lies es dem User vor) und übergib das
+        VOLLSTÄNDIGE neue Objekt — das alte wird komplett ersetzt.
+      change_summary: kurze Beschreibung der Änderung (z.B. "Cash-Minimum 8→10%, NVDA gesperrt").
+    """
+    from src.chat import db as chat_db
+    from src.analysis.mandate import validate_mandate_schema
+    try:
+        mandate = json.loads(mandate_json)
+    except json.JSONDecodeError as e:
+        return {"error": f"mandate_json ist kein gültiges JSON: {e}"}
+    ok, err = validate_mandate_schema(mandate)
+    if not ok:
+        return {"error": f"Mandat ungültig: {err}. Korrigiere und ruf das Tool erneut auf."}
+    summary = change_summary or "Mandat aktualisiert"
+    action_id = chat_db.create_pending_action(
+        tool_name="propose_mandate",
+        params={"mandate": mandate, "change_summary": summary},
+        summary=f"Strategie ändern: {summary}", thread_id=None,
+    )
+    return {
+        "status": "pending_confirmation", "action_id": action_id, "summary": summary,
+        "message": "Der Strategie-Vorschlag wartet auf Bestätigung in der UI. Sag dem User Bescheid.",
+    }
+
+
+@mcp.tool()
+def get_strategy_drift() -> dict:
+    """Aktuelle Soll-vs-Ist-Abweichung des Portfolios vom Mandat (Strategie-Drift).
+    Nutze dies, wenn der User fragt, ob/wie sein Portfolio von seiner Strategie abweicht,
+    oder bevor du Mandats-Änderungen vorschlägst (um die aktuelle Lage zu kennen)."""
+    from src.analysis.mandate import load_mandate, compute_strategy_drift
+    from src.web.services.portfolio_service import compute_portfolio_overview
+    from src.web.services.cache_service import get_market_data
+    mandate = load_mandate()
+    if not mandate:
+        return {"error": "Kein Mandat definiert (config/mandate.json fehlt)."}
+    overview = compute_portfolio_overview(_load_portfolio(), get_market_data())
+    drift = compute_strategy_drift(overview, mandate)
+    return drift or {"error": "Drift nicht berechenbar"}
+
+
 # ── Entry-Point ──────────────────────────────────────────────
 
 def main() -> None:

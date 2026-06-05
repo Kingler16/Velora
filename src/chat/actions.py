@@ -38,6 +38,8 @@ def execute_pending_action(action_id: str) -> dict:
             result = _execute_update_watchlist(params)
         elif tool == "close_recommendation":
             result = _execute_close_recommendation(params)
+        elif tool == "propose_mandate":
+            result = _execute_propose_mandate(params)
         else:
             return {"success": False, "message": f"Unbekanntes Tool: {tool}"}
 
@@ -62,6 +64,14 @@ def execute_pending_action(action_id: str) -> dict:
                     body=str(result.get("message", "")),
                     url="/recommendations",
                     tag=f"rec-{params.get('ticker', '')}",
+                )
+            elif tool == "propose_mandate" and not result.get("error"):
+                send_push_safe(
+                    category="briefings",
+                    title="Strategie aktualisiert",
+                    body=str(result.get("message", "")),
+                    url="/strategy",
+                    tag="mandate",
                 )
         except Exception:
             logger.exception("Push nach execute_pending_action fehlgeschlagen")
@@ -188,6 +198,21 @@ def _add_new_position(ticker: str, shares: float, price: float, account: str | N
         except Exception:
             pass
     return added, None
+
+
+def _execute_propose_mandate(params: dict) -> dict:
+    """Speichert das im Chat vorgeschlagene Mandat (nach User-Bestätigung)."""
+    from src.analysis.mandate import save_mandate
+    mandate = params.get("mandate")
+    summary = params.get("change_summary", "Mandat aktualisiert")
+    if not isinstance(mandate, dict):
+        return {"message": "Kein gültiges Mandat im Vorschlag.", "error": True}
+    try:
+        saved = save_mandate(mandate, summary)
+    except ValueError as e:
+        return {"message": f"Mandat abgelehnt: {e}", "error": True}
+    return {"message": f"Mandat v{saved.get('version')} gespeichert: {summary}",
+            "version": saved.get("version")}
 
 
 def _execute_update_watchlist(params: dict) -> dict:

@@ -6,6 +6,7 @@ from src.analysis.mandate import (
     validate_against_mandate,
     validate_mandate_schema,
     build_mandate_block,
+    compute_strategy_drift,
 )
 
 
@@ -109,6 +110,30 @@ def test_schema_accepts_valid():
 
 def test_build_block_empty_for_none():
     assert build_mandate_block(None) == ""
+
+
+def test_drift_none_without_mandate():
+    assert compute_strategy_drift(_overview(), None) is None
+    assert compute_strategy_drift(None, _mandate()) is None
+
+
+def test_drift_detects_region_and_position_breach():
+    mandate = {
+        "hard_rules": [{"type": "max_position_pct", "value": 12, "rule": "block"}],
+        "targets": {"regions": {"USA": 55, "Europa": 30, "Asien": 15}, "cash_pct": 8},
+    }
+    ov = {
+        "total_value_eur": 50000.0,
+        "cash_total": 5000.0,  # 10% -> Abweichung +2pp -> ok
+        "region_exposure": {"USA": 40000.0, "Europa": 0.0, "Asien": 0.0},  # USA 100% -> breach
+        "positions": [{"ticker": "NVDA", "name": "Nvidia", "current_value_eur": 9000.0}],  # 18% > 12% -> breach
+    }
+    drift = compute_strategy_drift(ov, mandate)
+    assert drift["status"] == "breach"
+    # USA stark über Soll -> breach; NVDA-Position über Limit -> breach
+    usa = next(d for d in drift["dimensions"] if d["name"] == "USA")
+    assert usa["severity"] == "breach"
+    assert any(d["kind"] == "position" and d["severity"] == "breach" for d in drift["dimensions"])
 
 
 def test_build_block_contains_rules():
