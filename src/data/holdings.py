@@ -220,10 +220,12 @@ def compute_lookthrough(portfolio: dict, market_data: dict, research: dict | Non
     eur_usd = safe_eur_usd(market_data)
     # Region-Map für Direktaktien (gleiche Quelle wie Dashboard)
     try:
-        from src.web.services.portfolio_service import _load_region_exposure
+        from src.web.services.portfolio_service import _load_region_exposure, _norm_sector
         region_map = _load_region_exposure()
     except Exception:
         region_map = {}
+        def _norm_sector(x):
+            return x
 
     asset_class = {}        # equity/bond/commodity/mixed/cash -> EUR
     titles = {}             # Einzeltitel-Name -> EUR (direkt + durchgerechnet)
@@ -256,7 +258,8 @@ def compute_lookthrough(portfolio: dict, market_data: dict, research: dict | Non
                 for reg, pct in (entry.get("region_breakdown") or {}).items():
                     regions[reg] = regions.get(reg, 0) + val * (pct or 0) / 100
                 for sec, pct in (entry.get("sector_breakdown") or {}).items():
-                    sectors[sec] = sectors.get(sec, 0) + val * (pct or 0) / 100
+                    cs = _norm_sector(sec)
+                    sectors[cs] = sectors.get(cs, 0) + val * (pct or 0) / 100
                 # Top-Holdings in Einzeltitel zerlegen
                 holdings = entry.get("top_holdings") or []
                 covered = 0.0
@@ -278,7 +281,8 @@ def compute_lookthrough(portfolio: dict, market_data: dict, research: dict | Non
                 # Sektor aus market_data
                 sec = (market_data.get("positions", {}).get(ticker, {}).get("price", {}) or {}).get("sector")
                 if sec:
-                    sectors[sec] = sectors.get(sec, 0) + val
+                    cs = _norm_sector(sec)
+                    sectors[cs] = sectors.get(cs, 0) + val
                 # Region aus region_exposure.json (Direktaktien), sonst ISIN-Fallback
                 rmap = region_map.get(ticker) or region_map.get(isin)
                 if rmap:

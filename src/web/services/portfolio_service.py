@@ -36,6 +36,31 @@ INDEX_DESCRIPTIONS = {
 }
 
 
+# Sektor-Bezeichnungen vereinheitlichen (yfinance vs. GICS/Fonds-Factsheets vs. deutsch)
+_SECTOR_CANON = {
+    "financial services": "Finanzen", "financials": "Finanzen", "finanzwesen": "Finanzen", "finanzen": "Finanzen",
+    "technology": "Technologie", "information technology": "Technologie", "informationstechnologie": "Technologie",
+    "technologie": "Technologie",
+    "consumer cyclical": "Konsum (zyklisch)", "consumer discretionary": "Konsum (zyklisch)",
+    "consumer defensive": "Konsum (defensiv)", "consumer staples": "Konsum (defensiv)",
+    "communication services": "Kommunikation", "communication": "Kommunikation", "communications": "Kommunikation",
+    "kommunikation": "Kommunikation", "kommunikationsdienste": "Kommunikation",
+    "healthcare": "Gesundheit", "health care": "Gesundheit", "gesundheit": "Gesundheit", "gesundheitswesen": "Gesundheit",
+    "industrials": "Industrie", "industrie": "Industrie",
+    "energy": "Energie", "energie": "Energie",
+    "materials": "Grundstoffe", "basic materials": "Grundstoffe", "grundstoffe": "Grundstoffe",
+    "utilities": "Versorger", "versorger": "Versorger",
+    "real estate": "Immobilien", "immobilien": "Immobilien",
+}
+
+
+def _norm_sector(name: str) -> str:
+    """Vereinheitlicht Sektor-Bezeichnungen, damit yfinance- und Fonds-Labels zusammenfallen."""
+    if not name:
+        return "Unbekannt"
+    return _SECTOR_CANON.get(name.strip().lower(), name)
+
+
 def _load_region_exposure() -> dict:
     """Lädt Region-Exposure Mapping aus config/region_exposure.json."""
     path = CONFIG_DIR / "region_exposure.json"
@@ -260,11 +285,41 @@ def compute_portfolio_overview(portfolio: dict, market_data: dict) -> dict:
             region = fallback.get(isin_prefix, "Sonstige")
             regions[region] = regions.get(region, 0) + value
 
-    # Sektor-Breakdown
+    # Sektor-Breakdown — Fonds/ETFs/Anleihen via Durchschau-Research zerlegen statt "Unbekannt"
+    try:
+        from src.data.holdings import load_holdings_research, needs_lookthrough
+        _research = load_holdings_research()
+    except Exception:
+        _research, needs_lookthrough = {}, None
     sectors = {}
     for p in positions:
-        sector = p["sector"] or "Unbekannt"
-        sectors[sector] = sectors.get(sector, 0) + p["current_value_eur"]
+        val = p["current_value_eur"]
+        key = p.get("isin") or p.get("ticker") or p.get("name", "")
+        entry = _research.get(key)
+        is_fund = needs_lookthrough(p.get("name", ""), p.get("ticker", ""), p.get("isin", "")) if needs_lookthrough else False
+        if is_fund and entry:
+            sb = entry.get("sector_breakdown") or {}
+            ac = entry.get("asset_class")
+            if sb:
+                covered = 0.0
+                for sec, pct in sb.items():
+                    w = (pct or 0) / 100
+                    covered += w
+                    cs = _norm_sector(sec)
+                    sectors[cs] = sectors.get(cs, 0) + val * w
+                if max(0.0, 1 - covered) > 0.01:
+                    sectors["Sonstige"] = sectors.get("Sonstige", 0) + val * (1 - covered)
+            elif ac == "bond":
+                sectors["Anleihen"] = sectors.get("Anleihen", 0) + val
+            elif ac == "commodity":
+                sectors["Rohstoffe"] = sectors.get("Rohstoffe", 0) + val
+            else:
+                sectors["Unbekannt"] = sectors.get("Unbekannt", 0) + val
+        elif is_fund:
+            sectors["Fonds (nicht recherchiert)"] = sectors.get("Fonds (nicht recherchiert)", 0) + val
+        else:
+            sector = _norm_sector(p["sector"] or "Unbekannt")
+            sectors[sector] = sectors.get(sector, 0) + val
 
     # Account-Breakdown
     accounts = {}
