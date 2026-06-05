@@ -140,6 +140,90 @@ def get_upcoming_macro_events(days_ahead: int = 30) -> list[dict]:
 
 # ── Earnings-Kalender ────────────────────────────────────────────
 
+def fetch_earnings_surprise_history(ticker: str, stock=None) -> dict | None:
+    """Holt die Earnings-Surprise-Historie der letzten ~8 Quartale via yfinance.
+
+    Nutzt ``stock.earnings_dates`` (DataFrame). yfinance-Spaltennamen können je
+    Version variieren — wir prüfen vorhandene Spalten und nutzen "Surprise(%)"
+    wenn vorhanden, sonst rechnen wir aus Estimate/Reported selbst.
+
+    Rückgabe-Felder:
+      - quarters: Anzahl ausgewerteter (gemeldeter) Quartale
+      - beats: Anzahl Quartale mit Surprise > 0
+      - beat_rate: beats/quarters*100 (0 Dezimalstellen)
+      - avg_surprise_pct: Ø Surprise (1 Dezimalstelle)
+      - last_surprise_pct: jüngste Surprise (1 Dezimalstelle)
+
+    None bei fehlenden Daten / Exception (yfinance-Earnings-Daten sind notorisch lückig).
+    """
+    if not ticker:
+        return None
+    try:
+        if stock is None:
+            stock = yf.Ticker(ticker)
+        df = stock.earnings_dates
+        if df is None or not hasattr(df, "empty") or df.empty:
+            return None
+
+        cols = {str(c).lower().replace(" ", ""): c for c in df.columns}
+        est_col = cols.get("epsestimate")
+        rep_col = cols.get("reportedeps")
+        surp_col = cols.get("surprise(%)") or cols.get("surprise%") or cols.get("surprise")
+
+        # Ohne gemeldete EPS können wir nichts auswerten.
+        if rep_col is None:
+            return None
+
+        surprises = []
+        for _, row in df.iterrows():
+            reported = row.get(rep_col)
+            # Nur Zeilen mit tatsächlich gemeldeten Werten.
+            if reported is None or _is_nan(reported):
+                continue
+
+            surprise = None
+            if surp_col is not None:
+                s = row.get(surp_col)
+                if s is not None and not _is_nan(s):
+                    surprise = float(s)
+            # Fallback / falls Surprise fehlt: aus Estimate + Reported selbst rechnen.
+            if surprise is None and est_col is not None:
+                est = row.get(est_col)
+                if est is not None and not _is_nan(est):
+                    est = float(est)
+                    if est != 0:
+                        surprise = (float(reported) - est) / abs(est) * 100.0
+            if surprise is not None:
+                surprises.append(surprise)
+
+        # earnings_dates ist absteigend sortiert (neueste zuerst) -> jüngste = surprises[0].
+        surprises = surprises[:8]
+        quarters = len(surprises)
+        if quarters == 0:
+            return None
+
+        beats = sum(1 for s in surprises if s > 0)
+        avg_surprise = sum(surprises) / quarters
+        return {
+            "quarters": quarters,
+            "beats": beats,
+            "beat_rate": round(beats / quarters * 100, 0),
+            "avg_surprise_pct": round(avg_surprise, 1),
+            "last_surprise_pct": round(surprises[0], 1),
+        }
+    except Exception as e:
+        logger.debug(f"Earnings-Surprise-Historie für {ticker}: {e}")
+        return None
+
+
+def _is_nan(val) -> bool:
+    """Robuster NaN-Check (auch für pandas/numpy-Werte)."""
+    try:
+        return val != val  # NaN ist ungleich sich selbst
+    except Exception:
+        return False
+
+
 def _fetch_earnings_single(t: dict) -> list[dict]:
     ticker = t.get("ticker")
     if not ticker:
@@ -147,6 +231,8 @@ def _fetch_earnings_single(t: dict) -> list[dict]:
     out = []
     try:
         stock = yf.Ticker(ticker)
+        # Surprise-Historie über dieselbe yf.Ticker-Instanz holen (kein extra Call-Setup).
+        surprise_history = fetch_earnings_surprise_history(ticker, stock=stock)
         cal = stock.calendar
         if cal is not None and not (hasattr(cal, 'empty') and cal.empty):
             if isinstance(cal, dict):
@@ -158,6 +244,7 @@ def _fetch_earnings_single(t: dict) -> list[dict]:
                         "name": t["name"],
                         "event": "Earnings",
                         "date": date_str[:10],
+                        "surprise_history": surprise_history,
                     })
             elif hasattr(cal, 'to_dict'):
                 cal_dict = cal.to_dict()
@@ -172,6 +259,7 @@ def _fetch_earnings_single(t: dict) -> list[dict]:
                                 "name": t["name"],
                                 "event": str(key),
                                 "date": str(val)[:10],
+                                "surprise_history": surprise_history,
                             })
     except Exception as e:
         logger.debug(f"Earnings für {ticker}: {e}")
@@ -260,7 +348,21 @@ def format_full_calendar(market_status: dict, earnings: list[dict], macro_events
                 days = f" (in {diff} Tagen)" if diff > 0 else " (HEUTE!)" if diff == 0 else f" (vor {-diff} Tagen)"
             except (ValueError, TypeError):
                 pass
-            lines.append(f"  {e['date']} | {e['name']} ({e['ticker']}): {e['event']}{days}")
+
+            # Surprise-Historie kompakt anhängen, nur wenn vorhanden.
+            hist = ""
+            sh = e.get("surprise_history")
+            if sh:
+                parts = [f"Beat-Rate {sh['beat_rate']:.0f}%"]
+                avg = sh.get("avg_surprise_pct")
+                if avg is not None:
+                    parts.append(f"Ø {avg:+.1f}%")
+                last = sh.get("last_surprise_pct")
+                if last is not None:
+                    parts.append(f"zuletzt {last:+.1f}%")
+                hist = f" ({', '.join(parts)})"
+
+            lines.append(f"  {e['date']} | {e['name']} ({e['ticker']}): {e['event']}{days}{hist}")
     else:
         lines.append("  Keine Earnings-Termine gefunden.")
 

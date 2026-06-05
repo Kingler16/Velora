@@ -8,9 +8,16 @@ import math
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
 from src.data.fx import safe_eur_usd
 
 logger = logging.getLogger(__name__)
+
+# Mindestanzahl Tagesreturns, ab der eine Position für Risiko/Korrelation taugt.
+MIN_RETURNS = 30
+TRADING_DAYS = 252
 
 MEMORY_DIR = Path(__file__).parent.parent.parent / "memory"
 
@@ -266,3 +273,331 @@ def track_recommendation_performance(market_data: dict) -> str:
         lines.append(f"  \u274c {rec.get('date', '?')[:10]}: {rec.get('action', '?')} {rec.get('ticker', '?')} \u2192 Stop ausgelöst")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Risiko-, Korrelations- & Regime-Analyse
+#
+# Datenquelle: market_data["positions"][ticker]["price"]["returns"] - Liste der
+# 1y-Tagesreturns (Contract des market.py-Agenten). Zusaetzlich genutzt:
+#   price["above_sma200"] (bool) fuer Breadth, price["current_price"] fuer Gewichte.
+# macro_data["us"]["fed_funds_rate"]["value"]     -> rf (Prozent, z.B. 4.5)
+# macro_data["us"]["yield_curve_spread"]["value"] -> 10y-2y (negativ = invertiert)
+# macro_data["fear_greed"] = {"value": .., "rating": ..}
+# market_data["indices"]["VIX"]["value"]          -> VIX
+# Alle Funktionen sind defensiv: fehlende/zu kurze Daten -> Position auslassen,
+# nie crashen.
+# ---------------------------------------------------------------------------
+
+
+def _get_returns(pos: dict):
+    """Holt die Tagesreturns einer Position als float-Array - oder None.
+
+    None bei: kein price-Dict, kein returns-Key, < MIN_RETURNS brauchbaren Werten,
+    oder nicht-numerischen Werten. NaN/Inf werden rausgefiltert.
+    """
+    if not isinstance(pos, dict):
+        return None
+    price = pos.get("price")
+    if not isinstance(price, dict):
+        return None
+    raw = price.get("returns")
+    if not isinstance(raw, (list, tuple)) or len(raw) < MIN_RETURNS:
+        return None
+    try:
+        arr = np.asarray(raw, dtype=float)
+    except (TypeError, ValueError):
+        return None
+    arr = arr[np.isfinite(arr)]
+    if arr.size < MIN_RETURNS:
+        return None
+    return arr
+
+
+def _rf_from_macro(macro_data: dict, fallback: float = 0.04) -> float:
+    """Fed-Funds-Rate als Dezimal aus macro_data["us"]["fed_funds_rate"]["value"].
+
+    FRED liefert den Wert in Prozent (z.B. 4.5) -> /100. Fallback 0.04 (=4%).
+    """
+    try:
+        val = macro_data.get("us", {}).get("fed_funds_rate", {}).get("value")
+        if val is None:
+            return fallback
+        return float(val) / 100.0
+    except (AttributeError, TypeError, ValueError):
+        return fallback
+
+
+def compute_risk_metrics(market_data: dict, macro_data: dict) -> dict:
+    """Pro Position: annualisierte Vol, Max-Drawdown, Sharpe (aus Tagesreturns).
+
+    Rueckgabe:
+        {
+          "per_position": {ticker: {"vol_annual": float,    # % p.a.
+                                    "max_drawdown": float,   # % (<= 0)
+                                    "sharpe": float}},
+          "rf_used": float,                                  # rf als Dezimal
+        }
+    Positionen ohne brauchbare returns werden ausgelassen.
+    """
+    rf = _rf_from_macro(macro_data)
+    per_position: dict = {}
+
+    positions = (market_data or {}).get("positions", {})
+    for ticker, pos in positions.items():
+        returns = _get_returns(pos)
+        if returns is None:
+            continue
+
+        mean = float(np.mean(returns))
+        std = float(np.std(returns))  # Population-Std (ddof=0)
+
+        vol_annual = std * math.sqrt(TRADING_DAYS) * 100
+
+        # Max-Drawdown auf dem kumulierten Return-Pfad (Wachstumsfaktor).
+        # Start-Baseline 1.0 voranstellen, damit auch der Verlust der ERSTEN
+        # Periode gegen den Anfangswert zaehlt (sonst ist der erste Punkt schon
+        # das Maximum und der initiale Drop wird unterschlagen).
+        cum = np.cumprod(1.0 + returns)
+        cum = np.concatenate(([1.0], cum))
+        running_max = np.maximum.accumulate(cum)
+        drawdowns = cum / running_max - 1.0
+        max_drawdown = float(np.min(drawdowns)) * 100  # negativ
+
+        ann_return = mean * TRADING_DAYS
+        ann_vol = std * math.sqrt(TRADING_DAYS)
+        sharpe = (ann_return - rf) / ann_vol if ann_vol > 0 else 0.0
+
+        per_position[ticker] = {
+            "vol_annual": round(vol_annual, 1),
+            "max_drawdown": round(max_drawdown, 1),
+            "sharpe": round(sharpe, 2),
+        }
+
+    return {"per_position": per_position, "rf_used": round(rf, 4)}
+
+
+def _position_value(pos: dict):
+    """Naeherung des aktuellen Positionswerts fuer Gewichtung.
+
+    Bevorzugt shares * current_price; faellt auf current_price zurueck (gleich-
+    gewichtet, wenn shares fehlen - wie im Contract spezifiziert).
+    """
+    price = pos.get("price") if isinstance(pos, dict) else None
+    if not isinstance(price, dict):
+        return None
+    cur = price.get("current_price")
+    try:
+        cur = float(cur)
+    except (TypeError, ValueError):
+        return None
+    if cur <= 0:
+        return None
+    shares = pos.get("shares")
+    try:
+        if shares is not None:
+            shares = float(shares)
+            if shares > 0:
+                return shares * cur
+    except (TypeError, ValueError):
+        pass
+    return cur
+
+
+def compute_correlation_data(market_data: dict) -> dict:
+    """Korrelations- & Konzentrationsanalyse ueber alle Positionen mit returns.
+
+    Rueckgabe:
+        {
+          "top_pairs": [{"a": str, "b": str, "corr": float}, ...],  # |corr|>0.7, max 8
+          "herfindahl": float | None,            # HHI der Wertgewichte
+          "effective_positions": float | None,   # 1/HHI
+          "avg_correlation": float | None,        # Mittel oberes Dreieck
+        }
+    Defensiv: < 2 Positionen mit returns -> alles None/leer.
+    """
+    empty = {
+        "top_pairs": [],
+        "herfindahl": None,
+        "effective_positions": None,
+        "avg_correlation": None,
+    }
+
+    positions = (market_data or {}).get("positions", {})
+
+    returns_by_ticker: dict = {}
+    for ticker, pos in positions.items():
+        r = _get_returns(pos)
+        if r is not None:
+            returns_by_ticker[ticker] = r
+
+    if len(returns_by_ticker) < 2:
+        return dict(empty)
+
+    # Auf gemeinsame Laenge trimmen (von hinten = juengste Returns behalten).
+    min_len = min(len(r) for r in returns_by_ticker.values())
+    data = {t: r[-min_len:] for t, r in returns_by_ticker.items()}
+
+    df = pd.DataFrame(data)
+    corr = df.corr()
+
+    # Oberes Dreieck (ohne Diagonale) als Paarliste.
+    tickers = list(corr.columns)
+    pairs = []
+    upper_values = []
+    for i in range(len(tickers)):
+        for j in range(i + 1, len(tickers)):
+            c = corr.iloc[i, j]
+            if c is None or (isinstance(c, float) and math.isnan(c)):
+                continue
+            c = float(c)
+            upper_values.append(c)
+            pairs.append({"a": tickers[i], "b": tickers[j], "corr": c})
+
+    top_pairs = [
+        {"a": p["a"], "b": p["b"], "corr": round(p["corr"], 2)}
+        for p in sorted(pairs, key=lambda p: abs(p["corr"]), reverse=True)
+        if abs(p["corr"]) > 0.7
+    ][:8]
+
+    avg_correlation = round(sum(upper_values) / len(upper_values), 2) if upper_values else None
+
+    # HHI nur ueber Positionen mit returns (gleiche Grundgesamtheit wie corr).
+    values = []
+    for ticker in tickers:
+        v = _position_value(positions.get(ticker, {}))
+        values.append(v if v is not None else 0.0)
+    total = sum(values)
+    herfindahl = None
+    effective_positions = None
+    if total > 0:
+        weights = [v / total for v in values]
+        hhi = sum(w * w for w in weights)
+        if hhi > 0:
+            herfindahl = round(hhi, 4)
+            effective_positions = round(1.0 / hhi, 1)
+
+    return {
+        "top_pairs": top_pairs,
+        "herfindahl": herfindahl,
+        "effective_positions": effective_positions,
+        "avg_correlation": avg_correlation,
+    }
+
+
+def _vix_value(market_data: dict):
+    try:
+        return float(market_data.get("indices", {}).get("VIX", {}).get("value"))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _yield_curve_spread(macro_data: dict):
+    try:
+        val = macro_data.get("us", {}).get("yield_curve_spread", {}).get("value")
+        return float(val) if val is not None else None
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def classify_regime(market_data: dict, macro_data: dict) -> dict:
+    """Regelbasiertes Markt-Regime-Scoring (kein ML/LLM).
+
+    Scoring-Komponenten (je -1/0/+1):
+      VIX        : <15 ruhig (+1), 15-25 neutral (0), >25 gestresst (-1)
+      Fear&Greed : >60 Gier (+1), 40-60 neutral (0), <40 Angst (-1)
+      Yield-Curve: invertiert (10y-2y < 0) (-1), sonst (0)
+      Breadth    : Anteil Positionen ueber SMA200 >60% (+1), <40% (-1), sonst (0)
+    Summe -> Label: >=2 "Risk-On", <=-2 "Risk-Off", sonst "Neutral".
+
+    Rueckgabe: {"label": str, "score": int, "drivers": [str, ...]}
+    drivers sind lesbare deutsche Strings fuer den Prompt.
+    """
+    score = 0
+    drivers = []
+
+    # --- VIX ---
+    vix = _vix_value(market_data)
+    if vix is not None:
+        if vix < 15:
+            score += 1
+            drivers.append(f"VIX {vix:.0f} (ruhig, +1)")
+        elif vix <= 25:
+            drivers.append(f"VIX {vix:.0f} (neutral, 0)")
+        else:
+            score -= 1
+            drivers.append(f"VIX {vix:.0f} (gestresst, -1)")
+    else:
+        drivers.append("VIX n/a")
+
+    # --- Fear & Greed ---
+    fg = (macro_data or {}).get("fear_greed") or {}
+    fg_val = fg.get("value")
+    rating = fg.get("rating")
+    try:
+        fg_val = float(fg_val) if fg_val is not None else None
+    except (TypeError, ValueError):
+        fg_val = None
+    if fg_val is not None:
+        rating_str = f", {rating}" if rating else ""
+        if fg_val > 60:
+            score += 1
+            drivers.append(f"Fear&Greed {fg_val:.0f} (Gier{rating_str}, +1)")
+        elif fg_val >= 40:
+            drivers.append(f"Fear&Greed {fg_val:.0f} (neutral{rating_str}, 0)")
+        else:
+            score -= 1
+            drivers.append(f"Fear&Greed {fg_val:.0f} (Angst{rating_str}, -1)")
+    else:
+        drivers.append("Fear&Greed n/a")
+
+    # --- Yield Curve ---
+    spread = _yield_curve_spread(macro_data)
+    if spread is not None:
+        if spread < 0:
+            score -= 1
+            drivers.append(f"Zinskurve {spread:+.2f}pp (invertiert, -1)")
+        else:
+            drivers.append(f"Zinskurve {spread:+.2f}pp (normal, 0)")
+    else:
+        drivers.append("Zinskurve n/a")
+
+    # --- Breadth (Anteil Positionen ueber SMA200) ---
+    # Nur Positionen mit echtem bool-Signal zaehlen. market.py setzt
+    # above_sma200=None bei zu kurzer Historie -> die schliessen wir aus,
+    # sonst wuerde die Breadth nach unten verzerrt.
+    positions = (market_data or {}).get("positions", {})
+    above = 0
+    counted = 0
+    for pos in positions.values():
+        price = pos.get("price") if isinstance(pos, dict) else None
+        if not isinstance(price, dict):
+            continue
+        flag = price.get("above_sma200")
+        if not isinstance(flag, bool):
+            continue
+        counted += 1
+        if flag:
+            above += 1
+    if counted > 0:
+        breadth = above / counted
+        pct = breadth * 100
+        if breadth > 0.60:
+            score += 1
+            drivers.append(f"Breadth {pct:.0f}% ueber SMA200 (stark, +1)")
+        elif breadth < 0.40:
+            score -= 1
+            drivers.append(f"Breadth {pct:.0f}% ueber SMA200 (schwach, -1)")
+        else:
+            drivers.append(f"Breadth {pct:.0f}% ueber SMA200 (neutral, 0)")
+    else:
+        drivers.append("Breadth n/a")
+
+    if score >= 2:
+        label = "Risk-On"
+    elif score <= -2:
+        label = "Risk-Off"
+    else:
+        label = "Neutral"
+
+    return {"label": label, "score": score, "drivers": drivers}

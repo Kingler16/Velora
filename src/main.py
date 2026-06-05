@@ -33,6 +33,9 @@ from src.analysis.prompt import (
     build_briefing_prompt,
     build_ticker_analysis_prompt,
     build_portfolio_summary,
+    format_regime,
+    format_risk_metrics,
+    format_correlation,
     MONTHLY_REPORT_TEMPLATE,
 )
 from src.analysis.claude import ask_claude, strip_json_block, ClaudeCLIError
@@ -51,6 +54,9 @@ from src.analysis.performance import (
     calculate_benchmark_comparison,
     find_tax_loss_harvesting,
     track_recommendation_performance,
+    classify_regime,
+    compute_risk_metrics,
+    compute_correlation_data,
 )
 from src.data.cache import save_cache
 from src.delivery.telegram import send_briefing, send_document, send_error_alert, create_bot_app
@@ -117,6 +123,9 @@ async def run_briefing():
         benchmark = calculate_benchmark_comparison(market_data)
         tax_loss = find_tax_loss_harvesting(portfolio, market_data)
         rec_tracking = track_recommendation_performance(market_data)
+        regime = classify_regime(market_data, macro_data)
+        risk_metrics = compute_risk_metrics(market_data, macro_data)
+        correlation = compute_correlation_data(market_data)
 
         # 3. Memory laden + offene Empfehlungen updaten
         logger.info("Lade Memory...")
@@ -129,6 +138,18 @@ async def run_briefing():
 
         # Zusätzliche Sektionen anhängen
         extra = f"""
+
+=== MARKT-REGIME (berechnet, regelbasiert — als objektiver Anker für deine Einschätzung) ===
+
+{format_regime(regime)}
+
+=== RISIKO-KENNZAHLEN PRO POSITION (aus 1J-Tagesdaten) ===
+
+{format_risk_metrics(risk_metrics, market_data)}
+
+=== KORRELATION & KLUMPENRISIKO ===
+
+{format_correlation(correlation)}
 
 === FINANZKALENDER (Börsen, Earnings, Makro-Events) ===
 

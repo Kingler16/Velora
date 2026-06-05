@@ -169,11 +169,42 @@ def fetch_yfinance_sentiment(ticker: str) -> dict | None:
         total = sb + b + h + s + ss
         if total == 0:
             return None
+
+        # Rating-Trend: jüngste Periode (Zeile 0) vs. älteste verfügbare Zeile
+        # vergleichen. recommendations_summary hat je eine Zeile pro Periode
+        # (period 0m/-1m/-2m/-3m), Zeile 0 = aktuell. Das Upgrade/Downgrade-
+        # Signal aus den älteren Perioden ging bisher verloren.
+        rating_trend = None
+        rating_trend_detail = None
+        if len(rs) >= 2:
+            old = rs.iloc[-1].to_dict()
+            o_sb = int(old.get("strongBuy", 0) or 0)
+            o_b = int(old.get("buy", 0) or 0)
+            o_h = int(old.get("hold", 0) or 0)
+            o_s = int(old.get("sell", 0) or 0)
+            o_ss = int(old.get("strongSell", 0) or 0)
+            # Gewichteter Score: strongBuy*2 + buy*1 + hold*0 + sell*-1 + strongSell*-2
+            new_score = sb * 2 + b - s - ss * 2
+            old_score = o_sb * 2 + o_b - o_s - o_ss * 2
+            if new_score > old_score:
+                rating_trend = "upgrading"
+            elif new_score < old_score:
+                rating_trend = "downgrading"
+            else:
+                rating_trend = "stable"
+            # Zeithorizont aus der period-Spalte der ältesten Zeile (z.B. "-3m" → "3M")
+            span = str(old.get("period", "")).lstrip("-").upper() or "3M"
+            rating_trend_detail = (
+                f"StrongBuy {o_sb}→{sb}, Buy {o_b}→{b} in {span}"
+            )
+
         return {
             "bullish": round((sb + b) / total * 100, 1),
             "bearish": round((s + ss) / total * 100, 1),
             "neutral": round(h / total * 100, 1),
             "buzz_volume": total,
+            "rating_trend": rating_trend,
+            "rating_trend_detail": rating_trend_detail,
             "source": "yfinance-analysts",
         }
     except Exception as e:

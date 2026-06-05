@@ -132,10 +132,10 @@ BRIEFING_TEMPLATE = """
 
 Erstelle das Briefing. Struktur:
 
-1. MARKTLAGE (2-3 Sätze, was hat sich VERÄNDERT seit dem letzten Briefing? Nutze die Makro-Daten: Yield Curve, Credit Spreads, Inflation, Zinsen. Nutze Benchmark-Vergleich.)
+1. MARKTLAGE (2-3 Sätze, was hat sich VERÄNDERT seit dem letzten Briefing? Nutze die Makro-Daten: Yield Curve, Credit Spreads, Inflation, Zinsen. Nutze Benchmark-Vergleich. Verankere deine Einschätzung am berechneten MARKT-REGIME — wenn deine Lesart davon abweicht, begründe warum.)
 2. PORTFOLIO-CHECK (nur Positionen erwähnen wo sich etwas RELEVANTES getan hat. Fonds-Positionen einordnen falls vorhanden. EUR/USD Auswirkung auf USD-Positionen berechnen. KRITISCH: Verwende für die Performance jeder Position IMMER die "P/L: ...€ (...%)" Werte aus dem PORTFOLIO-Abschnitt oben — diese basieren auf dem persönlichen Buy-In. Die "Kursperf. 1M/6M/1Y" Werte aus den MARKTDATEN zeigen die allgemeine Aktienperformance und sind NICHT identisch mit der Position-Performance!)
 3. EARNINGS & EVENTS (welche Positionen reporten bald? Was ist zu erwarten? Kommende Katalysatoren.)
-4. EMPFEHLUNGEN — STRENG: max. 3 Einträge pro Briefing, nur High-Conviction. Wenn nichts überzeugt: 0 Empfehlungen ist die richtige Antwort. "Halten" / "Beobachten ohne Order" gehört in den Fließtext, NICHT in die JSON-Liste. Jede Empfehlung MUSS konkret sein: Einstieg, Stop-Loss, Ziel, Risk/Reward UND Stückzahl. Bei Kauf: Anzahl Stück. Bei Verkauf: Prozent der Position ODER Anzahl Stück. Berücksichtige Tax-Loss-Harvesting wenn sinnvoll.
+4. EMPFEHLUNGEN — STRENG: max. 3 Einträge pro Briefing, nur High-Conviction. Wenn nichts überzeugt: 0 Empfehlungen ist die richtige Antwort. "Halten" / "Beobachten ohne Order" gehört in den Fließtext, NICHT in die JSON-Liste. Jede Empfehlung MUSS konkret sein: Einstieg, Stop-Loss, Ziel, Risk/Reward UND Stückzahl. Bei Kauf: Anzahl Stück. Bei Verkauf: Prozent der Position ODER Anzahl Stück. Berücksichtige Tax-Loss-Harvesting wenn sinnvoll. WICHTIG: Leite Stop-Distanzen aus dem ATR ab (z.B. Stop ≈ Kurs − 1,5–2×ATR) statt sie zu raten — zu enge Stops sind der häufigste Verlustgrund. Berücksichtige Klumpenrisiko/Korrelation (effektive Positionen) und nutze die Analysten-Kursziele als Konsens-Anker für deine Ziele.
 5. NEUE IDEEN (nur wenn wirklich überzeugend. Eigene Analyse, keine Morningstar-Listen.)
 6. RISIKEN AUF DEM RADAR (was könnte schiefgehen?)
 7. EMPFEHLUNGS-BILANZ (wenn es offene Empfehlungen gibt: wie haben sie sich entwickelt?)
@@ -315,9 +315,10 @@ def format_market_data(market_data: dict) -> str:
     lines = []
     for ticker, data in market_data.get("positions", {}).items():
         p = data.get("price", {})
-        lines.append(
+        stale = " ⚠KURS VERALTET" if p.get("stale_quote") else ""
+        block = (
             f"{data['name']} ({ticker}):\n"
-            f"  Kurs: {p.get('current_price')} | Tagesänderung: {p.get('change_pct', '?')}%\n"
+            f"  Kurs: {p.get('current_price')}{stale} | Tagesänderung: {p.get('change_pct', '?')}%\n"
             f"  52W-Hoch: {p.get('52w_high')} | 52W-Tief: {p.get('52w_low')}\n"
             f"  Kursperf. 1M: {p.get('perf_1m_pct') or 'k.A.'}{'%' if p.get('perf_1m_pct') is not None else ''} | Kursperf. 6M: {p.get('perf_6m_pct') or 'k.A.'}{'%' if p.get('perf_6m_pct') is not None else ''} | Kursperf. 1Y: {p.get('perf_1y_pct') or 'k.A.'}{'%' if p.get('perf_1y_pct') is not None else ''}\n"
             f"  KGV: {p.get('pe_ratio', '?')} | Forward KGV: {p.get('forward_pe', '?')} | PEG: {p.get('peg_ratio', '?')}\n"
@@ -326,14 +327,109 @@ def format_market_data(market_data: dict) -> str:
             f"  Sektor: {p.get('sector', '?')} | Branche: {p.get('industry', '?')}\n"
             f"  [Quelle: {p.get('source')}, {p.get('timestamp', '')[:16]}]"
         )
-        # Insider-Transaktionen
-        insiders = data.get("insiders", [])
-        if insiders:
-            lines.append("  Insider-Transaktionen (letzte 90 Tage):")
-            for ins in insiders[:3]:
-                lines.append(f"    {ins.get('date')}: {ins.get('insider')} - {ins.get('transaction')} - {ins.get('shares')} Stk")
+        # Technik / Analysten-Konsens / Insider-Aggregat (Phase 2)
+        sig = _position_signal_lines(p, data)
+        if sig:
+            block += "\n" + sig
+        lines.append(block)
 
     return "\n\n".join(lines)
+
+
+def _position_signal_lines(p: dict, data: dict) -> str:
+    """Rendert die Phase-2-Signale (Technik, Analysten-Konsens, Insider-Aggregat)
+    kompakt — nur Felder, die tatsächlich vorhanden sind."""
+    out = []
+
+    tech = []
+    if p.get("rsi_14") is not None:
+        tech.append(f"RSI14 {p['rsi_14']}")
+    if p.get("sma_50") is not None and p.get("sma_200") is not None:
+        trend = "über" if p.get("above_sma200") else "unter"
+        cross = {"golden": " +GOLDEN-CROSS", "death": " +DEATH-CROSS"}.get(p.get("cross_signal"), "")
+        tech.append(f"SMA50/200 {p['sma_50']}/{p['sma_200']} (Kurs {trend} SMA200{cross})")
+    if p.get("dist_to_sma200_pct") is not None:
+        tech.append(f"Δ-SMA200 {p['dist_to_sma200_pct']:+.1f}%")
+    if p.get("atr_14") is not None:
+        atr_pct = f" ({p['atr_pct']}%)" if p.get("atr_pct") is not None else ""
+        tech.append(f"ATR14 {p['atr_14']}{atr_pct}")
+    if p.get("realized_vol_30d") is not None:
+        tech.append(f"Vol30d {p['realized_vol_30d']}%")
+    if p.get("avg_volume_ratio") is not None:
+        tech.append(f"Vol-Ratio {p['avg_volume_ratio']}")
+    if tech:
+        out.append("  Technik: " + " | ".join(tech))
+
+    an = []
+    if p.get("target_mean"):
+        cur = p.get("current_price")
+        up = f" ({(p['target_mean'] / cur - 1) * 100:+.0f}% Upside)" if cur else ""
+        lo, hi = p.get("target_low"), p.get("target_high")
+        rng = f" [{lo:.2f}–{hi:.2f}]" if lo and hi else ""
+        an.append(f"Kursziel Ø {p['target_mean']:.2f}{up}{rng}")
+    if p.get("analyst_rating") is not None:
+        cnt = f" ({p['analyst_count']} Analysten)" if p.get("analyst_count") else ""
+        an.append(f"Rating {p['analyst_rating']}/5{cnt}")
+    if p.get("short_ratio") is not None:
+        an.append(f"Short-Ratio {p['short_ratio']}")
+    if an:
+        out.append("  Analysten: " + " | ".join(an))
+
+    isum = data.get("insider_summary") or {}
+    nv = isum.get("net_value_90d")
+    buyers = isum.get("distinct_buyers_90d") or 0
+    sellers = isum.get("distinct_sellers_90d") or 0
+    if nv or buyers or sellers:
+        cluster = " | ⚑CLUSTER-KAUF" if isum.get("cluster_buy") else ""
+        nv_str = f"Netto {nv:+,.0f} | " if nv else ""
+        out.append(f"  Insider (90T): {nv_str}{buyers} Käufer / {sellers} Verkäufer{cluster}")
+
+    return "\n".join(out)
+
+
+def format_regime(regime: dict) -> str:
+    """Rendert das berechnete Markt-Regime (classify_regime) für den Prompt."""
+    if not regime or not regime.get("label"):
+        return "Nicht verfügbar."
+    drivers = regime.get("drivers") or []
+    lines = [f"Regime: {regime['label']} (Score {regime.get('score', '?')})"]
+    for d in drivers:
+        lines.append(f"  - {d}")
+    return "\n".join(lines)
+
+
+def format_risk_metrics(risk: dict, market_data: dict) -> str:
+    """Rendert Risiko-Kennzahlen pro Position (compute_risk_metrics) für den Prompt."""
+    per_pos = (risk or {}).get("per_position") or {}
+    if not per_pos:
+        return "Nicht verfügbar."
+    names = {tk: d.get("name", tk) for tk, d in market_data.get("positions", {}).items()}
+    lines = [f"(Risikofreier Zins: {((risk.get('rf_used') or 0) * 100):.1f}%)"]
+    for tk, m in sorted(per_pos.items(), key=lambda kv: kv[1].get("vol_annual", 0), reverse=True):
+        lines.append(
+            f"  {names.get(tk, tk)} ({tk}): Vol {m.get('vol_annual', '?')}% p.a. | "
+            f"Max-DD {m.get('max_drawdown', '?')}% | Sharpe {m.get('sharpe', '?')}"
+        )
+    return "\n".join(lines)
+
+
+def format_correlation(corr: dict) -> str:
+    """Rendert Korrelation & Klumpenrisiko (compute_correlation_data) für den Prompt."""
+    if not corr:
+        return "Nicht verfügbar."
+    lines = []
+    eff = corr.get("effective_positions")
+    avg = corr.get("avg_correlation")
+    if eff is not None:
+        lines.append(f"Effektive Positionen: {eff} (je niedriger vs. Positionsanzahl, desto mehr Klumpenrisiko)")
+    if avg is not None:
+        lines.append(f"Ø paarweise Korrelation: {avg}")
+    pairs = corr.get("top_pairs") or []
+    if pairs:
+        lines.append("Stark korrelierte Paare (|r|>0.7):")
+        for pr in pairs:
+            lines.append(f"  - {pr.get('a')} ↔ {pr.get('b')}: {pr.get('corr')}")
+    return "\n".join(lines) if lines else "Keine auffälligen Korrelationen."
 
 
 def format_index_data(indices: dict) -> str:
@@ -391,8 +487,15 @@ def build_briefing_prompt(portfolio: dict, market_data: dict, macro_data: dict, 
             bull = s.get("bullish")
             bear = s.get("bearish")
             buzz = s.get("buzz_volume")
+            trend = s.get("rating_trend")
+            trend_str = ""
+            if trend:
+                detail = s.get("rating_trend_detail")
+                trend_str = f" | Analysten-Rating: {trend}" + (f" ({detail})" if detail else "")
             if bull is not None:
-                lines.append(f"  {ticker}: {bull:.0%} bullish / {bear:.0%} bearish (Artikel letzte Woche: {buzz or '?'})")
+                lines.append(f"  {ticker}: {bull:.0%} bullish / {bear:.0%} bearish (Artikel letzte Woche: {buzz or '?'}){trend_str}")
+            elif trend:
+                lines.append(f"  {ticker}:{trend_str}")
         if lines:
             sentiment_str = "\n".join(lines)
 
@@ -426,6 +529,8 @@ def build_briefing_prompt(portfolio: dict, market_data: dict, macro_data: dict, 
 def build_ticker_analysis_prompt(ticker: str, ticker_data: dict, portfolio: dict, market_data: dict, news: list) -> str:
     """Baut den Prompt für eine On-Demand Ticker-Analyse."""
     p = ticker_data.get("price", {})
+    # Rohes returns-Array (252 Tagesreturns) NICHT in den Prompt dumpen — bloated nur.
+    p = {k: v for k, v in p.items() if k != "returns"}
     ticker_str = json.dumps(p, indent=2, default=str)
     news_str = "\n".join(f"- {a['title']}: {a['description'][:150]}" for a in news) if news else "Keine News gefunden."
 

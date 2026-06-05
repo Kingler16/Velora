@@ -1,4 +1,5 @@
 yfinance>=0.2.36
+lxml>=5.0          # yfinance .earnings_dates (Earnings-Surprise-Historie) braucht es — sonst still None
 fredapi>=0.5
 python-telegram-bot>=21.0
 requests>=2.31
