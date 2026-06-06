@@ -4,7 +4,7 @@
   const isDark = () => window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
   window.VeloraChartTheme = {
-    colors: ['#22d3ee', '#6366f1', '#3b82f6', '#8b5cf6', '#fbbf24', '#0891b2', '#f472b6', '#94a3b8', '#f87171'],
+    colors: ['#3b82f6', '#93c5fd', '#1e40af', '#94a3b8', '#60a5fa', '#475569', '#bfdbfe', '#fbbf24', '#64748b'],
     bg:          () => css('--bg-canvas'),
     bodyBg:      () => css('--bg-body'),
     text:        () => css('--text-secondary'),

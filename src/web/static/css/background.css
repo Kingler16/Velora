@@ -1,4 +1,5 @@
-/* Velora background system v2: grainy blurred gradient blobs + SVG noise overlay. */
+/* Velora background system v3: ruhiger, statischer Fintech-Hintergrund.
+   Kein animierter Blob, kein Grain-Overlay (das war der "KI-App"-Look). */
 
 body {
   min-height: 100vh;
@@ -6,57 +7,24 @@ body {
   overflow-x: hidden;
 }
 
+/* Dezenter, statischer Tiefen-Schimmer von oben — neutral-kühl, keine Animation, kein Bunt. */
 body::before {
   content: '';
   position: fixed;
-  inset: -20vh -20vw;
-  z-index: -2;
-  background:
-    radial-gradient(44vmin circle at 12% 18%, rgba(56, 120, 255, 0.48), transparent 62%),
-    radial-gradient(50vmin circle at 82% 28%, rgba(99, 102, 241, 0.44), transparent 65%),
-    radial-gradient(54vmin circle at 70% 85%, rgba(139, 92, 246, 0.42), transparent 60%),
-    radial-gradient(38vmin circle at 20% 78%, rgba(56, 189, 248, 0.32), transparent 58%);
-  filter: blur(70px) saturate(135%);
-  animation: blob-drift 48s ease-in-out infinite alternate;
-  will-change: transform;
-}
-
-body::after {
-  content: '';
-  position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: -2;
   pointer-events: none;
-  opacity: var(--glass-noise-opacity);
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  background-size: 220px 220px;
-}
-
-@keyframes blob-drift {
-  0% {
-    transform: translate3d(0, 0, 0) rotate(0deg);
-  }
-  50% {
-    transform: translate3d(-3vw, 2vh, 0) rotate(4deg);
-  }
-  100% {
-    transform: translate3d(2vw, -2vh, 0) rotate(-3deg);
-  }
+  background:
+    radial-gradient(150vmin circle at 50% -35%, rgba(70, 100, 160, 0.10), transparent 60%);
 }
 
 @media (prefers-color-scheme: light) {
   body::before {
     background:
-      radial-gradient(44vmin circle at 12% 18%, rgba(160, 190, 255, 0.40), transparent 62%),
-      radial-gradient(50vmin circle at 82% 28%, rgba(190, 180, 255, 0.38), transparent 65%),
-      radial-gradient(54vmin circle at 70% 85%, rgba(175, 160, 240, 0.35), transparent 60%),
-      radial-gradient(38vmin circle at 20% 78%, rgba(200, 220, 255, 0.30), transparent 58%);
+      radial-gradient(150vmin circle at 50% -35%, rgba(120, 150, 210, 0.12), transparent 60%);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body::before {
-    animation: none;
-  }
+  body::before { animation: none; }
 }

@@ -32,7 +32,7 @@
 .chat-sidebar-header .btn-new {
     flex: 1;
     padding: 8px 12px;
-    background: linear-gradient(135deg, var(--color-cyan-500), var(--color-azure-500));
+    background: var(--accent);
     color: #fff;
     border: none;
     border-radius: var(--radius-sm);
@@ -303,7 +303,7 @@ body.chat-sidebar-open .chat-sidebar-backdrop { display: block; }
     overflow-wrap: break-word;
 }
 .msg.user .msg-bubble {
-    background: linear-gradient(135deg, var(--color-cyan-500), var(--color-azure-500));
+    background: var(--accent);
     color: #fff;
     border-top-right-radius: 4px;
     box-shadow: 0 4px 16px rgba(6, 182, 212, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.20);
@@ -629,7 +629,7 @@ body.chat-sidebar-open .chat-sidebar-backdrop { display: block; }
     width: 34px;
     height: 34px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--color-cyan-500), var(--color-azure-500));
+    background: var(--accent);
     color: #fff;
     border: none;
     cursor: pointer;
@@ -733,7 +733,7 @@ body.chat-sidebar-open .chat-sidebar-backdrop { display: block; }
 .chat-confirm-actions .btn-cancel { color: var(--text-secondary); }
 .chat-confirm-actions .btn-cancel:hover { background: var(--glass-bg-strong); color: var(--text-primary); }
 .chat-confirm-actions .btn-confirm {
-    background: linear-gradient(135deg, var(--color-cyan-500), var(--color-azure-500));
+    background: var(--accent);
     border: none;
     color: #fff;
     box-shadow: 0 4px 12px rgba(6, 182, 212, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);

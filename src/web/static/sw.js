@@ -8,7 +8,7 @@
  * Push-Handler folgt in Phase 3.
  */
 
-const VERSION = 'velora-0.5.0-webui-cockpit';
+const VERSION = 'velora-0.6.0-redesign';
 const STATIC_CACHE = `velora-static-${VERSION}`;
 const RUNTIME_CACHE = `velora-runtime-${VERSION}`;
 const API_CACHE = `velora-api-${VERSION}`;

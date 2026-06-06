@@ -8,7 +8,7 @@ _TRANSLATIONS: dict[str, dict] = {
     # ── German (default) ──────────────────────────────────────────────
     "de": {
         "nav": {
-            "brand": "AI Vermögensberater",
+            "brand": "Vermögensberater",
             "dashboard": "Dashboard",
             "portfolio": "Portfolio",
             "analyse": "Analyse",
@@ -316,7 +316,7 @@ _TRANSLATIONS: dict[str, dict] = {
     # ── English ───────────────────────────────────────────────────────
     "en": {
         "nav": {
-            "brand": "AI Wealth Advisor",
+            "brand": "Wealth Advisor",
             "dashboard": "Dashboard",
             "portfolio": "Portfolio",
             "analyse": "Analysis",

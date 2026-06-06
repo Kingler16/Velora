@@ -1,10 +1,10 @@
 /* Velora design system v2: split raw tokens, semantic aliases, legacy compat, base resets. */
 
 :root {
-  --color-night-0: #030510;
-  --color-night-1: #050814;
-  --color-night-2: #0a0f1f;
-  --color-night-3: #0f1428;
+  --color-night-0: #0a0c11;
+  --color-night-1: #0d1117;
+  --color-night-2: #161b22;
+  --color-night-3: #1c222b;
 
   /* UI brand (no green allowed) */
   --color-cyan-400: #22d3ee;
@@ -17,10 +17,10 @@
   --color-amber-400: #fbbf24;
   --color-amber-500: #f59e0b;
 
-  --color-ink-0: #f0f9ff;
-  --color-ink-1: #e0f2fe;
-  --color-ink-2: #94a3b8;
-  --color-ink-3: #64748b;
+  --color-ink-0: #e8eaed;
+  --color-ink-1: #d6dae0;
+  --color-ink-2: #969ba5;
+  --color-ink-3: #6a7079;
 
   /* Data semantics (green allowed for gain signals only) */
   --data-green-400: #34d399;
@@ -40,7 +40,7 @@
 
   --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.38), inset 0 1px 0 var(--glass-highlight);
   --shadow-elevated: 0 16px 48px rgba(0, 0, 0, 0.45), inset 0 1px 0 var(--glass-highlight);
-  --shadow-accent-glow: 0 0 24px rgba(34, 211, 238, 0.25);
+  --shadow-accent-glow: 0 0 0 1px rgba(59, 130, 246, 0.35);
 
   --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
   --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
@@ -87,10 +87,10 @@
   --text-secondary: var(--color-ink-2);
   --text-muted: var(--color-ink-3);
 
-  --accent: var(--color-cyan-400);
-  --accent-deep: var(--color-cyan-600);
-  --accent-bg: rgba(34, 211, 238, 0.12);
-  --accent-ring: rgba(34, 211, 238, 0.45);
+  --accent: #3b82f6;
+  --accent-deep: #2563eb;
+  --accent-bg: rgba(59, 130, 246, 0.12);
+  --accent-ring: rgba(59, 130, 246, 0.42);
 
   /* Semantic data tokens */
   --gain: var(--data-green-500);
@@ -132,10 +132,10 @@
     --glass-highlight: rgba(255, 255, 255, 0.8);
     --glass-noise-opacity: 0.05;
 
-    --accent: #0891b2;
-    --accent-deep: #0e7490;
-    --accent-bg: rgba(8, 145, 178, 0.10);
-    --accent-ring: rgba(8, 145, 178, 0.35);
+    --accent: #2563eb;
+    --accent-deep: #1d4ed8;
+    --accent-bg: rgba(37, 99, 235, 0.10);
+    --accent-ring: rgba(37, 99, 235, 0.35);
 
     --gain: #059669;
     --gain-bg: rgba(5, 150, 105, 0.12);
@@ -153,7 +153,7 @@
 
     --shadow-glass: 0 8px 32px rgba(10, 20, 40, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
     --shadow-elevated: 0 16px 48px rgba(10, 20, 40, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    --shadow-accent-glow: 0 0 24px rgba(8, 145, 178, 0.30);
+    --shadow-accent-glow: 0 0 0 1px rgba(37, 99, 235, 0.35);
   }
 }
 

@@ -37,15 +37,6 @@
     {% block head %}{% endblock %}
 </head>
 <body data-page="{{ page }}">
-    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-      <defs>
-        <filter id="velora-grain">
-          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
-          <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .4 0"/>
-        </filter>
-      </defs>
-    </svg>
-
     <div id="cmd-palette" class="cmd-palette" hidden>
       <div class="cmd-overlay"></div>
       <div class="cmd-dialog glass glass-strong glass-elevated">
@@ -53,8 +44,8 @@
         <ul id="cmd-results" class="cmd-results"></ul>
         <div class="cmd-footer">
           <span><kbd>&uarr;&darr;</kbd> navigieren</span>
-          <span><kbd>Enter</kbd> auswaehlen</span>
-          <span><kbd>Esc</kbd> schliessen</span>
+          <span><kbd>Enter</kbd> auswählen</span>
+          <span><kbd>Esc</kbd> schließen</span>
         </div>
       </div>
     </div>

@@ -82,7 +82,7 @@
     color: var(--accent);
     background: var(--accent-bg);
     border-left: 3px solid var(--accent);
-    box-shadow: inset 0 0 20px rgba(34, 211, 238, 0.10);
+    box-shadow: inset 0 0 20px rgba(59, 130, 246, 0.10);
 }
 
 .sidebar-nav .nav-icon {
@@ -551,7 +551,7 @@ tbody td {
     display: inline-block;
 }
 
-.cache-dot.fresh { background: var(--green); box-shadow: 0 0 8px rgba(74, 222, 128, 0.5); }
+.cache-dot.fresh { background: var(--accent); }
 .cache-dot.stale { background: var(--yellow); }
 .cache-dot.missing { background: var(--red); }
 
