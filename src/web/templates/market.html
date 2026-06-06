@@ -85,8 +85,8 @@
                     {% if fg_val <= 25 %}Extreme Angst. Historisch oft Kaufgelegenheiten.
                     {% elif fg_val <= 45 %}Angst dominiert. Anleger vorsichtig.
                     {% elif fg_val <= 55 %}Neutrales Sentiment. Markt wartet auf Impulse.
-                    {% elif fg_val <= 75 %}Gier. Vorsicht vor Uebertreibungen.
-                    {% else %}Extreme Gier. Korrekturrisiko erhoeht.{% endif %}
+                    {% elif fg_val <= 75 %}Gier. Vorsicht vor Übertreibungen.
+                    {% else %}Extreme Gier. Korrekturrisiko erhöht.{% endif %}
                 </div>
                 {% if fg.previous_1_week is defined %}
                 <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: var(--space-3);">
@@ -266,7 +266,7 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Kein Analyst-Konsens</div><div class="empty-state-body">Erscheint nach dem naechsten Daten-Refresh (Top-8 Positionen mit Analysten-Coverage).</div></div>
+        <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Kein Analyst-Konsens</div><div class="empty-state-body">Erscheint nach dem nächsten Daten-Refresh (Top-8 Positionen mit Analysten-Coverage).</div></div>
         {% endif %}
     </div>
 

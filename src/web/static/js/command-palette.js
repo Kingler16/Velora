@@ -16,8 +16,8 @@
     { id: 'act-trade',           label: 'Trade loggen',             icon: '\u002B', action: () => {
         if (location.pathname !== '/portfolio') {
           location.href = '/portfolio?trade=1';
-        } else if (typeof window.openTradeModal === 'function') {
-          window.openTradeModal();
+        } else if (window.TradeModal && typeof window.TradeModal.open === 'function') {
+          window.TradeModal.open();
         } else {
           const modal = document.getElementById('tradeModal');
           if (modal) modal.classList.add('open');

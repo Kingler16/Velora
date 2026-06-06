@@ -19,7 +19,7 @@
   }
 
   function toast(type, msg) {
-    if (window.VeloraToast && window.VeloraToast[type]) window.VeloraToast[type](msg);
+    if (window.toast && window.toast[type]) window.toast[type](msg);
     else if (type === 'error') console.error('[push]', msg);
     else console.log('[push]', msg);
   }
