@@ -29,8 +29,8 @@
 <div id="tradeModal" class="modal-overlay" onclick="if(event.target===this)TradeModal.close()">
     <div class="card glass-strong glass-elevated" style="width: 440px; max-width: 95vw; padding: 24px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
-            <div id="tradeStepTitle" style="font-family:var(--font-ui); font-weight: 700; font-size: var(--text-lg); color: var(--text-primary); letter-spacing: var(--letter-tight);">Trade loggen</div>
-            <span style="cursor:pointer; font-size:20px; color:var(--text-muted);" onclick="TradeModal.close()" aria-label="Schliessen">×</span>
+            <div id="tradeStepTitle" style="font-family:var(--font-ui); font-weight: 700; font-size: var(--text-lg); color: var(--text-primary); letter-spacing: var(--letter-tight);">{{ t.portfolio.log_trade_title }}</div>
+            <span style="cursor:pointer; font-size:20px; color:var(--text-muted);" onclick="TradeModal.close()" aria-label="{{ t.common.close }}">×</span>
         </div>
         <div id="tradeProgress" style="display:flex; gap:6px; margin-bottom: 20px;">
             <span class="trade-dot active"></span>
@@ -39,28 +39,28 @@
         </div>
 
         <div id="tradeSharePreview" hidden style="margin-bottom: 16px; padding: 10px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 10px; display: flex; gap: 10px; align-items: flex-start;">
-            <img id="tradeShareImg" src="" alt="Geteilter Screenshot" style="width: 72px; height: 72px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: var(--color-night-1);">
+            <img id="tradeShareImg" src="" alt="{{ t.portfolio.screenshot_alt }}" style="width: 72px; height: 72px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: var(--color-night-1);">
             <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 4px;">Aus Screenshot</div>
-                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">Werte aus dem Screenshot ablesen und eintippen.</div>
+                <div style="font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 4px;">{{ t.portfolio.screenshot_badge }}</div>
+                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">{{ t.portfolio.screenshot_hint }}</div>
             </div>
-            <button type="button" onclick="document.getElementById('tradeSharePreview').hidden=true" aria-label="Vorschau ausblenden" style="background:transparent; border:0; color:var(--text-muted); cursor:pointer; padding:4px; font-size:16px; line-height:1;">×</button>
+            <button type="button" onclick="document.getElementById('tradeSharePreview').hidden=true" aria-label="{{ t.portfolio.hide_preview }}" style="background:transparent; border:0; color:var(--text-muted); cursor:pointer; padding:4px; font-size:16px; line-height:1;">×</button>
         </div>
 
         <div id="tradeStep1" class="trade-step">
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px;">
-                <button type="button" class="trade-action-btn active" data-action="buy">KAUFEN</button>
-                <button type="button" class="trade-action-btn" data-action="sell">VERKAUFEN</button>
+                <button type="button" class="trade-action-btn active" data-action="buy">{{ t.portfolio.buy_upper }}</button>
+                <button type="button" class="trade-action-btn" data-action="sell">{{ t.portfolio.sell_upper }}</button>
             </div>
-            <label class="field-label" style="display:block; margin-bottom:4px;">Ticker</label>
-            <input type="text" id="tradeTicker" class="input" placeholder="z.B. AAPL, ASML.AS" list="tickerList" autocomplete="off" inputmode="text">
+            <label class="field-label" style="display:block; margin-bottom:4px;">{{ t.portfolio.ticker }}</label>
+            <input type="text" id="tradeTicker" class="input" placeholder="{{ t.portfolio.ticker_placeholder }}" list="tickerList" autocomplete="off" inputmode="text">
             <datalist id="tickerList">
                 {% for pos in overview.positions %}
                 <option value="{{ pos.ticker }}">{{ pos.name }}</option>
                 {% endfor %}
             </datalist>
             <div style="display:flex; justify-content:flex-end; margin-top:20px;">
-                <button type="button" class="btn btn-accent" id="tradeNext1">Weiter →</button>
+                <button type="button" class="btn btn-accent" id="tradeNext1">{{ t.common.next }} →</button>
             </div>
         </div>
 
@@ -68,11 +68,11 @@
             <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 12px;">Du <span id="tradeActionWord">kaufst</span>: <strong id="tradeTickerDisplay" style="color: var(--text-primary);">—</strong></div>
             <div style="display:flex; gap:10px; margin-bottom:12px;">
                 <div style="flex:1;">
-                    <label class="field-label" style="display:block; margin-bottom:4px;">Stueck</label>
+                    <label class="field-label" style="display:block; margin-bottom:4px;">{{ t.portfolio.shares }}</label>
                     <input type="number" id="tradeShares" class="input" step="0.01" min="0.01" placeholder="10.00" inputmode="decimal">
                 </div>
                 <div style="flex:1;">
-                    <label class="field-label" style="display:block; margin-bottom:4px;">Preis (<span id="tradePriceCur">{{ default_currency if default_currency != 'mixed' else 'EUR' }}</span>)</label>
+                    <label class="field-label" style="display:block; margin-bottom:4px;">{{ t.portfolio.price }} (<span id="tradePriceCur">{{ default_currency if default_currency != 'mixed' else 'EUR' }}</span>)</label>
                     <input type="number" id="tradePrice" class="input" step="0.01" min="0.01" placeholder="150.00" inputmode="decimal">
                 </div>
             </div>
@@ -90,16 +90,16 @@
             {% else %}
             <input type="hidden" name="trade_currency" value="{{ default_currency }}">
             {% endif %}
-            <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom:12px;">Total: <strong id="tradeTotal" class="tabular-nums" style="color: var(--text-primary);">—</strong></div>
-            <label class="field-label" style="display:block; margin-bottom:4px;">Konto</label>
+            <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom:12px;">{{ t.portfolio.total }}: <strong id="tradeTotal" class="tabular-nums" style="color: var(--text-primary);">—</strong></div>
+            <label class="field-label" style="display:block; margin-bottom:4px;">{{ t.portfolio.account }}</label>
             <select id="tradeAccount" class="input">
                 {% for acc_name, acc_data in overview.accounts_grouped.items() %}
                 <option value="{{ acc_name }}">{{ acc_data.display_name }}</option>
                 {% endfor %}
             </select>
             <div style="display:flex; justify-content:space-between; margin-top:20px;">
-                <button type="button" class="btn btn-ghost" id="tradeBack2">← Zurueck</button>
-                <button type="button" class="btn btn-accent" id="tradeNext2">Weiter →</button>
+                <button type="button" class="btn btn-ghost" id="tradeBack2">← {{ t.common.back }}</button>
+                <button type="button" class="btn btn-accent" id="tradeNext2">{{ t.common.next }} →</button>
             </div>
         </div>
 
@@ -108,13 +108,13 @@
                 <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom:8px;" id="tradePreviewLabel">KAUF</div>
                 <div style="font-size: var(--text-lg); font-weight: 700; color: var(--text-primary); margin-bottom:4px;" id="tradePreviewMain">—</div>
                 <div style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom:8px;" id="tradePreviewTotal">= —</div>
-                <div style="font-size: var(--text-xs); color: var(--text-muted);">Konto: <span id="tradePreviewAccount">—</span></div>
+                <div style="font-size: var(--text-xs); color: var(--text-muted);">{{ t.portfolio.account }}: <span id="tradePreviewAccount">—</span></div>
             </div>
             <div style="display:flex; justify-content:space-between;">
-                <button type="button" class="btn btn-ghost" id="tradeBack3">← Zurueck</button>
+                <button type="button" class="btn btn-ghost" id="tradeBack3">← {{ t.common.back }}</button>
                 <button type="button" class="btn btn-accent" id="tradeSubmitBtn">
                     <span class="spinner"></span>
-                    Bestaetigen & speichern
+                    {{ t.portfolio.confirm_save }}
                 </button>
             </div>
         </div>
@@ -136,11 +136,11 @@
 
 <div class="charts-grid grid-cols-2" style="margin-bottom: 24px;">
     <div class="card">
-        <div class="card-title">Region-Exposure</div>
+        <div class="card-title">{{ t.portfolio.region_exposure }}</div>
         <div id="regionChart" class="chart-h-md"></div>
     </div>
     <div class="card">
-        <div class="card-title">Sektor-Aufteilung</div>
+        <div class="card-title">{{ t.portfolio.sector_split }}</div>
         <div id="sectorChart" class="chart-h-md"></div>
     </div>
 </div>
@@ -163,7 +163,7 @@
                 <div style="font-size: 13px; font-weight: 500;">{{ pos.name }}</div>
                 <div style="font-size: 11px; color: var(--text-muted);">
                     <span class="ticker-badge">{{ pos.ticker or '–' }}</span>
-                    <span class="tabular-nums">{{ pos.shares|number }}</span> Stk
+                    <span class="tabular-nums">{{ pos.shares|number }}</span> {{ t.portfolio.shares_abbr }}
                 </div>
             </div>
             <div style="text-align: right;">
@@ -180,39 +180,39 @@
 
 {% if overview.bank_accounts %}
 <div class="card" style="margin-bottom: 24px;">
-    <div class="card-title">Bankkonten</div>
+    <div class="card-title">{{ t.portfolio.bank_accounts }}</div>
     <div class="table-wrapper">
         <table class="data-table-stack">
             <thead>
                 <tr>
-                    <th>Konto</th>
-                    <th>Bank</th>
-                    <th class="text-right">Wert</th>
-                    <th class="text-right">Zinssatz</th>
-                    <th>Typ</th>
+                    <th>{{ t.portfolio.account }}</th>
+                    <th>{{ t.portfolio.bank }}</th>
+                    <th class="text-right">{{ t.portfolio.value }}</th>
+                    <th class="text-right">{{ t.portfolio.interest_rate }}</th>
+                    <th>{{ t.portfolio.type }}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for acc in overview.bank_accounts %}
                 <tr>
                     <td class="primary">{{ acc.name }}</td>
-                    <td class="text-muted" data-label="Bank">{{ acc.bank }}</td>
-                    <td class="text-right tabular-nums" data-label="Wert" style="font-weight: 600;">{{ acc.value|eur }}</td>
-                    <td class="text-right text-accent tabular-nums" data-label="Zinssatz">{{ acc.interest }}%</td>
-                    <td data-label="Typ">
+                    <td class="text-muted" data-label="{{ t.portfolio.bank }}">{{ acc.bank }}</td>
+                    <td class="text-right tabular-nums" data-label="{{ t.portfolio.value }}" style="font-weight: 600;">{{ acc.value|eur }}</td>
+                    <td class="text-right text-accent tabular-nums" data-label="{{ t.portfolio.interest_rate }}">{{ acc.interest }}%</td>
+                    <td data-label="{{ t.portfolio.type }}">
                         {% if acc.is_depot_cash %}
-                        <span class="rec-status open">Depot-Cash</span>
+                        <span class="rec-status open">{{ t.portfolio.depot_cash }}</span>
                         {% else %}
-                        <span class="rec-status target_hit">Frei verfügbar</span>
+                        <span class="rec-status target_hit">{{ t.portfolio.free_cash }}</span>
                         {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
                 <tr class="data-table-summary" style="border-top: 2px solid var(--border);">
-                    <td class="primary" colspan="2" style="font-weight: 600;">Gesamt Cash</td>
-                    <td class="text-right tabular-nums" data-label="Wert" style="font-weight: 700; font-size: 15px;">{{ overview.cash_total|eur }}</td>
-                    <td data-label="Zinssatz"></td>
-                    <td data-label="Typ"></td>
+                    <td class="primary" colspan="2" style="font-weight: 600;">{{ t.portfolio.total_cash }}</td>
+                    <td class="text-right tabular-nums" data-label="{{ t.portfolio.value }}" style="font-weight: 700; font-size: 15px;">{{ overview.cash_total|eur }}</td>
+                    <td data-label="{{ t.portfolio.interest_rate }}"></td>
+                    <td data-label="{{ t.portfolio.type }}"></td>
                 </tr>
             </tbody>
         </table>
@@ -221,21 +221,21 @@
 {% endif %}
 
 <div class="card">
-    <div class="card-title">Alle Positionen — Details</div>
+    <div class="card-title">{{ t.portfolio.all_positions }}</div>
     <div class="table-wrapper">
         <table class="holdings-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Ticker</th>
-                    <th class="text-right">Kurs</th>
-                    <th class="text-right hide-on-phone">Buy-In</th>
-                    <th class="text-right">Wert</th>
-                    <th class="text-right">P&L</th>
-                    <th class="text-right hide-on-phone">1M</th>
-                    <th class="text-right hide-on-phone">6M</th>
-                    <th class="text-right hide-on-phone">1Y</th>
-                    <th class="hide-on-phone">Sektor</th>
+                    <th>{{ t.portfolio.col_name }}</th>
+                    <th>{{ t.portfolio.ticker }}</th>
+                    <th class="text-right">{{ t.portfolio.col_kurs }}</th>
+                    <th class="text-right hide-on-phone">{{ t.portfolio.buy_in }}</th>
+                    <th class="text-right">{{ t.portfolio.value }}</th>
+                    <th class="text-right">{{ t.portfolio.col_pnl }}</th>
+                    <th class="text-right hide-on-phone">{{ t.portfolio['1m'] }}</th>
+                    <th class="text-right hide-on-phone">{{ t.portfolio['6m'] }}</th>
+                    <th class="text-right hide-on-phone">{{ t.portfolio['1y'] }}</th>
+                    <th class="hide-on-phone">{{ t.portfolio.sector }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -243,22 +243,22 @@
                 <tr>
                     <td class="primary">{{ pos.name }}</td>
                     <td data-label="Ticker"><span class="ticker-badge">{{ pos.ticker or '–' }}</span></td>
-                    <td class="text-right tabular-nums" data-label="Kurs">{{ pos.current_price_eur|eur }}</td>
+                    <td class="text-right tabular-nums" data-label="{{ t.portfolio.col_kurs }}">{{ pos.current_price_eur|eur }}</td>
                     <td class="text-right text-muted tabular-nums hide-on-phone" data-label="Buy-In">{{ pos.buy_in_eur|eur }}</td>
-                    <td class="text-right tabular-nums" data-label="Wert" style="font-weight: 600;">{{ pos.current_value_eur|eur }}</td>
+                    <td class="text-right tabular-nums" data-label="{{ t.portfolio.value }}" style="font-weight: 600;">{{ pos.current_value_eur|eur }}</td>
                     <td class="text-right tabular-nums {{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}" data-label="P&L">
                         {{ pos.pnl_pct|pct }}
                     </td>
-                    <td class="text-right tabular-nums hide-on-phone {{ 'positive' if pos.perf_1m_pct and pos.perf_1m_pct >= 0 else 'negative' if pos.perf_1m_pct else '' }}" data-label="1 Monat">
+                    <td class="text-right tabular-nums hide-on-phone {{ 'positive' if pos.perf_1m_pct and pos.perf_1m_pct >= 0 else 'negative' if pos.perf_1m_pct else '' }}" data-label="{{ t.portfolio.label_1m }}">
                         {{ pos.perf_1m_pct|pct if pos.perf_1m_pct is not none else '–' }}
                     </td>
-                    <td class="text-right tabular-nums hide-on-phone {{ 'positive' if pos.perf_6m_pct and pos.perf_6m_pct >= 0 else 'negative' if pos.perf_6m_pct else '' }}" data-label="6 Monate">
+                    <td class="text-right tabular-nums hide-on-phone {{ 'positive' if pos.perf_6m_pct and pos.perf_6m_pct >= 0 else 'negative' if pos.perf_6m_pct else '' }}" data-label="{{ t.portfolio.label_6m }}">
                         {{ pos.perf_6m_pct|pct if pos.perf_6m_pct is not none else '–' }}
                     </td>
-                    <td class="text-right tabular-nums hide-on-phone {{ 'positive' if pos.perf_1y_pct and pos.perf_1y_pct >= 0 else 'negative' if pos.perf_1y_pct else '' }}" data-label="1 Jahr">
+                    <td class="text-right tabular-nums hide-on-phone {{ 'positive' if pos.perf_1y_pct and pos.perf_1y_pct >= 0 else 'negative' if pos.perf_1y_pct else '' }}" data-label="{{ t.portfolio.label_1y }}">
                         {{ pos.perf_1y_pct|pct if pos.perf_1y_pct is not none else '–' }}
                     </td>
-                    <td class="text-muted hide-on-phone" data-label="Sektor" style="font-size: 11px;">{{ pos.sector or '–' }}</td>
+                    <td class="text-muted hide-on-phone" data-label="{{ t.portfolio.sector }}" style="font-size: 11px;">{{ pos.sector or '–' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

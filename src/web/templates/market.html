@@ -37,14 +37,14 @@
 
 {% if calendar and calendar.get('market_status') and calendar['market_status'].get('holidays_today') %}
 <div style="background: var(--warn-bg); border: 1px solid var(--warn-bg); border-radius: var(--radius-sm); padding: 8px 14px; margin-bottom: var(--space-4); font-size: var(--text-sm); color: var(--warn);">
-    Feiertag: {{ calendar['market_status']['holidays_today']|join(', ') }}
+    {{ t.markt.holiday_prefix }} {{ calendar['market_status']['holidays_today']|join(', ') }}
 </div>
 {% endif %}
 
 <div class="card" style="padding: var(--space-5); margin-bottom: var(--space-5);">
     <div class="grid grid-cols-2" style="gap: var(--space-5); align-items: center;">
         <div>
-            <div class="card-title">Markt-Stimmung</div>
+            <div class="card-title">{{ t.markt.market_mood }}</div>
             <div id="fgGaugeContainer">
                 {% if macro and macro.get('fear_greed') %}
                 {% set fg = macro['fear_greed'] %}
@@ -67,7 +67,7 @@
                     <circle id="fgNeedle" r="7" fill="#fff" style="filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4)); transition: cx 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), cy 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);"/>
                     <text x="120" y="105" text-anchor="middle" fill="currentColor" font-family="Geist Mono, monospace" font-size="42" font-weight="800" letter-spacing="-1" class="tabular-nums">{{ fg_val }}</text>
                     <text x="120" y="130" text-anchor="middle" fill="currentColor" opacity="0.65" font-size="10" font-weight="600" letter-spacing="1" style="text-transform:uppercase;">
-                        {% if fg_val <= 25 %}EXTREME ANGST{% elif fg_val <= 45 %}ANGST{% elif fg_val <= 55 %}NEUTRAL{% elif fg_val <= 75 %}GIER{% else %}EXTREME GIER{% endif %}
+                        {% if fg_val <= 25 %}{{ t.markt.extreme_fear }}{% elif fg_val <= 45 %}{{ t.markt.fear }}{% elif fg_val <= 55 %}{{ t.markt.neutral }}{% elif fg_val <= 75 %}{{ t.markt.greed }}{% else %}{{ t.markt.extreme_greed }}{% endif %}
                     </text>
                 </svg>
                 <script>
@@ -82,15 +82,15 @@
                 })();
                 </script>
                 <div style="font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.6; margin-top: var(--space-3);">
-                    {% if fg_val <= 25 %}Extreme Angst. Historisch oft Kaufgelegenheiten.
-                    {% elif fg_val <= 45 %}Angst dominiert. Anleger vorsichtig.
-                    {% elif fg_val <= 55 %}Neutrales Sentiment. Markt wartet auf Impulse.
-                    {% elif fg_val <= 75 %}Gier. Vorsicht vor Übertreibungen.
-                    {% else %}Extreme Gier. Korrekturrisiko erhöht.{% endif %}
+                    {% if fg_val <= 25 %}{{ t.markt.fg_desc_extreme_fear }}
+                    {% elif fg_val <= 45 %}{{ t.markt.fg_desc_fear }}
+                    {% elif fg_val <= 55 %}{{ t.markt.fg_desc_neutral }}
+                    {% elif fg_val <= 75 %}{{ t.markt.fg_desc_greed }}
+                    {% else %}{{ t.markt.fg_desc_extreme_greed }}{% endif %}
                 </div>
                 {% if fg.previous_1_week is defined %}
                 <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: var(--space-3);">
-                    {% for label, val in [('Vorwoche', fg.previous_1_week), ('Vormonat', fg.previous_1_month), ('Vorjahr', fg.previous_1_year)] %}
+                    {% for label, val in [(t.markt.prev_week, fg.previous_1_week), (t.markt.prev_month, fg.previous_1_month), (t.markt.prev_year, fg.previous_1_year)] %}
                     {% if val is defined and val is not none %}
                     {% set v = val|round(0)|int %}
                     <span class="tabular-nums" style="padding: 4px 10px; border-radius: var(--radius-sm); font-size: var(--text-xs); font-weight: 600;
@@ -103,23 +103,23 @@
                 </div>
                 {% endif %}
                 {% else %}
-                <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Keine F&G-Daten</div></div>
+                <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">{{ t.markt.no_fg }}</div></div>
                 {% endif %}
             </div>
         </div>
         <div>
-            <div class="card-title">Sektoren heute</div>
+            <div class="card-title">{{ t.markt.sectors_today }}</div>
             {% if sector_heatmap %}
             <div id="sectorTreemap" class="chart-h-md"></div>
             {% else %}
-            <div class="empty-state-v2"><div class="empty-state-icon">▦</div><div class="empty-state-title">Keine Sektor-Daten</div></div>
+            <div class="empty-state-v2"><div class="empty-state-icon">▦</div><div class="empty-state-title">{{ t.markt.no_sectors }}</div></div>
             {% endif %}
         </div>
     </div>
 </div>
 
 <div class="card" style="margin-bottom: var(--space-5);">
-    <div class="card-title">Indizes</div>
+    <div class="card-title">{{ t.markt.indices }}</div>
     {% if indices %}
     <div class="grid-cards-compact">
         {% for idx in indices[:8] %}
@@ -149,15 +149,15 @@
         {% endfor %}
     </div>
     {% else %}
-    <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Keine Index-Daten</div></div>
+    <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">{{ t.markt.no_index_data }}</div></div>
     {% endif %}
 </div>
 
 <div class="card" style="margin-bottom: var(--space-5);">
     <div style="display:flex; flex-wrap: wrap; gap: 4px; margin-bottom: var(--space-4); border-bottom: 1px solid var(--glass-border);">
-        <button class="btn btn-ghost news-tab active" data-tab="buzz" style="border-radius: 0; border-bottom: 2px solid var(--accent); color: var(--accent);">Headline Buzz</button>
-        <button class="btn btn-ghost news-tab" data-tab="positions" style="border-radius: 0;">Deine Positionen</button>
-        <button class="btn btn-ghost news-tab" data-tab="macro" style="border-radius: 0;">Makro</button>
+        <button class="btn btn-ghost news-tab active" data-tab="buzz" style="border-radius: 0; border-bottom: 2px solid var(--accent); color: var(--accent);">{{ t.markt.tab_buzz }}</button>
+        <button class="btn btn-ghost news-tab" data-tab="positions" style="border-radius: 0;">{{ t.markt.tab_positions }}</button>
+        <button class="btn btn-ghost news-tab" data-tab="macro" style="border-radius: 0;">{{ t.markt.tab_macro }}</button>
     </div>
     <div id="newsContent">
         <div data-tab-content="buzz">
@@ -190,7 +190,7 @@
                 {% endfor %}
             </div>
             {% else %}
-            <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Keine Headlines</div></div>
+            <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">{{ t.markt.no_headlines }}</div></div>
             {% endif %}
         </div>
         <div data-tab-content="positions" hidden>
@@ -199,7 +199,7 @@
             {% if loop.index <= 8 %}
             <details style="margin-bottom: 4px;" {% if loop.index <= 2 %}open{% endif %}>
                 <summary style="cursor: pointer; padding: 10px 0; font-size: var(--text-base); font-weight: 600; color: var(--text-primary); border-bottom: 1px solid var(--glass-border); list-style: none; display: flex; justify-content: space-between; align-items: center;">
-                    <span><span class="ticker-badge" style="margin-right: 8px;">{{ ticker }}</span> {{ articles|length }} Artikel</span>
+                    <span><span class="ticker-badge" style="margin-right: 8px;">{{ ticker }}</span> {{ articles|length }} {{ t.markt.articles_suffix }}</span>
                     <span style="font-size: 16px; color: var(--text-muted); transition: transform 0.2s;">&#9662;</span>
                 </summary>
                 <div style="padding: 8px 0 8px 12px;">
@@ -216,7 +216,7 @@
             {% endif %}
             {% endfor %}
             {% else %}
-            <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Keine Positionen-News</div></div>
+            <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">{{ t.markt.no_position_news }}</div></div>
             {% endif %}
         </div>
         <div data-tab-content="macro" hidden>
@@ -235,7 +235,7 @@
                 {% endfor %}
             </div>
             {% else %}
-            <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Keine Makro-News</div></div>
+            <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">{{ t.markt.no_macro_news }}</div></div>
             {% endif %}
         </div>
     </div>
@@ -243,7 +243,7 @@
 
 <div class="charts-grid" style="margin-bottom: var(--space-5);">
     <div class="card">
-        <div class="card-title">Analyst-Konsens</div>
+        <div class="card-title">{{ t.markt.analyst_consensus }}</div>
         {% if news.get('sentiment') %}
         <div style="display: grid; gap: 8px;">
             {% for ticker, s in news['sentiment'].items() %}
@@ -260,13 +260,13 @@
                     </div>
                 </div>
                 {% if s.get('buzz_volume') %}
-                <span class="tabular-nums" style="font-size: 10px; color: var(--text-muted);" title="Analysten gesamt">{{ s.buzz_volume }}</span>
+                <span class="tabular-nums" style="font-size: 10px; color: var(--text-muted);" title="{{ t.markt.analysts_total }}">{{ s.buzz_volume }}</span>
                 {% endif %}
             </div>
             {% endfor %}
         </div>
         {% else %}
-        <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Kein Analyst-Konsens</div><div class="empty-state-body">Erscheint nach dem nächsten Daten-Refresh (Top-8 Positionen mit Analysten-Coverage).</div></div>
+        <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">{{ t.markt.no_analyst_consensus }}</div><div class="empty-state-body">{{ t.markt.no_analyst_consensus_sub }}</div></div>
         {% endif %}
     </div>
 
@@ -286,7 +286,7 @@
                         <td>
                             {{ val }}
                             {% if 'yield' in key|lower and 'spread' in key|lower and val is number and val < 0 %}
-                            <span style="font-size: 10px; color: var(--loss); margin-left: 4px;">invertiert</span>
+                            <span style="font-size: 10px; color: var(--loss); margin-left: 4px;">{{ t.markt.inverted }}</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -294,7 +294,7 @@
                 </tbody>
             </table>
             {% else %}
-            <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Keine US-Makrodaten</div></div>
+            <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">{{ t.markt.no_us_macro }}</div></div>
             {% endif %}
         </div>
         <div id="macro-eu" style="display: none;">
@@ -310,7 +310,7 @@
                 </tbody>
             </table>
             {% else %}
-            <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Keine EU-Makrodaten</div></div>
+            <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">{{ t.markt.no_eu_macro }}</div></div>
             {% endif %}
         </div>
     </div>
@@ -318,18 +318,18 @@
 
 <div class="charts-grid" style="margin-bottom: var(--space-5);">
     <div class="card">
-        <div class="card-title">Earnings-Kalender</div>
+        <div class="card-title">{{ t.markt.earnings }}</div>
         {% if calendar and calendar.get('earnings') %}
         <div class="table-wrapper">
             <table class="data-table-stack">
-                <thead><tr><th>Ticker</th><th>Datum</th><th class="text-right">Tage</th></tr></thead>
+                <thead><tr><th>{{ t.markt.col_ticker }}</th><th>{{ t.markt.col_date }}</th><th class="text-right">{{ t.markt.col_days }}</th></tr></thead>
                 <tbody>
                     {% for e in calendar['earnings'] %}
                     {% if e is mapping %}
                     <tr>
                         <td class="primary"><span class="ticker-badge">{{ e.ticker }}</span></td>
-                        <td class="tabular-nums" data-label="Datum">{{ e.date[:10] if e.date else '' }}</td>
-                        <td class="text-right" data-label="Tage">
+                        <td class="tabular-nums" data-label="{{ t.markt.col_date }}">{{ e.date[:10] if e.date else '' }}</td>
+                        <td class="text-right" data-label="{{ t.markt.col_days }}">
                             {% if e.get('days_until') is not none %}
                             <span class="tabular-nums" style="font-size: var(--text-xs); padding: 2px 6px; border-radius: 4px; {% if e.days_until <= 7 %}background: var(--accent-bg); color: var(--accent); font-weight: 600;{% else %}color: var(--text-muted);{% endif %}">
                                 {{ e.days_until }}d
@@ -343,23 +343,23 @@
             </table>
         </div>
         {% else %}
-        <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Keine anstehenden Earnings</div></div>
+        <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">{{ t.markt.no_earnings }}</div></div>
         {% endif %}
     </div>
 
     <div class="card">
-        <div class="card-title">Makro-Events</div>
+        <div class="card-title">{{ t.markt.macro_events }}</div>
         {% if calendar and calendar.get('macro_events') %}
         <div class="table-wrapper">
             <table class="data-table-stack">
-                <thead><tr><th>Event</th><th>Datum</th><th class="text-right">Tage</th></tr></thead>
+                <thead><tr><th>{{ t.markt.col_event }}</th><th>{{ t.markt.col_date }}</th><th class="text-right">{{ t.markt.col_days }}</th></tr></thead>
                 <tbody>
                     {% for event in calendar['macro_events'] %}
                     {% if event is mapping %}
                     <tr>
                         <td class="primary">{{ event.name }}</td>
-                        <td class="text-muted tabular-nums" data-label="Datum">{{ event.date[:10] if event.date else '' }}</td>
-                        <td class="text-right" data-label="Tage">
+                        <td class="text-muted tabular-nums" data-label="{{ t.markt.col_date }}">{{ event.date[:10] if event.date else '' }}</td>
+                        <td class="text-right" data-label="{{ t.markt.col_days }}">
                             {% if event.get('days_until') is not none %}
                             <span class="tabular-nums" style="font-size: var(--text-xs); color: var(--text-muted);">{{ event.days_until }}d</span>
                             {% endif %}
@@ -371,14 +371,14 @@
             </table>
         </div>
         {% else %}
-        <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Keine Events</div></div>
+        <div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">{{ t.markt.no_events }}</div></div>
         {% endif %}
     </div>
 </div>
 
 {% if news.get('opportunities') %}
 <div class="card" style="margin-bottom: var(--space-5);">
-    <div class="card-title">Investment-Ideen (Recherche)</div>
+    <div class="card-title">{{ t.markt.opportunities }}</div>
     <div style="max-height: 300px; overflow-y: auto;">
         {% for item in news['opportunities'][:10] %}
         <div style="padding: 10px 0; {% if not loop.last %}border-bottom: 1px solid var(--glass-border);{% endif %}">
@@ -390,7 +390,7 @@
         {% endfor %}
     </div>
     <div style="font-size: 10px; color: var(--text-muted); margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--glass-border);">
-        Automatisch recherchiert via Brave Search. Keine Anlageempfehlung.
+        {{ t.markt.opportunities_note }}
     </div>
 </div>
 {% endif %}

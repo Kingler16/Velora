@@ -16,8 +16,8 @@
 <div id="tradeModal" class="modal-overlay" onclick="if(event.target===this)TradeModal.close()">
     <div class="card glass-strong glass-elevated" style="width: 440px; max-width: 95vw; padding: 24px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
-            <div id="tradeStepTitle" style="font-family:var(--font-ui); font-weight: 700; font-size: var(--text-lg); color: var(--text-primary); letter-spacing: var(--letter-tight);">Trade loggen</div>
-            <span style="cursor:pointer; font-size:20px; color:var(--text-muted);" onclick="TradeModal.close()" aria-label="Schliessen">×</span>
+            <div id="tradeStepTitle" style="font-family:var(--font-ui); font-weight: 700; font-size: var(--text-lg); color: var(--text-primary); letter-spacing: var(--letter-tight);">{{ t.portfolio.log_trade_title }}</div>
+            <span style="cursor:pointer; font-size:20px; color:var(--text-muted);" onclick="TradeModal.close()" aria-label="{{ t.common.close }}">×</span>
         </div>
         <div id="tradeProgress" style="display:flex; gap:6px; margin-bottom: 20px;">
             <span class="trade-dot active"></span>
@@ -27,13 +27,13 @@
 
         <div id="tradeStep1" class="trade-step">
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px;">
-                <button type="button" class="trade-action-btn active" data-action="buy">KAUFEN</button>
-                <button type="button" class="trade-action-btn" data-action="sell">VERKAUFEN</button>
+                <button type="button" class="trade-action-btn active" data-action="buy">{{ t.portfolio.buy_upper }}</button>
+                <button type="button" class="trade-action-btn" data-action="sell">{{ t.portfolio.sell_upper }}</button>
             </div>
-            <label class="field-label" style="display:block; margin-bottom:4px;">Ticker</label>
+            <label class="field-label" style="display:block; margin-bottom:4px;">{{ t.portfolio.ticker }}</label>
             <input type="text" id="tradeTicker" class="input" placeholder="z.B. AAPL, ASML.AS" autocomplete="off" inputmode="text">
             <div style="display:flex; justify-content:flex-end; margin-top:20px;">
-                <button type="button" class="btn btn-accent" id="tradeNext1">Weiter →</button>
+                <button type="button" class="btn btn-accent" id="tradeNext1">{{ t.common.next }} →</button>
             </div>
         </div>
 
@@ -41,11 +41,11 @@
             <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 12px;">Du <span id="tradeActionWord">kaufst</span>: <strong id="tradeTickerDisplay" style="color: var(--text-primary);">—</strong></div>
             <div style="display:flex; gap:10px; margin-bottom:12px;">
                 <div style="flex:1;">
-                    <label class="field-label" style="display:block; margin-bottom:4px;">Stueck</label>
+                    <label class="field-label" style="display:block; margin-bottom:4px;">{{ t.portfolio.shares }}</label>
                     <input type="number" id="tradeShares" class="input" step="0.01" min="0.01" placeholder="10.00" inputmode="decimal">
                 </div>
                 <div style="flex:1;">
-                    <label class="field-label" style="display:block; margin-bottom:4px;">Preis (<span id="tradePriceCur">EUR</span>)</label>
+                    <label class="field-label" style="display:block; margin-bottom:4px;">{{ t.portfolio.price }} (<span id="tradePriceCur">EUR</span>)</label>
                     <input type="number" id="tradePrice" class="input" step="0.01" min="0.01" placeholder="150.00" inputmode="decimal">
                 </div>
             </div>
@@ -59,12 +59,12 @@
                     <span style="font-weight:600;">USD</span>
                 </label>
             </div>
-            <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom:12px;">Total: <strong id="tradeTotal" class="tabular-nums" style="color: var(--text-primary);">—</strong></div>
-            <label class="field-label" style="display:block; margin-bottom:4px;">Konto</label>
+            <div style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom:12px;">{{ t.portfolio.total }}: <strong id="tradeTotal" class="tabular-nums" style="color: var(--text-primary);">—</strong></div>
+            <label class="field-label" style="display:block; margin-bottom:4px;">{{ t.portfolio.account }}</label>
             <input type="text" id="tradeAccount" class="input" placeholder="z.B. Trade Republic, Scalable" autocomplete="off">
             <div style="display:flex; justify-content:space-between; margin-top:20px;">
-                <button type="button" class="btn btn-ghost" id="tradeBack2">← Zurueck</button>
-                <button type="button" class="btn btn-accent" id="tradeNext2">Weiter →</button>
+                <button type="button" class="btn btn-ghost" id="tradeBack2">← {{ t.common.back }}</button>
+                <button type="button" class="btn btn-accent" id="tradeNext2">{{ t.common.next }} →</button>
             </div>
         </div>
 
@@ -73,13 +73,13 @@
                 <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom:8px;" id="tradePreviewLabel">KAUF</div>
                 <div style="font-size: var(--text-lg); font-weight: 700; color: var(--text-primary); margin-bottom:4px;" id="tradePreviewMain">—</div>
                 <div style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom:8px;" id="tradePreviewTotal">= —</div>
-                <div style="font-size: var(--text-xs); color: var(--text-muted);">Konto: <span id="tradePreviewAccount">—</span></div>
+                <div style="font-size: var(--text-xs); color: var(--text-muted);">{{ t.portfolio.account }}: <span id="tradePreviewAccount">—</span></div>
             </div>
             <div style="display:flex; justify-content:space-between;">
-                <button type="button" class="btn btn-ghost" id="tradeBack3">← Zurueck</button>
+                <button type="button" class="btn btn-ghost" id="tradeBack3">← {{ t.common.back }}</button>
                 <button type="button" class="btn btn-accent" id="tradeSubmitBtn">
                     <span class="spinner"></span>
-                    Bestaetigen & speichern
+                    {{ t.portfolio.confirm_save }}
                 </button>
             </div>
         </div>
@@ -134,23 +134,23 @@
 <!-- KPI Stats -->
 <div class="kpi-grid" style="margin-bottom: 24px;">
     <div class="kpi-card" style="border-left: 3px solid var(--accent);">
-        <div class="kpi-label">Offene Aktionen</div>
+        <div class="kpi-label">{{ t.empfehlungen.open_actions }}</div>
         <div class="kpi-value text-accent">{{ actionable|length }}</div>
     </div>
     <div class="kpi-card" style="border-left: 3px solid var(--accent);">
-        <div class="kpi-label">Ausgeführt</div>
+        <div class="kpi-label">{{ t.empfehlungen.executed }}</div>
         <div class="kpi-value text-accent">{{ (wins|length + executed|length) }}</div>
     </div>
     <div class="kpi-card" style="border-left: 3px solid var(--red);">
-        <div class="kpi-label">Stop ausgelöst</div>
+        <div class="kpi-label">{{ t.empfehlungen.stopped }}</div>
         <div class="kpi-value text-red">{{ losses|length }}</div>
     </div>
     <div class="kpi-card">
-        <div class="kpi-label">Hit-Rate</div>
+        <div class="kpi-label">{{ t.empfehlungen.hit_rate }}</div>
         {% if total_closed >= 3 %}
         <div class="kpi-value {% if hit_rate >= 60 %}text-accent{% elif hit_rate >= 40 %}text-yellow{% else %}text-red{% endif %}">{{ hit_rate|int }}%</div>
         {% else %}
-        <div class="kpi-value text-muted" style="font-size: 13px; font-weight: 600; line-height: 1.3;">Noch zu wenig Daten</div>
+        <div class="kpi-value text-muted" style="font-size: 13px; font-weight: 600; line-height: 1.3;">{{ t.empfehlungen.too_few_data }}</div>
         {% endif %}
     </div>
 </div>
@@ -158,7 +158,7 @@
 <!-- Aktive Empfehlungen -->
 {% if actionable %}
 <div class="card" style="margin-bottom: 24px;">
-    <div class="card-title">Zu tun</div>
+    <div class="card-title">{{ t.empfehlungen.todo }}</div>
     <div style="display: grid; gap: 14px;">
         {% for rec in actionable %}
         {#
@@ -173,15 +173,15 @@
         {% set is_buy = rec.action in ['buy', 'watch'] %}
         {% set is_limit = rec.entry_price is not none and rec.entry_price %}
         {% if is_stop_adjust %}
-            {% set order_label = 'STOP NACHZIEHEN' %}
+            {% set order_label = t.empfehlungen.order_trail_stop %}
             {% set accent = 'var(--yellow)' %}
             {% set accent_bg = 'var(--yellow-bg)' %}
         {% elif is_limit %}
-            {% set order_label = 'LIMIT KAUF' if is_buy else 'LIMIT VERKAUF' %}
+            {% set order_label = t.empfehlungen.order_limit_buy if is_buy else t.empfehlungen.order_limit_sell %}
             {% set accent = 'var(--accent)' if is_buy else 'var(--red)' %}
             {% set accent_bg = 'var(--accent-bg)' if is_buy else 'var(--red-bg)' %}
         {% else %}
-            {% set order_label = 'KAUFEN' if is_buy else 'VERKAUFEN' %}
+            {% set order_label = t.empfehlungen.order_buy if is_buy else t.empfehlungen.order_sell %}
             {% set accent = 'var(--accent)' if is_buy else 'var(--red)' %}
             {% set accent_bg = 'var(--accent-bg)' if is_buy else 'var(--red-bg)' %}
         {% endif %}
@@ -199,19 +199,19 @@
                     </span>
                     {% if rec.shares %}
                     <span style="font-size: 13px; color: var(--text-secondary);">
-                        <strong style="color: var(--text-primary);">{{ rec.shares }}</strong> Stück
+                        <strong style="color: var(--text-primary);">{{ rec.shares }}</strong> {{ t.portfolio.shares }}
                     </span>
                     {% elif rec.sell_pct %}
                     <span style="font-size: 13px; color: var(--text-secondary);">
-                        <strong style="color: var(--text-primary);">{{ rec.sell_pct }}%</strong> der Position
+                        <strong style="color: var(--text-primary);">{{ rec.sell_pct }}%</strong> {{ t.empfehlungen.of_position }}
                     </span>
                     {% endif %}
                 </div>
                 <div style="display: flex; gap: 6px; flex-shrink: 0;">
                     <button class="btn" style="padding:6px 10px; font-size:12px;"
-                            onclick="closeRec('{{ rec.ticker }}', 'executed')" title="Als ausgeführt markieren">&#10003; Erledigt</button>
+                            onclick="closeRec('{{ rec.ticker }}', 'executed')" title="{{ t.empfehlungen.mark_executed }}">&#10003; {{ t.empfehlungen.done }}</button>
                     <button class="btn" style="padding:6px 10px; font-size:12px;"
-                            onclick="closeRec('{{ rec.ticker }}', 'cancelled')" title="Verwerfen">&#10005;</button>
+                            onclick="closeRec('{{ rec.ticker }}', 'cancelled')" title="{{ t.empfehlungen.discard }}">&#10005;</button>
                 </div>
             </div>
 
@@ -220,7 +220,7 @@
             {# Stop-Nachziehen: nur die Stop-Box prominent, kein Limit/Ziel-Grid (irreführend). #}
             <div style="background: var(--bg-secondary); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; border-left: 3px solid var(--yellow);">
                 <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-                    Neuer Stop
+                    {{ t.empfehlungen.new_stop }}
                 </div>
                 <div style="font-size: 18px; font-weight: 700; color: var(--yellow);">
                     {{ rec.stop_loss|price(rec.ticker, rec._ccy) }}
@@ -232,7 +232,7 @@
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
                 <div style="background: var(--bg-secondary); border-radius: 8px; padding: 10px 12px;">
                     <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-                        {{ 'Limit' if is_limit else 'Markt' }}
+                        {{ t.empfehlungen.limit if is_limit else t.empfehlungen.market }}
                     </div>
                     <div style="font-size: 15px; font-weight: 700;">
                         {% if rec.entry_price %}{{ rec.entry_price|price(rec.ticker, rec._ccy) }}{% else %}<span class="text-muted">—</span>{% endif %}
@@ -242,7 +242,7 @@
                 </div>
                 <div style="background: var(--bg-secondary); border-radius: 8px; padding: 10px 12px;">
                     <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-                        Stop
+                        {{ t.empfehlungen.col_stop }}
                     </div>
                     <div style="font-size: 15px; font-weight: 700; color: {% if rec.stop_loss %}var(--red){% else %}var(--text-muted){% endif %};">
                         {% if rec.stop_loss %}{{ rec.stop_loss|price(rec.ticker, rec._ccy) }}{% else %}—{% endif %}
@@ -252,7 +252,7 @@
                 </div>
                 <div style="background: var(--bg-secondary); border-radius: 8px; padding: 10px 12px;">
                     <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-                        Ziel
+                        {{ t.empfehlungen.col_target }}
                     </div>
                     <div style="font-size: 15px; font-weight: 700; color: {% if rec.target_price %}var(--accent){% else %}var(--text-muted){% endif %};">
                         {% if rec.target_price %}{{ rec.target_price|price(rec.ticker, rec._ccy) }}{% else %}—{% endif %}
@@ -281,13 +281,13 @@
                         style="flex: 1; min-width: 140px; padding: 9px 12px; font-size: 13px; font-weight: 700; justify-content: center;
                                background: {{ accent_bg }}; color: {{ accent }}; border: 1px solid {{ accent }};"
                         onclick="logTrade('{{ 'buy' if is_buy else 'sell' }}', '{{ rec.ticker }}', {{ rec.shares or 'null' }}, {{ rec.entry_price or 'null' }}, '{{ rec._ccy or 'EUR' }}')">
-                    {{ 'Kauf loggen' if is_buy else 'Verkauf loggen' }}
+                    {{ t.empfehlungen.log_buy if is_buy else t.empfehlungen.log_sell }}
                 </button>
                 {% endif %}
                 <button type="button" class="btn btn-ghost"
                         style="padding: 9px 12px; font-size: 13px; justify-content: center;{% if is_stop_adjust %} flex: 1;{% endif %}"
                         onclick="askVelora('{{ rec.ticker }}')">
-                    Velora fragen
+                    {{ t.empfehlungen.ask_velora }}
                 </button>
             </div>
         </div>
@@ -298,8 +298,8 @@
 <div class="card" style="margin-bottom: 24px;">
     <div class="empty-state-v2" style="padding: 28px 12px;">
         <div class="empty-state-icon">&#9678;</div>
-        <div class="empty-state-title">Aktuell nichts zu tun</div>
-        <div class="empty-state-body">Velora hat keine offenen Kauf-, Verkaufs- oder Limit-Order-Empfehlungen. Positionen, die einfach gehalten werden, erscheinen hier nicht.</div>
+        <div class="empty-state-title">{{ t.empfehlungen.nothing_todo }}</div>
+        <div class="empty-state-body">{{ t.empfehlungen.nothing_todo_body }}</div>
     </div>
 </div>
 {% endif %}
@@ -308,17 +308,17 @@
 {% set closed_recs = wins + executed + losses + cancelled %}
 {% if closed_recs %}
 <div class="card" style="margin-bottom: 24px;">
-    <div class="card-title">Abgeschlossen</div>
+    <div class="card-title">{{ t.empfehlungen.completed }}</div>
     <div class="table-wrapper">
         <table class="data-table-stack">
             <thead>
                 <tr>
-                    <th>Datum</th>
-                    <th>Ticker</th>
-                    <th>Aktion</th>
-                    <th>Status</th>
-                    <th>Rendite</th>
-                    <th>Ergebnis</th>
+                    <th>{{ t.empfehlungen.col_date }}</th>
+                    <th>{{ t.portfolio.ticker }}</th>
+                    <th>{{ t.empfehlungen.col_action }}</th>
+                    <th>{{ t.empfehlungen.col_status }}</th>
+                    <th>{{ t.empfehlungen.col_return }}</th>
+                    <th>{{ t.empfehlungen.col_result }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -329,10 +329,10 @@
                     <td data-label="Aktion">{{ rec.action|upper }}</td>
                     <td data-label="Status">
                         <span class="rec-status {{ rec.status }}">
-                            {% if rec.status == 'target_hit' %}Ziel erreicht
-                            {% elif rec.status == 'executed' %}Ausgeführt
-                            {% elif rec.status == 'stop_hit' %}Stop ausgelöst
-                            {% elif rec.status == 'cancelled' %}Verworfen
+                            {% if rec.status == 'target_hit' %}{{ t.empfehlungen.target_hit }}
+                            {% elif rec.status == 'executed' %}{{ t.empfehlungen.executed_status }}
+                            {% elif rec.status == 'stop_hit' %}{{ t.empfehlungen.stop_triggered }}
+                            {% elif rec.status == 'cancelled' %}{{ t.empfehlungen.discarded }}
                             {% else %}{{ rec.status }}{% endif %}
                         </span>
                     </td>
@@ -355,10 +355,10 @@
 <div class="card">
     <div class="empty-state-v2">
         <div class="empty-state-icon">&#9670;</div>
-        <div class="empty-state-title">Noch keine Empfehlungen</div>
-        <div class="empty-state-body">Velora leitet aus jedem Briefing konkrete Trade-Ideen ab. Sobald das erste Briefing erstellt ist, erscheinen Empfehlungen hier.</div>
+        <div class="empty-state-title">{{ t.empfehlungen.empty }}</div>
+        <div class="empty-state-body">{{ t.empfehlungen.empty_body }}</div>
         <div class="empty-state-action">
-            <a class="btn btn-accent" href="/briefings">Zu den Briefings</a>
+            <a class="btn btn-accent" href="/briefings">{{ t.empfehlungen.to_briefings }}</a>
         </div>
     </div>
 </div>
@@ -367,7 +367,7 @@
 <!-- Position Theses -->
 {% if notes.get('position_theses') %}
 <div class="card" style="margin-top: 24px;">
-    <div class="card-title">Investment-Thesen</div>
+    <div class="card-title">{{ t.empfehlungen.theses }}</div>
     {% for ticker, thesis in notes['position_theses'].items() %}
     <div style="padding: 10px 0; border-bottom: 1px solid var(--glass-border);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">

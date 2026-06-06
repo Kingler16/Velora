@@ -17,18 +17,18 @@
 <!-- Top Cards: Market Regime + Key Insights -->
 <div class="charts-grid grid-cols-2" style="margin-bottom: 24px;">
     <div class="card">
-        <div class="card-title">Aktuelles Markt-Regime</div>
+        <div class="card-title">{{ t.briefings.regime }}</div>
         {% if notes.get('market_regime') %}
         <div style="background: var(--bg-primary); border-left: 4px solid var(--accent); border-radius: 0 8px 8px 0; padding: 16px 20px; font-size: 14px; color: var(--text-primary); line-height: 1.7;">
             {{ notes['market_regime'] }}
         </div>
         {% else %}
-        <div class="text-muted" style="padding: 12px 0;">Noch nicht verfügbar — wird nach dem ersten Briefing gesetzt</div>
+        <div class="text-muted" style="padding: 12px 0;">{{ t.briefings.regime_empty }}</div>
         {% endif %}
     </div>
 
     <div class="card">
-        <div class="card-title">Key Insights</div>
+        <div class="card-title">{{ t.briefings.key_insights }}</div>
         {% if notes.get('key_insights') %}
             {% for insight in notes['key_insights'][-5:]|reverse %}
             <div style="display: flex; gap: 10px; padding: 10px 0; {% if not loop.last %}border-bottom: 1px solid var(--glass-border);{% endif %}">
@@ -37,14 +37,14 @@
             </div>
             {% endfor %}
         {% else %}
-        <div class="text-muted" style="padding: 12px 0;">Noch keine Insights</div>
+        <div class="text-muted" style="padding: 12px 0;">{{ t.briefings.no_insights }}</div>
         {% endif %}
     </div>
 </div>
 
 <!-- Briefing History -->
 <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-    <div class="card-title" style="margin: 0; font-size: 14px;">Briefing-Verlauf ({{ briefings|length }})</div>
+    <div class="card-title" style="margin: 0; font-size: 14px;">{{ t.briefings.history }} ({{ briefings|length }})</div>
 </div>
 
 {% if briefings %}
@@ -58,24 +58,24 @@
                 </div>
                 <div>
                     <div style="font-size: 15px; font-weight: 600; color: var(--text-primary);">
-                        Briefing {{ briefing.date[:10] if briefing.date else '–' }}
+                        {{ t.briefings.briefing }} {{ briefing.date[:10] if briefing.date else '–' }}
                         <span class="text-muted" style="font-weight: 400; font-size: 13px; margin-left: 4px;">
-                            {{ briefing.date[11:16] if briefing.date and briefing.date|length > 16 else '' }} Uhr
+                            {{ briefing.date[11:16] if briefing.date and briefing.date|length > 16 else '' }} {{ t.briefings.time }}
                         </span>
                     </div>
                     <div class="briefing-meta" style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px;">
                         {% set _wc = (briefing.word_count if briefing.word_count else (briefing.full_text|wordcount if briefing.full_text else 0)) %}
-                        {% if _wc %}~{{ [1, (_wc / 200)|int]|max }} min Lesezeit{% else %}Kurz-Zusammenfassung{% endif %}
+                        {% if _wc %}~{{ [1, (_wc / 200)|int]|max }} {{ t.briefings.min_read }}{% else %}{{ t.briefings.short_summary }}{% endif %}
                     </div>
                     <div style="display: flex; gap: 8px; margin-top: 6px;">
                         {% if briefing.recommendation_count %}
-                        <span class="rec-status open">{{ briefing.recommendation_count }} Empfehlungen</span>
+                        <span class="rec-status open">{{ t.briefings.recommendations_n.replace('{n}', briefing.recommendation_count|string) }}</span>
                         {% endif %}
                         {% if briefing.had_actions %}
-                        <span class="rec-status executed">Aktionen empfohlen</span>
+                        <span class="rec-status executed">{{ t.briefings.actions_recommended }}</span>
                         {% endif %}
                         {% if briefing.full_text %}
-                        <span style="font-size: 11px; color: var(--text-muted); padding: 2px 6px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 4px;">Volltext verfügbar</span>
+                        <span style="font-size: 11px; color: var(--text-muted); padding: 2px 6px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 4px;">{{ t.briefings.fulltext_available }}</span>
                         {% endif %}
                     </div>
                 </div>
@@ -94,7 +94,7 @@
         {% if briefing.full_text %}
         <div class="briefing-full{% if loop.index == 1 %} open{% endif %}" style="{% if loop.index == 1 %}display: block; margin-top: 16px;{% else %}display: none; margin-top: 16px;{% endif %}">
             <div style="padding: 20px 24px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 10px;">
-                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">Vollständiges Briefing</div>
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">{{ t.briefings.full_briefing }}</div>
                 <div class="briefing-content">{{ briefing.full_text|safe }}</div>
             </div>
         </div>
@@ -105,10 +105,10 @@
 <div class="card">
     <div class="empty-state-v2">
         <div class="empty-state-icon">&#9674;</div>
-        <div class="empty-state-title">Noch keine Briefings</div>
-        <div class="empty-state-body">Velora erstellt automatisch Marktbriefings nach deinem Zeitplan. Das erste erscheint hier nach dem nächsten Sync.</div>
+        <div class="empty-state-title">{{ t.briefings.no_briefings }}</div>
+        <div class="empty-state-body">{{ t.briefings.no_briefings_sub }}</div>
         <div class="empty-state-action">
-            <a class="btn btn-accent" href="/settings">Zeitplan einrichten</a>
+            <a class="btn btn-accent" href="/settings">{{ t.briefings.setup_schedule }}</a>
         </div>
     </div>
 </div>
@@ -117,7 +117,7 @@
 <!-- Position Theses -->
 {% if notes.get('position_theses') %}
 <div class="card" style="margin-top: 24px;">
-    <div class="card-title">Investment-Thesen</div>
+    <div class="card-title">{{ t.briefings.theses }}</div>
     <div class="grid grid-cols-2" style="gap: 12px;">
         {% for ticker, thesis in notes['position_theses'].items() %}
         <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px;">

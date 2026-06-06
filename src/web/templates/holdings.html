@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Durchschau — Velora{% endblock %}
+{% block title %}{{ t.holdings.title }} — Velora{% endblock %}
 
 {% block head %}
 <style>
@@ -69,31 +69,31 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Durchschau</h1>
-        <div class="page-subtitle">Was wirklich in deinen Fonds &amp; ETFs steckt — Look-Through-Exposure</div>
+        <h1 class="page-title">{{ t.holdings.title }}</h1>
+        <div class="page-subtitle">{{ t.holdings.title_sub }}</div>
     </div>
     <button class="btn btn-accent" id="research-btn" onclick="triggerResearch()"
             {% if research_running %}disabled{% endif %}>
         <span class="spinner"></span>
-        <span class="research-label">{% if research_running %}Läuft…{% else %}Fonds recherchieren{% endif %}</span>
+        <span class="research-label">{% if research_running %}{{ t.holdings.research_running }}{% else %}{{ t.holdings.research_btn }}{% endif %}</span>
     </button>
 </div>
 
 {# ─── 1) ECHTE EXPOSURE (DURCHSCHAU) — das Highlight ──────────────── #}
 {% if lookthrough %}
 <div class="card lt-section">
-    <div class="card-title">Echte Exposure (Durchschau)</div>
+    <div class="card-title">{{ t.holdings.true_exposure }}</div>
 
     {% if lookthrough.unresearched_funds and lookthrough.unresearched_funds > 0 %}
     <div style="font-size: var(--text-xs); color: var(--warn); margin-bottom: var(--space-4);">
-        {{ lookthrough.unresearched_funds }} Fonds noch nicht recherchiert — Durchschau unvollständig
+        {{ t.holdings.unresearched_warning.replace('{n}', lookthrough.unresearched_funds|string) }}
     </div>
     {% endif %}
 
     {# Asset-Klassen-Mix #}
-    {% set ac_labels = {'equity':'Aktien','bond':'Anleihen','commodity':'Rohstoffe','mixed':'Gemischt','cash':'Cash'} %}
+    {% set ac_labels = {'equity':t.holdings.ac_equity,'bond':t.holdings.ac_bond,'commodity':t.holdings.ac_commodity,'mixed':t.holdings.ac_mixed,'cash':t.holdings.ac_cash} %}
     {% if lookthrough.asset_class %}
-    <div class="fund-subtitle" style="margin-top: 0;">Anlageklassen</div>
+    <div class="fund-subtitle" style="margin-top: 0;">{{ t.holdings.asset_classes }}</div>
     <div class="lt-bars" style="margin-bottom: var(--space-5);">
         {% for row in lookthrough.asset_class %}
         <div class="lt-bar-row">
@@ -107,7 +107,7 @@
 
     {# Top-Einzeltitel inkl. der in Fonds versteckten — KERN-MEHRWERT #}
     {% if lookthrough.top_titles %}
-    <div class="fund-subtitle">Top-Einzeltitel (direkt + über Fonds)</div>
+    <div class="fund-subtitle">{{ t.holdings.top_titles }}</div>
     <div class="lt-titles">
         {% for t_ in lookthrough.top_titles %}
         <div class="lt-title-row">
@@ -126,7 +126,7 @@
     <div class="charts-grid" style="margin-top: var(--space-5); margin-bottom: 0;">
         {% if lookthrough.regions %}
         <div>
-            <div class="fund-subtitle" style="margin-top: 0;">Regionen</div>
+            <div class="fund-subtitle" style="margin-top: 0;">{{ t.holdings.regions }}</div>
             <div class="lt-inline">
                 {% for r in lookthrough.regions[:8] %}
                 <span class="lt-inline-chip"><b>{{ r.name }}</b> {{ r.pct|round(1) }}%</span>
@@ -136,7 +136,7 @@
         {% endif %}
         {% if lookthrough.sectors %}
         <div>
-            <div class="fund-subtitle" style="margin-top: 0;">Sektoren</div>
+            <div class="fund-subtitle" style="margin-top: 0;">{{ t.holdings.sectors }}</div>
             <div class="lt-inline">
                 {% for s in lookthrough.sectors[:8] %}
                 <span class="lt-inline-chip"><b>{{ s.name }}</b> {{ s.pct|round(1) }}%</span>
@@ -149,21 +149,21 @@
 
     {% if lookthrough.fund_count is not none %}
     <div class="fund-stats" style="margin-top: var(--space-5); margin-bottom: 0; border-top: 1px solid var(--glass-border); padding-top: var(--space-3);">
-        <span><b>{{ lookthrough.fund_count }}</b> Fonds/ETFs</span>
-        <span><b>{{ lookthrough.researched_funds }}</b> recherchiert</span>
-        {% if lookthrough.total_invested_eur is not none %}<span>investiert <b>{{ lookthrough.total_invested_eur|eur }}</b></span>{% endif %}
-        {% if lookthrough.grand_total_eur is not none %}<span>Gesamt <b>{{ lookthrough.grand_total_eur|eur }}</b></span>{% endif %}
+        <span><b>{{ lookthrough.fund_count }}</b> {{ t.holdings.funds_etfs_suffix }}</span>
+        <span><b>{{ lookthrough.researched_funds }}</b> {{ t.holdings.researched_suffix }}</span>
+        {% if lookthrough.total_invested_eur is not none %}<span>{{ t.holdings.invested_prefix }} <b>{{ lookthrough.total_invested_eur|eur }}</b></span>{% endif %}
+        {% if lookthrough.grand_total_eur is not none %}<span>{{ t.holdings.grand_total_prefix }} <b>{{ lookthrough.grand_total_eur|eur }}</b></span>{% endif %}
     </div>
     {% endif %}
 </div>
 {% endif %}
 
 {# ─── 2) PRO FONDS EINE KARTE ─────────────────────────────────────── #}
-<div class="card-title" style="margin-top: var(--space-6);">Fonds &amp; ETFs im Detail</div>
+<div class="card-title" style="margin-top: var(--space-6);">{{ t.holdings.funds_detail }}</div>
 
 {% if funds %}
-{% set type_labels = {'etf':'ETF','fund':'Fonds','bond_fund':'Anleihenfonds','bond':'Anleihe','commodity':'Rohstoff','stock':'Aktie'} %}
-{% set class_labels = {'equity':'Aktienfonds','bond':'Anleihen','commodity':'Rohstoff','mixed':'Gemischt','cash':'Cash'} %}
+{% set type_labels = {'etf':t.holdings.type_etf,'fund':t.holdings.type_fund,'bond_fund':t.holdings.type_bond_fund,'bond':t.holdings.type_bond,'commodity':t.holdings.type_commodity,'stock':t.holdings.type_stock} %}
+{% set class_labels = {'equity':t.holdings.class_equity,'bond':t.holdings.class_bond,'commodity':t.holdings.class_commodity,'mixed':t.holdings.class_mixed,'cash':t.holdings.class_cash} %}
 {% for f in funds %}
 {% set r = f.research %}
 <div class="card fund-card">
@@ -173,18 +173,18 @@
             <div class="fund-meta">
                 {% if f.isin %}{{ f.isin }}{% endif %}
                 {% if f.ticker %} · {{ f.ticker }}{% endif %}
-                {% if f.shares is not none %} · {{ f.shares|round(2) }} Stk{% endif %}
+                {% if f.shares is not none %} · {{ f.shares|round(2) }} {{ t.holdings.shares_suffix }}{% endif %}
             </div>
         </div>
         <div class="fund-badges">
             {% if r %}
                 {% set tlabel = type_labels.get(r.instrument_type) %}
-                {% if not tlabel %}{% set tlabel = class_labels.get(r.asset_class, r.asset_class or 'Fonds') %}{% endif %}
+                {% if not tlabel %}{% set tlabel = class_labels.get(r.asset_class, r.asset_class or t.holdings.fallback_fund) %}{% endif %}
                 <span class="type-badge">{{ tlabel }}</span>
                 {% if r.confidence %}
-                <span class="conf-badge {{ r.confidence }}"><span class="dot"></span>{{ {'high':'Hohe','medium':'Mittlere','low':'Geringe'}.get(r.confidence, r.confidence) }} Sicherheit</span>
+                <span class="conf-badge {{ r.confidence }}"><span class="dot"></span>{{ {'high':t.holdings.conf_high,'medium':t.holdings.conf_medium,'low':t.holdings.conf_low}.get(r.confidence, r.confidence) }} {{ t.holdings.confidence_suffix }}</span>
                 {% endif %}
-                {% if r.researched_at %}<span class="fund-meta">zuletzt: {{ r.researched_at[:10] }}</span>{% endif %}
+                {% if r.researched_at %}<span class="fund-meta">{{ t.holdings.last_researched_prefix }} {{ r.researched_at[:10] }}</span>{% endif %}
             {% endif %}
         </div>
     </div>
@@ -193,51 +193,51 @@
     {# Empty-State: noch nicht recherchiert #}
     <div class="empty-state-v2" style="padding: var(--space-5) var(--space-4);">
         <div class="empty-state-icon">◌</div>
-        <div class="empty-state-title">Noch nicht recherchiert</div>
-        <div class="empty-state-body">Velora kennt die Zusammensetzung dieses Fonds noch nicht.</div>
+        <div class="empty-state-title">{{ t.holdings.not_researched_title }}</div>
+        <div class="empty-state-body">{{ t.holdings.not_researched_body }}</div>
         <button class="btn btn-sm" style="margin-top: var(--space-3);"
-                onclick="triggerResearch({{ f.isin|tojson }})">recherchieren</button>
+                onclick="triggerResearch({{ f.isin|tojson }})">{{ t.holdings.research_single }}</button>
     </div>
     {% else %}
     {# Recherchierte Daten #}
     {% if r.summary %}<p class="fund-summary">{{ r.summary }}</p>{% endif %}
 
     <div class="fund-stats">
-        {% if r.ter_pct is not none %}<span>TER <b>{{ r.ter_pct|round(2) }}%</b></span>{% endif %}
-        {% if r.source %}<span>Quelle <b>{{ r.source }}</b></span>{% endif %}
+        {% if r.ter_pct is not none %}<span>{{ t.holdings.ter_label }} <b>{{ r.ter_pct|round(2) }}%</b></span>{% endif %}
+        {% if r.source %}<span>{{ t.holdings.source_label }} <b>{{ r.source }}</b></span>{% endif %}
     </div>
 
     {# Bond-Detail (nur bond / bond_fund) #}
     {% if r.bond %}
-    <div class="fund-subtitle">Anleihe-Profil</div>
+    <div class="fund-subtitle">{{ t.holdings.bond_profile }}</div>
     <div class="bond-grid">
-        {% if r.bond.issuer %}<div class="bond-cell"><div class="k">Emittent</div><div class="v">{{ r.bond.issuer }}</div></div>{% endif %}
-        {% if r.bond.type %}<div class="bond-cell"><div class="k">Typ</div><div class="v">{{ r.bond.type }}</div></div>{% endif %}
-        {% if r.bond.avg_maturity %}<div class="bond-cell"><div class="k">Ø-Laufzeit</div><div class="v">{{ r.bond.avg_maturity }}</div></div>{% endif %}
-        {% if r.bond.avg_rating %}<div class="bond-cell"><div class="k">Rating</div><div class="v">{{ r.bond.avg_rating }}</div></div>{% endif %}
-        {% if r.bond.duration_years is not none %}<div class="bond-cell"><div class="k">Duration</div><div class="v">{{ r.bond.duration_years }} J</div></div>{% endif %}
-        {% if r.bond.currency %}<div class="bond-cell"><div class="k">Währung</div><div class="v">{{ r.bond.currency }}</div></div>{% endif %}
+        {% if r.bond.issuer %}<div class="bond-cell"><div class="k">{{ t.holdings.bond_issuer }}</div><div class="v">{{ r.bond.issuer }}</div></div>{% endif %}
+        {% if r.bond.type %}<div class="bond-cell"><div class="k">{{ t.holdings.bond_type }}</div><div class="v">{{ r.bond.type }}</div></div>{% endif %}
+        {% if r.bond.avg_maturity %}<div class="bond-cell"><div class="k">{{ t.holdings.bond_avg_maturity }}</div><div class="v">{{ r.bond.avg_maturity }}</div></div>{% endif %}
+        {% if r.bond.avg_rating %}<div class="bond-cell"><div class="k">{{ t.holdings.bond_rating }}</div><div class="v">{{ r.bond.avg_rating }}</div></div>{% endif %}
+        {% if r.bond.duration_years is not none %}<div class="bond-cell"><div class="k">{{ t.holdings.bond_duration }}</div><div class="v">{{ r.bond.duration_years }} {{ t.holdings.bond_duration_years_suffix }}</div></div>{% endif %}
+        {% if r.bond.currency %}<div class="bond-cell"><div class="k">{{ t.holdings.bond_currency }}</div><div class="v">{{ r.bond.currency }}</div></div>{% endif %}
     </div>
     {% endif %}
 
     {# Top-Holdings-Tabelle: Zerlegung in Einzeltitel #}
     {% if r.top_holdings %}
-    <div class="fund-subtitle">Top-Holdings</div>
+    <div class="fund-subtitle">{{ t.holdings.top_holdings }}</div>
     <div class="table-wrapper">
         <table class="data-table-stack">
             <thead>
                 <tr>
-                    <th class="text-right" style="width: 1%;">Gewicht</th>
-                    <th>Titel</th>
+                    <th class="text-right" style="width: 1%;">{{ t.holdings.col_weight }}</th>
+                    <th>{{ t.holdings.col_title }}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for h in r.top_holdings|sort(attribute='weight_pct', reverse=true) %}
                 <tr>
-                    <td class="text-right tabular-nums" data-label="Gewicht" style="font-weight: 600; color: var(--accent);">
+                    <td class="text-right tabular-nums" data-label="{{ t.holdings.col_weight }}" style="font-weight: 600; color: var(--accent);">
                         <span class="holdings-mini-bar"><span style="width: {{ h.weight_pct|round(1) }}%;"></span></span>{{ h.weight_pct|round(1) }}%
                     </td>
-                    <td class="primary" data-label="Titel">
+                    <td class="primary" data-label="{{ t.holdings.col_title }}">
                         {{ h.name }}{% if h.ticker %} <span class="ticker-badge" style="margin-left: 4px;">{{ h.ticker }}</span>{% endif %}
                     </td>
                 </tr>
@@ -249,7 +249,7 @@
 
     {# Region- / Sektor-Breakdown kompakt #}
     {% if r.region_breakdown %}
-    <div class="fund-subtitle">Regionen</div>
+    <div class="fund-subtitle">{{ t.holdings.regions }}</div>
     <div class="lt-inline">
         {% for region, pct in r.region_breakdown.items() %}
         <span class="lt-inline-chip"><b>{{ region }}</b> {{ pct|round(1) }}%</span>
@@ -257,7 +257,7 @@
     </div>
     {% endif %}
     {% if r.sector_breakdown %}
-    <div class="fund-subtitle">Sektoren</div>
+    <div class="fund-subtitle">{{ t.holdings.sectors }}</div>
     <div class="lt-inline">
         {% for sector, pct in r.sector_breakdown.items() %}
         <span class="lt-inline-chip"><b>{{ sector }}</b> {{ pct|round(1) }}%</span>
@@ -266,7 +266,7 @@
     {% endif %}
 
     <div style="margin-top: var(--space-4);">
-        <button class="btn btn-sm btn-ghost" onclick="triggerResearch({{ f.isin|tojson }})">neu recherchieren</button>
+        <button class="btn btn-sm btn-ghost" onclick="triggerResearch({{ f.isin|tojson }})">{{ t.holdings.re_research }}</button>
     </div>
     {% endif %}
 </div>
@@ -274,8 +274,8 @@
 {% else %}
 <div class="empty-state-v2">
     <div class="empty-state-icon">○</div>
-    <div class="empty-state-title">Keine Fonds im Depot</div>
-    <div class="empty-state-body">Sobald du Fonds, ETFs oder Anleihen hältst, erscheint hier ihre Durchschau.</div>
+    <div class="empty-state-title">{{ t.holdings.empty_no_funds_title }}</div>
+    <div class="empty-state-body">{{ t.holdings.empty_no_funds_body }}</div>
 </div>
 {% endif %}
 {% endblock %}

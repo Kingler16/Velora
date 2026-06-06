@@ -41,7 +41,7 @@
 <div class="card" style="margin-bottom: 16px;">
     <div class="card-title">{{ t.settings.currency_tax }}</div>
     <div style="margin-bottom: 14px;">
-        <label class="field-label">Standard-Währung beim Trade-Logging</label>
+        <label class="field-label">{{ t.settings.default_currency }}</label>
         <div style="display: flex; gap: 10px;">
             {% set cur_mode = settings.get('user', {}).get('default_currency', 'EUR') %}
             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--glass-border); font-size: 13px;"
@@ -62,17 +62,17 @@
         </div>
     </div>
     <div>
-        <label class="field-label">KESt-Berechnung</label>
+        <label class="field-label">{{ t.settings.kest_calc }}</label>
         <div style="display: flex; gap: 10px;">
             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--glass-border); font-size: 13px;"
                    onclick="this.querySelector('input').checked=true">
                 <input type="radio" name="kest_mode" value="per_account" {% if settings.get('user', {}).get('kest_mode', 'per_account') == 'per_account' %}checked{% endif %}>
-                Pro Depot
+                {{ t.settings.per_account }}
             </label>
             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--glass-border); font-size: 13px;"
                    onclick="this.querySelector('input').checked=true">
                 <input type="radio" name="kest_mode" value="total" {% if settings.get('user', {}).get('kest_mode') == 'total' %}checked{% endif %}>
-                Gesamt
+                {{ t.settings.total_mode }}
             </label>
         </div>
     </div>
@@ -126,18 +126,18 @@
 
 <!-- Telegram -->
 <div class="card" style="margin-bottom: 16px;">
-    <div class="card-title">Telegram Bot</div>
+    <div class="card-title">{{ t.settings.telegram }}</div>
     <div class="grid grid-cols-2" style="gap: 12px;">
         <div>
-            <label class="field-label">Bot Token</label>
+            <label class="field-label">{{ t.settings.bot_token }}</label>
             <div class="secret-field">
                 <input type="password" name="telegram_bot_token" value="{{ settings.get('telegram', {}).get('bot_token', '') }}"
                        placeholder="123456:ABC..." class="field-input">
-                <button type="button" class="secret-toggle" data-secret-toggle>Zeigen</button>
+                <button type="button" class="secret-toggle" data-secret-toggle>{{ t.settings.show }}</button>
             </div>
         </div>
         <div>
-            <label class="field-label">Chat ID</label>
+            <label class="field-label">{{ t.settings.chat_id }}</label>
             <input type="text" name="telegram_chat_id" value="{{ settings.get('telegram', {}).get('chat_id', '') }}"
                    placeholder="123456789" class="field-input">
         </div>
@@ -146,30 +146,30 @@
 
 <!-- API Keys -->
 <div class="card" style="margin-bottom: 16px;">
-    <div class="card-title">Externe APIs</div>
+    <div class="card-title">{{ t.settings.external_apis }}</div>
     <div style="display: grid; gap: 12px;">
         <div>
-            <label class="field-label">Brave Search <span class="text-muted">(News-Recherche, 2000 Abfragen/Monat gratis)</span></label>
+            <label class="field-label">Brave Search <span class="text-muted">{{ t.settings.brave_hint }}</span></label>
             <div class="secret-field">
                 <input type="password" name="brave_api_key" value="{{ settings.get('brave_search', {}).get('api_key', '') }}"
                        placeholder="BSA..." class="field-input">
-                <button type="button" class="secret-toggle" data-secret-toggle>Zeigen</button>
+                <button type="button" class="secret-toggle" data-secret-toggle>{{ t.settings.show }}</button>
             </div>
         </div>
         <div>
-            <label class="field-label">FRED <span class="text-muted">(US-Makrodaten, gratis auf fred.stlouisfed.org)</span></label>
+            <label class="field-label">FRED <span class="text-muted">{{ t.settings.fred_hint }}</span></label>
             <div class="secret-field">
                 <input type="password" name="fred_api_key" value="{{ settings.get('fred', {}).get('api_key', '') }}"
                        placeholder="abc123..." class="field-input">
-                <button type="button" class="secret-toggle" data-secret-toggle>Zeigen</button>
+                <button type="button" class="secret-toggle" data-secret-toggle>{{ t.settings.show }}</button>
             </div>
         </div>
         <div>
-            <label class="field-label">Finnhub <span class="text-muted">(Sentiment & News, gratis auf finnhub.io)</span></label>
+            <label class="field-label">Finnhub <span class="text-muted">{{ t.settings.finnhub_hint }}</span></label>
             <div class="secret-field">
                 <input type="password" name="finnhub_api_key" value="{{ settings.get('finnhub', {}).get('api_key', '') }}"
                        placeholder="abc123..." class="field-input">
-                <button type="button" class="secret-toggle" data-secret-toggle>Zeigen</button>
+                <button type="button" class="secret-toggle" data-secret-toggle>{{ t.settings.show }}</button>
             </div>
         </div>
     </div>
@@ -182,15 +182,15 @@
 
 <!-- Briefing-Zeitplan -->
 <div class="card" style="margin-bottom: 16px;">
-    <div class="card-title">Briefing-Zeitplan</div>
+    <div class="card-title">{{ t.settings.briefing_schedule }}</div>
     {% set _raw_days = settings.get('schedule', {}).get('briefing_days', ['monday','thursday']) %}
     {% if _raw_days is string %}{% set _raw_days = _raw_days.replace(' ', '').split(',') %}{% endif %}
     {% set _active_days = [] %}
     {% for d in _raw_days %}{% set _ = _active_days.append(d|lower) %}{% endfor %}
     <div style="margin-bottom: 14px;">
-        <label class="field-label">Briefing-Tage</label>
+        <label class="field-label">{{ t.settings.briefing_days }}</label>
         <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-            {% for day, label in [('monday','Mo'), ('tuesday','Di'), ('wednesday','Mi'), ('thursday','Do'), ('friday','Fr'), ('saturday','Sa'), ('sunday','So')] %}
+            {% for day, label in [('monday', t.settings.days_short[0]), ('tuesday', t.settings.days_short[1]), ('wednesday', t.settings.days_short[2]), ('thursday', t.settings.days_short[3]), ('friday', t.settings.days_short[4]), ('saturday', t.settings.days_short[5]), ('sunday', t.settings.days_short[6])] %}
             <label class="day-chip">
                 <input type="checkbox" name="briefing_days" value="{{ day }}" {% if day in _active_days %}checked{% endif %}>
                 <span>{{ label }}</span>
@@ -199,7 +199,7 @@
         </div>
     </div>
     <div>
-        <label class="field-label">Briefing-Uhrzeit</label>
+        <label class="field-label">{{ t.settings.briefing_time }}</label>
         <input type="time" name="briefing_time" value="{{ settings.get('schedule', {}).get('briefing_time', '07:00') }}"
                class="field-input" style="max-width: 200px;">
     </div>
@@ -212,15 +212,15 @@
 
 <!-- Web Dashboard -->
 <div class="card" style="margin-bottom: 16px;">
-    <div class="card-title">Web Dashboard</div>
+    <div class="card-title">{{ t.settings.web_dashboard }}</div>
     <div class="grid grid-cols-2" style="gap: 12px;">
         <div>
-            <label class="field-label">Port</label>
+            <label class="field-label">{{ t.settings.port }}</label>
             <input type="number" name="web_port" value="{{ settings.get('web', {}).get('port', 8080) }}"
                    class="field-input" inputmode="numeric">
         </div>
         <div>
-            <label class="field-label">Daten-Cache Status</label>
+            <label class="field-label">{{ t.settings.cache_status }}</label>
             <div class="field-input" style="background: transparent; border: none; padding-top: 4px;"
                  id="settings-cache-status" hx-get="/api/partial/cache-status" hx-trigger="load" hx-swap="innerHTML">
             </div>
@@ -230,11 +230,11 @@
 
 <!-- Portfolio-Übersicht (read-only) -->
 <div class="card" style="margin-bottom: 16px;">
-    <div class="card-title">Portfolio-Konten</div>
+    <div class="card-title">{{ t.settings.portfolio_accounts }}</div>
     {% for acc_name in accounts %}
     <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--glass-border);">
         <span>{{ acc_name }}</span>
-        <span class="text-muted">{{ portfolio.get('accounts', {}).get(acc_name, {}).get('positions', [])|length }} Positionen</span>
+        <span class="text-muted">{{ portfolio.get('accounts', {}).get(acc_name, {}).get('positions', [])|length }} {{ t.settings.positions_suffix }}</span>
     </div>
     {% endfor %}
     {% if portfolio.get('bank_accounts') %}

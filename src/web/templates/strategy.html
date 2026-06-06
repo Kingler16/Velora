@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Mein Mandat — Velora{% endblock %}
+{% block title %}{{ t.strategy.title }} — Velora{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Mein Mandat</h1>
-        <div class="page-subtitle">Deine Anlage-Strategie — die oberste Direktive, nach der Velora handelt</div>
+        <h1 class="page-title">{{ t.strategy.title }}</h1>
+        <div class="page-subtitle">{{ t.strategy.title_sub }}</div>
     </div>
 </div>
 
@@ -14,24 +14,21 @@
 <div class="card">
     <div class="empty-state-v2">
         <div class="empty-state-icon">&#9670;</div>
-        <div class="empty-state-title">Du hast noch keine Strategie definiert</div>
+        <div class="empty-state-title">{{ t.strategy.empty_title }}</div>
         <div class="empty-state-body">
-            Velora handelt nach deinem Mandat — einer klaren Anlage-Strategie mit Zielen,
-            harten Regeln und einer Soll-Allokation. Du definierst sie gemeinsam mit Velora
-            im Chat, in deinen eigenen Worten. Solange kein Mandat existiert, arbeitet Velora
-            ohne diese Leitplanken.
+            {{ t.strategy.empty_body }}
         </div>
         <div class="empty-state-action">
-            <a class="btn btn-accent" href="/chat">Mit Velora erstellen</a>
+            <a class="btn btn-accent" href="/chat">{{ t.strategy.create_with_velora }}</a>
         </div>
     </div>
     <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);
                 font-size: 12px; color: var(--text-muted); line-height: 1.6;">
-        Tipp: Du kannst sofort starten, indem du
+        {{ t.strategy.tip_prefix }}
         <code style="font-family: var(--font-mono, monospace); color: var(--text-secondary);">config/mandate.example.json</code>
-        nach
+        {{ t.strategy.tip_to }}
         <code style="font-family: var(--font-mono, monospace); color: var(--text-secondary);">config/mandate.json</code>
-        kopierst und anpasst.
+        {{ t.strategy.tip_copy }}
     </div>
 </div>
 
@@ -43,8 +40,8 @@
 <!-- Kern-Statement -->
 <div class="card" style="margin-bottom: 24px;">
     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
-        <div class="card-title" style="margin-bottom: 0;">Mein Mandat v{{ mandate.version }}</div>
-        <span class="text-muted" style="font-size: 12px;">zuletzt geändert: {{ mandate.updated_at[:10] if mandate.updated_at else '–' }}</span>
+        <div class="card-title" style="margin-bottom: 0;">{{ t.strategy.mandate_version.replace('{n}', mandate.version|string) }}</div>
+        <span class="text-muted" style="font-size: 12px;">{{ t.strategy.last_changed }} {{ mandate.updated_at[:10] if mandate.updated_at else '–' }}</span>
     </div>
 
     {% if mandate.summary_human %}
@@ -62,7 +59,7 @@
     {% endif %}
 
     <div style="margin-top: 18px;">
-        <a class="btn btn-accent" href="/chat">Mit Velora anpassen</a>
+        <a class="btn btn-accent" href="/chat">{{ t.strategy.adjust_with_velora }}</a>
     </div>
 </div>
 
@@ -72,24 +69,24 @@
 {% set status_bg = 'var(--bg-secondary)' if drift.status == 'ok' else ('var(--yellow-bg)' if drift.status == 'warn' else 'var(--red-bg)') %}
 <div class="card" style="margin-bottom: 24px;">
     <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
-        <div class="card-title" style="margin-bottom: 0;">Strategie-Status</div>
+        <div class="card-title" style="margin-bottom: 0;">{{ t.strategy.strategy_status }}</div>
         <span style="display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px;
                      border-radius: 999px; font-size: 12px; font-weight: 700;
                      background: {{ status_bg }}; color: {{ status_color }};">
             <span style="width: 8px; height: 8px; border-radius: 999px; background: {{ status_color }}; flex-shrink: 0;"></span>
-            {% if drift.status == 'ok' %}im Soll
-            {% else %}{{ drift.breaches }} Abweichung{{ '' if drift.breaches == 1 else 'en' }}, {{ drift.warnings }} Warnung{{ '' if drift.warnings == 1 else 'en' }}
+            {% if drift.status == 'ok' %}{{ t.strategy.on_target }}
+            {% else %}{{ drift.breaches }} {{ t.strategy.deviation if drift.breaches == 1 else t.strategy.deviations }}, {{ drift.warnings }} {{ t.strategy.warning if drift.warnings == 1 else t.strategy.warnings }}
             {% endif %}
         </span>
     </div>
 
     {% if not drift.dimensions %}
     <div style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
-        Keine Abweichungen — Portfolio im Rahmen der Strategie.
+        {{ t.strategy.no_deviations }}
     </div>
     {% else %}
     {# Gruppierung nach kind: Region / Cash / Einzelposition #}
-    {% set kind_labels = {'region': 'Regionen', 'cash': 'Cash', 'position': 'Einzelpositionen'} %}
+    {% set kind_labels = {'region': t.strategy.kind_region, 'cash': t.strategy.kind_cash, 'position': t.strategy.kind_position} %}
     {% for kind in ['region', 'cash', 'position'] %}
     {% set group = drift.dimensions|selectattr('kind', 'equalto', kind)|list %}
     {% if group %}
@@ -107,8 +104,8 @@
             <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px;">
                 <span style="font-size: 13px; color: var(--text-primary); font-weight: 500;">{{ d.name }}</span>
                 <span style="font-size: 12px; color: var(--text-muted); display: flex; gap: 12px; flex-shrink: 0;">
-                    <span>Soll <strong style="color: var(--text-secondary);">{{ d.soll }}%</strong></span>
-                    <span>Ist <strong style="color: {{ sev_color }};">{{ d.ist }}%</strong></span>
+                    <span>{{ t.strategy.target_short }} <strong style="color: var(--text-secondary);">{{ d.soll }}%</strong></span>
+                    <span>{{ t.strategy.actual_short }} <strong style="color: {{ sev_color }};">{{ d.ist }}%</strong></span>
                     <span style="color: {{ sev_color }}; font-weight: 700; min-width: 52px; text-align: right;">
                         {{ '+' if d.abweichung_pp > 0 else '' }}{{ d.abweichung_pp }} pp
                     </span>
@@ -129,10 +126,10 @@
     {% endfor %}
     <div style="margin-top: 16px; display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted);">
         <span style="display: inline-flex; align-items: center; gap: 6px;">
-            <span style="width: 18px; height: 6px; border-radius: 999px; background: var(--accent);"></span> Ist (gefüllt)
+            <span style="width: 18px; height: 6px; border-radius: 999px; background: var(--accent);"></span> {{ t.strategy.legend_actual }}
         </span>
         <span style="display: inline-flex; align-items: center; gap: 6px;">
-            <span style="width: 18px; height: 4px; border-radius: 999px; background: var(--text-muted); opacity: 0.55;"></span> Soll (Referenz)
+            <span style="width: 18px; height: 4px; border-radius: 999px; background: var(--text-muted); opacity: 0.55;"></span> {{ t.strategy.legend_target }}
         </span>
     </div>
     {% endif %}
@@ -142,10 +139,10 @@
 <!-- Harte Regeln -->
 {% if mandate.hard_rules %}
 <div class="card" style="margin-bottom: 24px;">
-    <div class="card-title">Regeln</div>
+    <div class="card-title">{{ t.strategy.rules }}</div>
     <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5;">
-        <strong style="color: var(--red);">BLOCK</strong> — Velora schlägt nichts vor, was diese Regel verletzt.
-        <strong style="color: var(--yellow);">WARN</strong> — Abweichung nur mit ausdrücklicher Begründung.
+        <strong style="color: var(--red);">{{ t.strategy.rule_block }}</strong> {{ t.strategy.rules_block_desc }}
+        <strong style="color: var(--yellow);">{{ t.strategy.rule_warn }}</strong> {{ t.strategy.rules_warn_desc }}
     </div>
     <div style="display: grid; gap: 10px;">
         {% for r in (block_rules + warn_rules) %}
@@ -154,17 +151,17 @@
         {% set accent_bg = 'var(--red-bg)' if is_block else 'var(--yellow-bg)' %}
         {# Regel-Text menschenlesbar je type (analog mandate._rule_text). #}
         {% if r.type == 'max_position_pct' %}
-            {% set rule_text = 'max ' ~ r.value ~ '% je Einzelposition (vom Gesamtvermögen)' %}
+            {% set rule_text = t.strategy.rule_max_position.replace('{value}', r.value|string) %}
         {% elif r.type == 'forbidden_instrument' %}
-            {% set rule_text = 'verbotene Instrumente: ' ~ (r.match|join(', ') if r.match else '—') %}
+            {% set rule_text = t.strategy.rule_forbidden_instrument.replace('{list}', (r.match|join(', ') if r.match else '—')) %}
         {% elif r.type == 'forbidden_ticker' %}
-            {% set rule_text = 'gesperrte Ticker: ' ~ (r.tickers|join(', ') if r.tickers else '—') %}
+            {% set rule_text = t.strategy.rule_forbidden_ticker.replace('{list}', (r.tickers|join(', ') if r.tickers else '—')) %}
         {% elif r.type == 'min_cash_pct' %}
-            {% set rule_text = 'min ' ~ r.value ~ '% Cash' %}
+            {% set rule_text = t.strategy.rule_min_cash.replace('{value}', r.value|string) %}
         {% elif r.type == 'max_keyword_pct' %}
-            {% set rule_text = 'max ' ~ r.value ~ '% in ' ~ (r.keywords|join('/') if r.keywords else '—') %}
+            {% set rule_text = t.strategy.rule_max_keyword.replace('{value}', r.value|string).replace('{list}', (r.keywords|join('/') if r.keywords else '—')) %}
         {% elif r.type == 'max_sector_pct' %}
-            {% set rule_text = 'max ' ~ r.value ~ '% im Sektor ' ~ r.sector %}
+            {% set rule_text = t.strategy.rule_max_sector.replace('{value}', r.value|string).replace('{sector}', r.sector|string) %}
         {% else %}
             {% set rule_text = r.type %}
         {% endif %}
@@ -173,7 +170,7 @@
                     border-radius: 10px; padding: 12px 14px;">
             <span style="padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 800;
                          letter-spacing: 0.6px; flex-shrink: 0; background: {{ accent_bg }}; color: {{ accent }};">
-                {{ 'BLOCK' if is_block else 'WARN' }}
+                {{ t.strategy.rule_block if is_block else t.strategy.rule_warn }}
             </span>
             <span style="font-size: 13px; color: var(--text-primary); line-height: 1.45;">{{ rule_text }}</span>
         </div>
@@ -185,7 +182,7 @@
 <!-- Soll-Allokation -->
 {% if mandate.targets and (mandate.targets.regions or mandate.targets.cash_pct is not none) %}
 <div class="card" style="margin-bottom: 24px;">
-    <div class="card-title">Soll-Allokation</div>
+    <div class="card-title">{{ t.strategy.target_allocation }}</div>
     <div style="display: grid; gap: 12px;">
         {% for region, pct in (mandate.targets.regions or {}).items() %}
         <div>
@@ -201,7 +198,7 @@
         {% if mandate.targets.cash_pct is not none %}
         <div>
             <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px;">
-                <span style="color: var(--text-secondary);">Cash-Puffer</span>
+                <span style="color: var(--text-secondary);">{{ t.strategy.cash_buffer }}</span>
                 <strong style="color: var(--text-primary);">{{ mandate.targets.cash_pct }}%</strong>
             </div>
             <div style="height: 8px; border-radius: 999px; background: var(--bg-secondary); overflow: hidden;">
@@ -217,7 +214,7 @@
 {% if mandate.soft_preferences or mandate.tax_directives %}
 <div class="card" style="margin-bottom: 24px;">
     {% if mandate.soft_preferences %}
-    <div class="card-title">Präferenzen</div>
+    <div class="card-title">{{ t.strategy.preferences }}</div>
     <ul style="margin: 0 0 0 0; padding: 0; list-style: none; display: grid; gap: 10px;">
         {% for pref in mandate.soft_preferences %}
         <li style="display: flex; gap: 10px; font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
@@ -229,7 +226,7 @@
     {% endif %}
 
     {% if mandate.tax_directives %}
-    <div class="card-title" style="margin-top: {{ '22px' if mandate.soft_preferences else '0' }};">Steuer</div>
+    <div class="card-title" style="margin-top: {{ '22px' if mandate.soft_preferences else '0' }};">{{ t.strategy.tax }}</div>
     <ul style="margin: 0; padding: 0; list-style: none; display: grid; gap: 10px;">
         {% for tax in mandate.tax_directives %}
         <li style="display: flex; gap: 10px; font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
@@ -245,27 +242,27 @@
 <!-- Objective -->
 {% if mandate.objective %}
 <div class="card" style="margin-bottom: 24px;">
-    <div class="card-title">Ziel</div>
+    <div class="card-title">{{ t.strategy.objective }}</div>
     <div class="kpi-grid">
         {% if mandate.objective.horizon_years %}
         <div class="kpi-card">
-            <div class="kpi-label">Anlagehorizont</div>
-            <div class="kpi-value">{{ mandate.objective.horizon_years }}<span style="font-size: 14px; color: var(--text-muted); font-weight: 500;"> Jahre</span></div>
+            <div class="kpi-label">{{ t.strategy.horizon }}</div>
+            <div class="kpi-value">{{ mandate.objective.horizon_years }}<span style="font-size: 14px; color: var(--text-muted); font-weight: 500;"> {{ t.strategy.horizon_years_suffix }}</span></div>
         </div>
         {% endif %}
         {% if mandate.objective.monthly_contribution_eur is not none %}
         <div class="kpi-card">
-            <div class="kpi-label">Sparrate / Monat</div>
+            <div class="kpi-label">{{ t.strategy.monthly_contribution }}</div>
             <div class="kpi-value">{{ mandate.objective.monthly_contribution_eur }}<span style="font-size: 14px; color: var(--text-muted); font-weight: 500;"> €</span></div>
         </div>
         {% endif %}
         {% if mandate.objective.primary_goal %}
         <div class="kpi-card">
-            <div class="kpi-label">Primärziel</div>
+            <div class="kpi-label">{{ t.strategy.primary_goal }}</div>
             <div class="kpi-value" style="font-size: 18px;">
-                {% if mandate.objective.primary_goal == 'max_growth' %}Maximales Wachstum
-                {% elif mandate.objective.primary_goal == 'income' %}Einkommen
-                {% elif mandate.objective.primary_goal == 'capital_preservation' %}Kapitalerhalt
+                {% if mandate.objective.primary_goal == 'max_growth' %}{{ t.strategy.goal_max_growth }}
+                {% elif mandate.objective.primary_goal == 'income' %}{{ t.strategy.goal_income }}
+                {% elif mandate.objective.primary_goal == 'capital_preservation' %}{{ t.strategy.goal_capital_preservation }}
                 {% else %}{{ mandate.objective.primary_goal }}{% endif %}
             </div>
         </div>
@@ -279,7 +276,7 @@
 <div class="card">
     <details>
         <summary style="cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text-primary); list-style: none;">
-            Verlauf ({{ mandate.change_log|length }})
+            {{ t.strategy.change_log }} ({{ mandate.change_log|length }})
         </summary>
         <div style="margin-top: 14px; display: grid; gap: 10px;">
             {% for entry in mandate.change_log|reverse %}

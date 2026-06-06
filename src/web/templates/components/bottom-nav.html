@@ -3,13 +3,13 @@
         <span class="icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
         </span>
-        <span class="label">Home</span>
+        <span class="label">{{ t.nav.dashboard }}</span>
     </a>
     <a href="/portfolio" class="bottom-nav-item {{ 'active' if page == 'portfolio' }}">
         <span class="icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
         </span>
-        <span class="label">Depot</span>
+        <span class="label">{{ t.nav.portfolio }}</span>
     </a>
     <a href="/recommendations" class="bottom-nav-item {{ 'active' if page == 'recommendations' }}">
         <span class="icon">
@@ -18,13 +18,13 @@
             <span class="nav-badge" aria-label="{{ actionable_count }} offene Empfehlungen">{{ actionable_count if actionable_count <= 9 else '9+' }}</span>
             {% endif %}
         </span>
-        <span class="label">Empfehlungen</span>
+        <span class="label">{{ t.nav.empfehlungen }}</span>
     </a>
     <a href="/briefings" class="bottom-nav-item {{ 'active' if page == 'briefings' }}">
         <span class="icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
         </span>
-        <span class="label">Briefs</span>
+        <span class="label">{{ t.nav.briefings }}</span>
     </a>
     <button type="button" class="bottom-nav-item bottom-nav-more {{ 'active' if page in ('holdings','market','analysis','strategy','settings','install') }}"
             aria-label="Mehr" aria-expanded="false"
@@ -32,7 +32,7 @@
         <span class="icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
         </span>
-        <span class="label">Mehr</span>
+        <span class="label">{{ t.nav.more }}</span>
     </button>
 </nav>
 
@@ -40,7 +40,7 @@
 <div id="bottom-more-sheet" class="bottom-more-sheet" role="menu" aria-label="Mehr">
     <a href="/holdings" class="bottom-more-item {{ 'active' if page == 'holdings' }}" role="menuitem">
         <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
-        <span>Durchschau</span>
+        <span>{{ t.nav.holdings }}</span>
     </a>
     <a href="/market" class="bottom-more-item {{ 'active' if page == 'market' }}" role="menuitem">
         <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
@@ -52,11 +52,11 @@
     </a>
     <a href="/strategy" class="bottom-more-item {{ 'active' if page == 'strategy' }}" role="menuitem">
         <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.5" fill="currentColor"/></svg></span>
-        <span>{{ t.nav.get('strategy', 'Strategie') }}</span>
+        <span>{{ t.nav.strategy }}</span>
     </a>
     <a href="/settings" class="bottom-more-item {{ 'active' if page in ('settings', 'install') }}" role="menuitem">
         <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.36.166.68.42.93.74.251.32.44.7.53 1.11"/></svg></span>
-        <span>{{ t.nav.get('settings', 'Einstellungen') }}</span>
+        <span>{{ t.nav.settings }}</span>
     </a>
 </div>
 <div class="bottom-more-backdrop" onclick="document.body.classList.remove('bottom-more-open'); document.getElementById('bottom-more-sheet').classList.remove('open'); var b=document.querySelector('.bottom-nav-more'); if(b) b.setAttribute('aria-expanded','false');"></div>
@@ -81,7 +81,6 @@
     font-weight: 700;
     line-height: 16px;
     text-align: center;
-    box-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
     pointer-events: none;
 }
 /* Desktop-Sidebar (a ist bereits display:flex): Badge ans rechte Ende. */

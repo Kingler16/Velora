@@ -22,55 +22,55 @@
 
 <div class="kpi-grid grid-cols-3" style="margin-bottom: var(--space-5);">
     <div class="kpi-card">
-        <div class="kpi-label">Rendite gesamt</div>
+        <div class="kpi-label">{{ t.analyse.total_return }}</div>
         <div class="kpi-value tabular-nums {{ 'positive' if overview.total_pnl_pct >= 0 else 'negative' }}">{{ overview.total_pnl_pct|pct }}</div>
     </div>
     <div class="kpi-card">
-        <div class="kpi-label">Max Drawdown</div>
+        <div class="kpi-label">{{ t.analyse.max_drawdown }}</div>
         <div class="kpi-value tabular-nums text-muted" id="kpiMaxDD">—</div>
     </div>
     <div class="kpi-card">
-        <div class="kpi-label">Sharpe Ratio</div>
+        <div class="kpi-label">{{ t.analyse.sharpe }}</div>
         <div class="kpi-value tabular-nums text-muted" id="kpiSharpe">—</div>
     </div>
 </div>
 
 <div class="card" style="margin-bottom: var(--space-5);">
-    <div class="card-title">Performance vs Benchmark</div>
+    <div class="card-title">{{ t.analyse.performance_vs_benchmark }}</div>
     {% if snapshots %}
     <div id="perfRangeChart" class="chart-h-lg"></div>
     {% else %}
     <div class="empty-state-v2">
         <div class="empty-state-icon">◠</div>
-        <div class="empty-state-title">Keine Performance-Daten</div>
-        <div class="empty-state-body">Nach dem ersten monatlichen Snapshot erscheint hier die Wertentwicklung.</div>
+        <div class="empty-state-title">{{ t.analyse.no_snapshots }}</div>
+        <div class="empty-state-body">{{ t.analyse.no_snapshots_sub }}</div>
     </div>
     {% endif %}
 </div>
 
 <div class="card" style="margin-bottom: var(--space-5);">
-    <div class="card-title">Monatsrenditen</div>
+    <div class="card-title">{{ t.analyse.monthly_returns }}</div>
     <div id="heatmapChart" style="min-height: 240px;"></div>
 </div>
 
 <div class="charts-grid grid-cols-3" style="margin-bottom: var(--space-5);">
     <div class="card">
-        <div class="card-title">Nach Sektor</div>
+        <div class="card-title">{{ t.analyse.by_sector }}</div>
         <div id="sectorPie" class="chart-h-sm"></div>
     </div>
     <div class="card">
-        <div class="card-title">Nach Region</div>
+        <div class="card-title">{{ t.analyse.by_region }}</div>
         <div id="regionPie" class="chart-h-sm"></div>
     </div>
     <div class="card">
-        <div class="card-title">Nach Konto</div>
+        <div class="card-title">{{ t.analyse.by_account }}</div>
         <div id="accountPie" class="chart-h-sm"></div>
     </div>
 </div>
 
 <div class="charts-grid">
     <div class="card">
-        <div class="card-title">Top Performer</div>
+        <div class="card-title">{{ t.analyse.top_performers }}</div>
         {% set sorted_pos = overview.positions|sort(attribute='pnl_pct', reverse=true) %}
         {% for pos in sorted_pos[:5] %}
         <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--glass-border);">
@@ -83,7 +83,7 @@
         {% endfor %}
     </div>
     <div class="card">
-        <div class="card-title">Schlechteste Performer</div>
+        <div class="card-title">{{ t.analyse.worst_performers }}</div>
         {% set sorted_neg = overview.positions|sort(attribute='pnl_pct') %}
         {% for pos in sorted_neg[:5] %}
         <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--glass-border);">
@@ -99,26 +99,26 @@
 
 {% if tax_loss %}
 <details style="margin-top: var(--space-5);">
-    <summary class="card-title" style="cursor:pointer; list-style:none; padding: var(--space-3) var(--space-4); background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md);">Tax-Loss-Harvesting anzeigen &#9662;</summary>
+    <summary class="card-title" style="cursor:pointer; list-style:none; padding: var(--space-3) var(--space-4); background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md);">{{ t.analyse.tlh_show }} &#9662;</summary>
     <div class="card" style="margin-top: var(--space-3);">
-        <div class="card-title">Tax-Loss-Harvesting (KESt {{ (tax_loss.tax_rate * 100)|round(1) }}%)</div>
+        <div class="card-title">{{ t.analyse.tlh_rate.replace('{rate}', ((tax_loss.tax_rate * 100)|round(1))|string) }}</div>
 
         {% if kest_mode != 'per_account' %}
         <div class="grid grid-cols-4" style="gap: 12px; margin-bottom: 16px;">
             <div style="background: var(--glass-bg); border-radius: var(--radius-md); padding: 12px;">
-                <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">Unreal. Gewinne</div>
+                <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.unrealised_gains }}</div>
                 <div class="positive tabular-nums" style="font-size: 18px; font-weight: 700;">{{ tax_loss.total_gains|eur }}</div>
             </div>
             <div style="background: var(--glass-bg); border-radius: var(--radius-md); padding: 12px;">
-                <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">Unreal. Verluste</div>
+                <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.unrealised_losses }}</div>
                 <div class="negative tabular-nums" style="font-size: 18px; font-weight: 700;">{{ tax_loss.total_losses|eur }}</div>
             </div>
             <div style="background: var(--glass-bg); border-radius: var(--radius-md); padding: 12px;">
-                <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">Pot. KESt</div>
+                <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.potential_tax }}</div>
                 <div class="tabular-nums" style="font-size: 18px; font-weight: 700;">{{ tax_loss.potential_tax|eur }}</div>
             </div>
             <div style="background: var(--gain-bg); border-radius: var(--radius-md); padding: 12px;">
-                <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">Steuerersparnis</div>
+                <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.tax_saving }}</div>
                 <div class="positive tabular-nums" style="font-size: 18px; font-weight: 700;">{{ tax_loss.tax_savings|eur }}</div>
             </div>
         </div>
@@ -131,24 +131,24 @@
             <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;">{{ account_names.get(acc_key, acc_key|replace('_', ' ')|title) }}</div>
             <div class="grid grid-cols-3" style="gap: 10px; margin-bottom: 14px;">
                 <div>
-                    <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">Gewinne</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.gains }}</div>
                     <div class="positive tabular-nums" style="font-size: 16px; font-weight: 700;">{{ acc.total_gains|eur }}</div>
                 </div>
                 <div>
-                    <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">Verluste</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.losses }}</div>
                     <div class="negative tabular-nums" style="font-size: 16px; font-weight: 700;">{{ acc.total_losses|eur }}</div>
                 </div>
                 <div>
-                    <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">KESt faellig</div>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.kest_due }}</div>
                     <div class="tabular-nums" style="font-size: 16px; font-weight: 700;">{{ acc.net_tax|eur }}</div>
                 </div>
             </div>
             <div class="charts-grid">
                 <div>
-                    <div style="font-size: var(--text-xs); font-weight: 600; color: var(--loss); margin-bottom: 6px; text-transform: uppercase;">Verluste</div>
+                    <div style="font-size: var(--text-xs); font-weight: 600; color: var(--loss); margin-bottom: 6px; text-transform: uppercase;">{{ t.analyse.losses }}</div>
                     {% if acc.losses %}
                     <table class="data-table-stack">
-                        <thead><tr><th>Position</th><th class="text-right">P&L</th><th class="text-right">%</th></tr></thead>
+                        <thead><tr><th>{{ t.analyse.col_position }}</th><th class="text-right">{{ t.analyse.col_pnl }}</th><th class="text-right">{{ t.analyse.col_pct }}</th></tr></thead>
                         <tbody>
                             {% for pos in acc.losses %}
                             <tr>
@@ -160,14 +160,14 @@
                         </tbody>
                     </table>
                     {% else %}
-                    <div class="text-muted" style="font-size: 12px;">Keine</div>
+                    <div class="text-muted" style="font-size: 12px;">{{ t.common.none }}</div>
                     {% endif %}
                 </div>
                 <div>
-                    <div style="font-size: var(--text-xs); font-weight: 600; color: var(--gain); margin-bottom: 6px; text-transform: uppercase;">Gewinne</div>
+                    <div style="font-size: var(--text-xs); font-weight: 600; color: var(--gain); margin-bottom: 6px; text-transform: uppercase;">{{ t.analyse.gains }}</div>
                     {% if acc.gains %}
                     <table class="data-table-stack">
-                        <thead><tr><th>Position</th><th class="text-right">P&L</th><th class="text-right">%</th></tr></thead>
+                        <thead><tr><th>{{ t.analyse.col_position }}</th><th class="text-right">{{ t.analyse.col_pnl }}</th><th class="text-right">{{ t.analyse.col_pct }}</th></tr></thead>
                         <tbody>
                             {% for pos in acc.gains %}
                             <tr>
@@ -179,7 +179,7 @@
                         </tbody>
                     </table>
                     {% else %}
-                    <div class="text-muted" style="font-size: 12px;">Keine</div>
+                    <div class="text-muted" style="font-size: 12px;">{{ t.common.none }}</div>
                     {% endif %}
                 </div>
             </div>
