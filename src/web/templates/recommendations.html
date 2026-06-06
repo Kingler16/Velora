@@ -364,23 +364,7 @@
 </div>
 {% endif %}
 
-<!-- Position Theses -->
-{% if notes.get('position_theses') %}
-<div class="card" style="margin-top: 24px;">
-    <div class="card-title">{{ t.empfehlungen.theses }}</div>
-    {% for ticker, thesis in notes['position_theses'].items() %}
-    <div style="padding: 10px 0; border-bottom: 1px solid var(--glass-border);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-            <span class="ticker-badge">{{ ticker }}</span>
-            <span class="text-muted" style="font-size: 11px;">{{ thesis.date[:10] if thesis.date else '' }}</span>
-        </div>
-        <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
-            {{ thesis.thesis if thesis is mapping else thesis }}
-        </div>
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
+{# Investment-Thesen leben jetzt nur noch auf /briefings — waren hier + dort doppelt (Phase 3: Doppelung entfernt). #}
 {% endblock %}
 
 {% block scripts %}

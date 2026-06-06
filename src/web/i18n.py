@@ -129,6 +129,10 @@ _TRANSLATIONS: dict[str, dict] = {
             "label_1m": "1 Monat",
             "label_6m": "6 Monate",
             "label_1y": "1 Jahr",
+            "tab_positions": "Positionen",
+            "tab_allocation": "Allokation",
+            "tab_performance": "Performance",
+            "tab_tax": "Steuer",
         },
         "analyse": {
             "title": "Analyse",
@@ -603,6 +607,10 @@ _TRANSLATIONS: dict[str, dict] = {
             "label_1m": "1 Month",
             "label_6m": "6 Months",
             "label_1y": "1 Year",
+            "tab_positions": "Positions",
+            "tab_allocation": "Allocation",
+            "tab_performance": "Performance",
+            "tab_tax": "Tax",
         },
         "analyse": {
             "title": "Analysis",

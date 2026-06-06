@@ -132,18 +132,56 @@
 .trade-action-btn.active[data-action="sell"] { background: var(--loss-bg); color: var(--loss); border-color: var(--loss); }
 .account-card summary::-webkit-details-marker { display: none; }
 .account-card summary::marker { content: ''; }
+
+/* ── Depot-Tabs (Positionen / Allokation / Performance / Steuer) ── */
+.depot-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--glass-border);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.depot-tabs::-webkit-scrollbar { display: none; }
+.depot-tab-btn {
+    flex: 0 0 auto;
+    padding: 10px 16px;
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: var(--letter-tight);
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color var(--dur-fast) var(--ease-apple), border-color var(--dur-fast) var(--ease-apple);
+}
+.depot-tab-btn:hover { color: var(--text-primary); }
+.depot-tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+.depot-tab-btn:focus-visible {
+    outline: 2px solid var(--accent-ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+.depot-panel[hidden] { display: none; }
 </style>
 
-<div class="charts-grid grid-cols-2" style="margin-bottom: 24px;">
-    <div class="card">
-        <div class="card-title">{{ t.portfolio.region_exposure }}</div>
-        <div id="regionChart" class="chart-h-md"></div>
-    </div>
-    <div class="card">
-        <div class="card-title">{{ t.portfolio.sector_split }}</div>
-        <div id="sectorChart" class="chart-h-md"></div>
-    </div>
+<div class="depot-tabs" role="tablist">
+    <button type="button" class="depot-tab-btn active" data-tab="positions" role="tab" aria-selected="true">{{ t.portfolio.tab_positions }}</button>
+    <button type="button" class="depot-tab-btn" data-tab="allocation" role="tab" aria-selected="false">{{ t.portfolio.tab_allocation }}</button>
+    <button type="button" class="depot-tab-btn" data-tab="performance" role="tab" aria-selected="false">{{ t.portfolio.tab_performance }}</button>
+    <button type="button" class="depot-tab-btn" data-tab="tax" role="tab" aria-selected="false">{{ t.portfolio.tab_tax }}</button>
 </div>
+
+<!-- ── TAB: Positionen ── -->
+<div class="depot-panel" data-panel="positions" role="tabpanel">
 
 <div class="account-grid" style="margin-bottom: 24px;">
     {% for account_name, account_data in overview.accounts_grouped.items() %}
@@ -265,6 +303,192 @@
         </table>
     </div>
 </div>
+
+</div><!-- /panel positions -->
+
+<!-- ── TAB: Allokation ── -->
+<div class="depot-panel" data-panel="allocation" role="tabpanel" hidden>
+    <div class="charts-grid grid-cols-3">
+        <div class="card">
+            <div class="card-title">{{ t.portfolio.region_exposure }}</div>
+            <div id="regionChart" class="chart-h-md"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">{{ t.portfolio.sector_split }}</div>
+            <div id="sectorChart" class="chart-h-md"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">{{ t.analyse.by_account }}</div>
+            <div id="accountPie" class="chart-h-md"></div>
+        </div>
+    </div>
+</div><!-- /panel allocation -->
+
+<!-- ── TAB: Performance ── -->
+<div class="depot-panel" data-panel="performance" role="tabpanel" hidden>
+    <div class="kpi-grid grid-cols-3" style="margin-bottom: var(--space-5);">
+        <div class="kpi-card">
+            <div class="kpi-label">{{ t.analyse.total_return }}</div>
+            <div class="kpi-value tabular-nums {{ 'positive' if overview.total_pnl_pct >= 0 else 'negative' }}">{{ overview.total_pnl_pct|pct }}</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">{{ t.analyse.max_drawdown }}</div>
+            <div class="kpi-value tabular-nums text-muted" id="kpiMaxDD">—</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">{{ t.analyse.sharpe }}</div>
+            <div class="kpi-value tabular-nums text-muted" id="kpiSharpe">—</div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom: var(--space-5);">
+        <div class="card-title">{{ t.analyse.performance_vs_benchmark }}</div>
+        {% if snapshots %}
+        <div id="perfRangeChart" class="chart-h-lg"></div>
+        {% else %}
+        <div class="empty-state-v2">
+            <div class="empty-state-icon">◠</div>
+            <div class="empty-state-title">{{ t.analyse.no_snapshots }}</div>
+            <div class="empty-state-body">{{ t.analyse.no_snapshots_sub }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card" style="margin-bottom: var(--space-5);">
+        <div class="card-title">{{ t.analyse.monthly_returns }}</div>
+        <div id="heatmapChart" style="min-height: 240px;"></div>
+    </div>
+
+    <div class="charts-grid">
+        <div class="card">
+            <div class="card-title">{{ t.analyse.top_performers }}</div>
+            {% set sorted_pos = overview.positions|sort(attribute='pnl_pct', reverse=true) %}
+            {% for pos in sorted_pos[:5] %}
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--glass-border);">
+                <div>
+                    <span style="font-weight: 500;">{{ pos.name }}</span>
+                    <span class="ticker-badge" style="margin-left: 6px;">{{ pos.ticker }}</span>
+                </div>
+                <span class="positive tabular-nums" style="font-weight: 600;">{{ pos.pnl_pct|pct }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="card">
+            <div class="card-title">{{ t.analyse.worst_performers }}</div>
+            {% set sorted_neg = overview.positions|sort(attribute='pnl_pct') %}
+            {% for pos in sorted_neg[:5] %}
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--glass-border);">
+                <div>
+                    <span style="font-weight: 500;">{{ pos.name }}</span>
+                    <span class="ticker-badge" style="margin-left: 6px;">{{ pos.ticker }}</span>
+                </div>
+                <span class="negative tabular-nums" style="font-weight: 600;">{{ pos.pnl_pct|pct }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div><!-- /panel performance -->
+
+<!-- ── TAB: Steuer ── -->
+<div class="depot-panel" data-panel="tax" role="tabpanel" hidden>
+    {% if tax_loss %}
+    <details open>
+        <summary class="card-title" style="cursor:pointer; list-style:none; padding: var(--space-3) var(--space-4); background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md);">{{ t.analyse.tlh_show }} &#9662;</summary>
+        <div class="card" style="margin-top: var(--space-3);">
+            <div class="card-title">{{ t.analyse.tlh_rate.replace('{rate}', ((tax_loss.tax_rate * 100)|round(1))|string) }}</div>
+
+            {% if kest_mode != 'per_account' %}
+            <div class="grid grid-cols-4" style="gap: 12px; margin-bottom: 16px;">
+                <div style="background: var(--glass-bg); border-radius: var(--radius-md); padding: 12px;">
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.unrealised_gains }}</div>
+                    <div class="positive tabular-nums" style="font-size: 18px; font-weight: 700;">{{ tax_loss.total_gains|eur }}</div>
+                </div>
+                <div style="background: var(--glass-bg); border-radius: var(--radius-md); padding: 12px;">
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.unrealised_losses }}</div>
+                    <div class="negative tabular-nums" style="font-size: 18px; font-weight: 700;">{{ tax_loss.total_losses|eur }}</div>
+                </div>
+                <div style="background: var(--glass-bg); border-radius: var(--radius-md); padding: 12px;">
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.potential_tax }}</div>
+                    <div class="tabular-nums" style="font-size: 18px; font-weight: 700;">{{ tax_loss.potential_tax|eur }}</div>
+                </div>
+                <div style="background: var(--gain-bg); border-radius: var(--radius-md); padding: 12px;">
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.tax_saving }}</div>
+                    <div class="positive tabular-nums" style="font-size: 18px; font-weight: 700;">{{ tax_loss.tax_savings|eur }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if kest_mode == 'per_account' and tax_loss.per_account %}
+            {% set account_names = {"trade_republic": "Trade Republic", "erste_bank": "Erste Bank", "interactive_brokers": "Interactive Brokers", "flatex": "Flatex", "scalable": "Scalable Capital"} %}
+            {% for acc_key, acc in tax_loss.per_account.items() %}
+            <div style="margin-top: 20px; padding: 16px; background: var(--glass-bg); border-radius: var(--radius-md); border: 1px solid var(--glass-border);">
+                <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;">{{ account_names.get(acc_key, acc_key|replace('_', ' ')|title) }}</div>
+                <div class="grid grid-cols-3" style="gap: 10px; margin-bottom: 14px;">
+                    <div>
+                        <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.gains }}</div>
+                        <div class="positive tabular-nums" style="font-size: 16px; font-weight: 700;">{{ acc.total_gains|eur }}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.losses }}</div>
+                        <div class="negative tabular-nums" style="font-size: 16px; font-weight: 700;">{{ acc.total_losses|eur }}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;">{{ t.analyse.kest_due }}</div>
+                        <div class="tabular-nums" style="font-size: 16px; font-weight: 700;">{{ acc.net_tax|eur }}</div>
+                    </div>
+                </div>
+                <div class="charts-grid">
+                    <div>
+                        <div style="font-size: var(--text-xs); font-weight: 600; color: var(--loss); margin-bottom: 6px; text-transform: uppercase;">{{ t.analyse.losses }}</div>
+                        {% if acc.losses %}
+                        <table class="data-table-stack">
+                            <thead><tr><th>{{ t.analyse.col_position }}</th><th class="text-right">{{ t.analyse.col_pnl }}</th><th class="text-right">{{ t.analyse.col_pct }}</th></tr></thead>
+                            <tbody>
+                                {% for pos in acc.losses %}
+                                <tr>
+                                    <td class="primary">{{ pos.name }} <span class="ticker-badge" style="margin-left: 4px;">{{ pos.ticker }}</span></td>
+                                    <td class="text-right negative tabular-nums" data-label="P&L" style="font-weight: 600;">{{ pos.pnl_eur|eur }}</td>
+                                    <td class="text-right negative tabular-nums" data-label="%">{{ pos.pnl_pct|pct }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <div class="text-muted" style="font-size: 12px;">{{ t.common.none }}</div>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <div style="font-size: var(--text-xs); font-weight: 600; color: var(--gain); margin-bottom: 6px; text-transform: uppercase;">{{ t.analyse.gains }}</div>
+                        {% if acc.gains %}
+                        <table class="data-table-stack">
+                            <thead><tr><th>{{ t.analyse.col_position }}</th><th class="text-right">{{ t.analyse.col_pnl }}</th><th class="text-right">{{ t.analyse.col_pct }}</th></tr></thead>
+                            <tbody>
+                                {% for pos in acc.gains %}
+                                <tr>
+                                    <td class="primary">{{ pos.name }} <span class="ticker-badge" style="margin-left: 4px;">{{ pos.ticker }}</span></td>
+                                    <td class="text-right positive tabular-nums" data-label="P&L" style="font-weight: 600;">{{ pos.pnl_eur|eur }}</td>
+                                    <td class="text-right positive tabular-nums" data-label="%">{{ pos.pnl_pct|pct }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <div class="text-muted" style="font-size: 12px;">{{ t.common.none }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+    </details>
+    {% else %}
+    <div class="empty-state-v2">
+        <div class="empty-state-icon">○</div>
+        <div class="empty-state-title">{{ t.common.none }}</div>
+    </div>
+    {% endif %}
+</div><!-- /panel tax -->
 {% endblock %}
 
 {% block scripts %}
@@ -318,14 +542,20 @@ function triggerRefresh() {
         .catch(() => { stop({ success: false, message: LANG === 'en' ? 'Failed to start refresh' : 'Refresh konnte nicht gestartet werden' }); });
 }
 
+// ── Daten für die Charts (Allokation + Performance) ──
 const regionExposure = {{ overview.region_exposure|tojson }};
 const sectorBreakdown = {{ overview.sector_breakdown|tojson }};
+const acctsGrouped   = {{ overview.accounts_grouped|tojson if overview.accounts_grouped else '{}' }};
+const snaps          = {{ snapshots|tojson if snapshots else '[]' }};
+const benchmarks     = {{ benchmarks|tojson if benchmarks else '[]' }};
 
+// %-Donut (Region / Sektor) — Werte sind bereits Prozente.
 function renderPctDonut(elId, labels, values) {
-    if (!labels.length || typeof ApexCharts === 'undefined' || !window.VeloraApex) return;
+    const el = document.getElementById(elId);
+    if (!el || !labels.length || typeof ApexCharts === 'undefined' || !window.VeloraApex) return;
     const base = window.VeloraApex.baseOptions();
     const dd = window.VeloraApex.donutDefaults();
-    new ApexCharts(document.getElementById(elId), Object.assign({}, base, {
+    new ApexCharts(el, Object.assign({}, base, {
         chart: Object.assign({}, base.chart, { type: 'donut', height: window.VeloraApex.chartHeight('md') }),
         series: values,
         labels: window.VeloraApex.truncateLabels(labels),
@@ -339,7 +569,209 @@ function renderPctDonut(elId, labels, values) {
     })).render();
 }
 
-renderPctDonut('regionChart', Object.keys(regionExposure), Object.values(regionExposure));
-renderPctDonut('sectorChart', Object.keys(sectorBreakdown), Object.values(sectorBreakdown));
+// €-Donut (Konto-Aufteilung) — Werte sind absolute Euro-Beträge.
+function renderEurDonut(elId, labels, values) {
+    const el = document.getElementById(elId);
+    if (!el || typeof ApexCharts === 'undefined' || !window.VeloraApex) return;
+    if (!labels.length) {
+        el.outerHTML = '<div class="empty-state-v2"><div class="empty-state-icon">○</div><div class="empty-state-title">Keine Daten</div></div>';
+        return;
+    }
+    const base = window.VeloraApex.baseOptions();
+    const dd = window.VeloraApex.donutDefaults();
+    new ApexCharts(el, Object.assign({}, base, {
+        chart: Object.assign({}, base.chart, { type: 'donut', height: window.VeloraApex.chartHeight('md') }),
+        series: values,
+        labels: window.VeloraApex.truncateLabels(labels),
+        stroke: { colors: [VeloraChartTheme.bodyBg()], width: 2 },
+        plotOptions: dd.plotOptions,
+        dataLabels: dd.dataLabels,
+        legend: Object.assign({}, base.legend, { position: 'bottom', itemMargin: { horizontal: 4, vertical: 2 } }),
+        tooltip: { y: { formatter: v => v.toLocaleString('de-DE', {minimumFractionDigits:0, maximumFractionDigits:0}) + '€' } },
+    })).render();
+}
+
+// ── Lazy-Init Allokation: erst rendern wenn der Tab das erste Mal sichtbar ist ──
+let allocInit = false;
+function initAllocationCharts() {
+    if (allocInit) return;
+    allocInit = true;
+    renderPctDonut('regionChart', Object.keys(regionExposure), Object.values(regionExposure));
+    renderPctDonut('sectorChart', Object.keys(sectorBreakdown), Object.values(sectorBreakdown));
+    const acctLabels = Object.values(acctsGrouped).map(a => a.display_name || '?');
+    const acctValues = Object.values(acctsGrouped).map(a => a.total_value || 0);
+    renderEurDonut('accountPie', acctLabels, acctValues);
+}
+
+// ── Lazy-Init Performance: KPI-Berechnung + perfRangeChart + Heatmap ──
+let perfInit = false;
+function initPerformanceCharts() {
+    if (perfInit) return;
+    perfInit = true;
+
+    function calcMaxDD(values) {
+        let peak = -Infinity; let maxDD = 0;
+        for (const v of values) {
+            if (v > peak) peak = v;
+            const dd = peak > 0 ? (v - peak) / peak : 0;
+            if (dd < maxDD) maxDD = dd;
+        }
+        return maxDD * 100;
+    }
+    function calcSharpe(returns) {
+        if (returns.length < 2) return null;
+        const mean = returns.reduce((a,b)=>a+b,0) / returns.length;
+        const variance = returns.reduce((s,r) => s + (r-mean)**2, 0) / returns.length;
+        const std = Math.sqrt(variance);
+        return std > 0 ? (mean * Math.sqrt(12) / std) : null;
+    }
+    const values = (snaps || []).map(s => s.total_value || s.portfolio_value || 0).filter(v => v > 0);
+    if (values.length > 1) {
+        const ddEl = document.getElementById('kpiMaxDD');
+        if (ddEl) {
+            ddEl.textContent = calcMaxDD(values).toFixed(2) + '%';
+            ddEl.classList.remove('text-muted');
+            ddEl.classList.add('negative');
+        }
+        const returns = [];
+        for (let i=1; i<values.length; i++) returns.push((values[i]-values[i-1])/values[i-1]);
+        const sharpe = calcSharpe(returns);
+        const shEl = document.getElementById('kpiSharpe');
+        if (sharpe !== null && shEl) {
+            shEl.textContent = sharpe.toFixed(2);
+            shEl.classList.remove('text-muted');
+        }
+    }
+
+    if (typeof ApexCharts === 'undefined' || !window.VeloraApex) return;
+    const base = window.VeloraApex.baseOptions();
+    const phone = window.VeloraApex.isPhone();
+
+    const perfTarget = document.getElementById('perfRangeChart');
+    if (perfTarget && snaps && snaps.length > 0) {
+        const series = [{
+            name: 'Portfolio',
+            data: snaps.map(s => ({ x: s.date || s.month, y: s.total_value || s.portfolio_value || 0 }))
+        }];
+        if (Array.isArray(benchmarks) && benchmarks.length > 0 && benchmarks[0] && benchmarks[0].series) {
+            benchmarks.slice(0, 2).forEach(bm => {
+                if (bm && bm.series) series.push({ name: bm.name || 'Benchmark', type: 'line', data: bm.series });
+            });
+        }
+        const opts = Object.assign({}, base, {
+            chart: Object.assign({}, base.chart, { type: 'area', height: window.VeloraApex.chartHeight('lg') }),
+            series: series,
+            xaxis: {
+                type: 'datetime',
+                labels: {
+                    style: { colors: VeloraChartTheme.textMuted(), fontSize: phone ? '10px' : '11px' },
+                    rotate: phone ? -45 : 0,
+                    rotateAlways: phone,
+                    hideOverlappingLabels: true,
+                },
+            },
+            yaxis: { labels: { formatter: v => (v/1000).toFixed(0) + 'k€', style: { colors: VeloraChartTheme.textMuted(), fontSize: phone ? '10px' : '11px' } } },
+            stroke: { curve: phone ? 'straight' : 'smooth', width: 2 },
+            fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: phone ? 0.25 : 0.4, opacityTo: 0.05, stops: [0, 100] } },
+            colors: ['#3b82f6', '#94a3b8', '#60a5fa'],
+            tooltip: { x: { format: 'dd MMM yyyy' }, y: { formatter: v => v.toLocaleString('de-DE', {minimumFractionDigits:0, maximumFractionDigits:0}) + '€' } },
+        });
+        new ApexCharts(perfTarget, opts).render();
+    }
+
+    const heatTarget = document.getElementById('heatmapChart');
+    if (heatTarget) {
+        // Monatsrenditen aus aufeinanderfolgenden total_value-Snapshots ableiten.
+        // Der monthly-Cron schreibt zwar keinen monthly_return_pct ins Snapshot-File,
+        // wir koennen die Rendite aber jederzeit aus den absoluten Werten rechnen.
+        // Sortiert nach (date || month) damit die Reihenfolge stabil ist, auch wenn
+        // Snapshots aus mehreren Cron-Laeufen unsortiert ankommen.
+        const sortedSnaps = [...(snaps || [])].sort((a, b) => {
+            const da = a.date || a.month || '';
+            const db = b.date || b.month || '';
+            return da < db ? -1 : da > db ? 1 : 0;
+        });
+        const byYear = {};
+        let prevValue = null;
+        sortedSnaps.forEach(s => {
+            const d = s.date || s.month || '';
+            const [y, m] = String(d).split('-');
+            if (!y || !m) return;
+            if (!byYear[y]) byYear[y] = new Array(12).fill(null);
+            const cur = s.total_value || s.portfolio_value;
+            let v = null;
+            if (s.monthly_return_pct !== undefined && s.monthly_return_pct !== null) {
+                v = s.monthly_return_pct;
+            } else if (s.return_pct !== undefined && s.return_pct !== null) {
+                v = s.return_pct;
+            } else if (prevValue && cur && prevValue > 0) {
+                v = (cur - prevValue) / prevValue * 100;
+            }
+            byYear[y][parseInt(m)-1] = v;
+            if (cur) prevValue = cur;
+        });
+        const months = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+        const heatSeries = Object.keys(byYear).sort((a,b) => b-a).map(y => ({
+            name: y,
+            data: byYear[y].map((v,i) => ({ x: months[i], y: v === null || v === undefined ? 0 : Number(Number(v).toFixed(2)) }))
+        }));
+        if (heatSeries.length > 0) {
+            const rowH = phone ? 32 : window.VeloraApex.isTablet() ? 40 : 45;
+            const labelFs = phone ? '8px' : window.VeloraApex.isTablet() ? '9px' : '10px';
+            const radius = phone ? 2 : window.VeloraApex.isTablet() ? 4 : 6;
+            const heatOpts = Object.assign({}, base, {
+                chart: Object.assign({}, base.chart, { type: 'heatmap', height: Math.max(160, heatSeries.length * rowH) }),
+                series: heatSeries,
+                xaxis: { labels: { style: { fontSize: phone ? '9px' : '11px', colors: VeloraChartTheme.textMuted() } } },
+                yaxis: { labels: { style: { fontSize: phone ? '10px' : '11px', colors: VeloraChartTheme.textMuted() } } },
+                plotOptions: {
+                    heatmap: {
+                        radius: radius,
+                        enableShades: !phone,
+                        colorScale: {
+                            ranges: [
+                                { from: -100, to: -5, color: '#dc2626', name: 'Stark negativ' },
+                                { from: -5, to: -0.01, color: '#f87171', name: 'Negativ' },
+                                { from: -0.01, to: 0.01, color: '#1f2937', name: 'Flach' },
+                                { from: 0.01, to: 5, color: '#3b82f6', name: 'Positiv' },
+                                { from: 5, to: 100, color: '#1d4ed8', name: 'Stark positiv' },
+                            ]
+                        }
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
+                    style: { fontSize: labelFs, fontFamily: 'Inter', fontWeight: 600 },
+                    formatter: v => v === 0 ? '' : (v > 0 ? '+' : '') + Number(v).toFixed(1) + '%',
+                },
+                tooltip: { y: { formatter: v => (v > 0 ? '+' : '') + v.toFixed(2) + '%' } },
+            });
+            new ApexCharts(heatTarget, heatOpts).render();
+        } else {
+            heatTarget.outerHTML = '<div class="empty-state-v2"><div class="empty-state-icon">◱</div><div class="empty-state-title">Keine Monatsdaten</div><div class="empty-state-body">Heatmap erscheint nach dem ersten monatlichen Snapshot.</div></div>';
+        }
+    }
+}
+
+// ── Tab-Controller: Panel umschalten, Charts lazy initialisieren, danach Resize feuern ──
+(function(){
+    const tabs = document.querySelectorAll('.depot-tab-btn');
+    const panels = document.querySelectorAll('.depot-panel');
+    function activate(name) {
+        tabs.forEach(t => {
+            const on = t.dataset.tab === name;
+            t.classList.toggle('active', on);
+            t.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        panels.forEach(p => { p.hidden = p.dataset.panel !== name; });
+        // Charts erst initialisieren wenn ihr Container sichtbar ist (korrekte Breite).
+        if (name === 'allocation') initAllocationCharts();
+        if (name === 'performance') initPerformanceCharts();
+        // ApexCharts neu vermessen lassen, nachdem das Panel eingeblendet wurde.
+        requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    }
+    tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
+    // positions ist initial aktiv (keine Charts) — nichts zu tun beim Load.
+})();
 </script>
 {% endblock %}

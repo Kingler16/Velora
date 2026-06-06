@@ -143,42 +143,11 @@
     </div>
 </div>
 
-<div class="card" style="margin-top: var(--space-4);">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: var(--space-3);">
-        <div class="card-title" style="margin:0;">{{ t.dashboard.all_holdings }} ({{ overview.positions|length }})</div>
-        <a href="/portfolio" style="font-size: var(--text-xs); color: var(--accent); text-decoration: none;">{{ t.common.details }} →</a>
-    </div>
-    <div class="table-wrapper">
-        <table class="holdings-table">
-            <thead>
-                <tr>
-                    <th>{{ t.dashboard.col_name }}</th>
-                    <th>{{ t.dashboard.col_ticker }}</th>
-                    <th>{{ t.dashboard.trend_30d }}</th>
-                    <th class="text-right">{{ t.dashboard.col_value }}</th>
-                    <th class="text-right">{{ t.dashboard.col_pnl_pct }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for pos in overview.positions|sort(attribute='current_value_eur', reverse=true) %}
-                <tr>
-                    <td class="primary">{{ pos.name }}</td>
-                    <td data-label="{{ t.dashboard.col_ticker }}"><span class="ticker-badge">{{ pos.ticker or '–' }}</span></td>
-                    <td data-label="{{ t.dashboard.trend_30d }}">
-                        {% if pos.sparkline %}
-                        <span class="sparkline" data-sparkline="{{ pos.sparkline|tojson }}" data-width="90" data-height="22"></span>
-                        {% else %}
-                        <span class="text-muted" style="font-size:var(--text-xs);">—</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-right tabular-nums" data-label="{{ t.dashboard.col_value }}" style="font-weight:600;">{{ pos.current_value_eur|eur }}</td>
-                    <td class="text-right tabular-nums {{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}" data-label="{{ t.dashboard.col_pnl_pct }}">{{ pos.pnl_pct|pct }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+{# Volltabelle lebt im Depot — hier nur ein schlanker Absprung (Dashboard = Überblick). #}
+<a href="/portfolio" class="card" style="margin-top: var(--space-4); display:flex; justify-content:space-between; align-items:center; gap: var(--space-3); text-decoration:none;">
+    <span class="card-title" style="margin:0;">{{ t.dashboard.all_holdings }} ({{ overview.positions|length }})</span>
+    <span style="color: var(--accent); font-size: var(--text-sm); white-space: nowrap;">{{ t.common.details }} →</span>
+</a>
 {% endblock %}
 
 {% block scripts %}

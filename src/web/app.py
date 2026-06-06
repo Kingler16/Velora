@@ -303,29 +303,24 @@ async def portfolio_page(request: Request):
     cache_status = get_cache_status()
     settings = _load_settings()
     default_currency = settings.get("user", {}).get("default_currency", "EUR")
+    # Analyse-Seite ist jetzt als Tab-System ("Depot") in portfolio.html integriert.
+    # Daher liefert die Portfolio-Route zusätzlich die Daten für die Performance-/Steuer-Tabs.
+    snapshots = get_monthly_snapshots()
+    benchmarks = compute_benchmark_data(market_data)
+    tax_loss = compute_tax_loss_data(portfolio, market_data) if market_data.get("positions") else None
+    kest_mode = settings.get("user", {}).get("kest_mode", "per_account")
 
     return templates.TemplateResponse(request, "portfolio.html", _ctx(request, "portfolio",
         overview=overview, portfolio_raw=portfolio, cache_status=cache_status,
         default_currency=default_currency,
+        snapshots=snapshots, benchmarks=benchmarks, tax_loss=tax_loss, kest_mode=kest_mode,
     ))
 
 
-@app.get("/analysis", response_class=HTMLResponse)
-async def analysis_page(request: Request):
-    portfolio = load_portfolio()
-    market_data = get_market_data()
-    overview = compute_portfolio_overview(portfolio, market_data)
-    snapshots = get_monthly_snapshots()
-    cache_status = get_cache_status()
-    benchmarks = compute_benchmark_data(market_data)
-    tax_loss = compute_tax_loss_data(portfolio, market_data) if market_data.get("positions") else None
-    settings = _load_settings()
-    kest_mode = settings.get("user", {}).get("kest_mode", "per_account")
-
-    return templates.TemplateResponse(request, "analysis.html", _ctx(request, "analysis",
-        overview=overview, snapshots=snapshots, cache_status=cache_status, benchmarks=benchmarks,
-        tax_loss=tax_loss, kest_mode=kest_mode,
-    ))
+@app.get("/analysis")
+async def analysis_page():
+    # Phase 3: Analyse ist ins Depot (/portfolio → Performance-/Steuer-Tab) integriert → dauerhaft umleiten.
+    return RedirectResponse("/portfolio", status_code=308)
 
 
 @app.get("/market", response_class=HTMLResponse)
