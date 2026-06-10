@@ -17,6 +17,7 @@ Confirmation-Flow. Hier: laden, validieren, in den Prompt rendern, Empfehlungen 
 import json
 import logging
 import os
+import re
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +36,13 @@ KNOWN_RULE_TYPES = {
 
 _EUR_SUFFIXES = (".DE", ".AS", ".PA", ".VI", ".MI", ".MC", ".BR", ".LS", ".HE", ".ST", ".OL", ".F", ".DU")
 _EUR_ISIN_PREFIXES = ("AT0", "DE0", "FR0", "NL0", "IE0", "ES0", "IT0", "BE0", "FI0", "PT0", "LU0")
+
+
+def _kw_hit(kw: str, text: str) -> bool:
+    """Keyword-Match mit Wortgrenzen — 'hebel' trifft 'Hebel-ETF', aber nicht mehr
+    'Hebelwirkung' im Reasoning. Deutsche Komposita ohne Bindestrich (Optionsschein,
+    Hebelprodukt) brauchen dafür ein eigenes Keyword in der Match-Liste."""
+    return re.search(r"(?<!\w)" + re.escape(kw.lower()) + r"(?!\w)", text.lower()) is not None
 
 
 def _ticker_ccy(ticker: str) -> str:
@@ -144,13 +152,17 @@ def _rule_text(r: dict) -> str:
         kw = ", ".join(r.get("match", [])) or "—"
         return f"verbotene Instrumente (Stichworte): {kw}"
     if t == "max_position_pct":
-        return f"max {r.get('value')}% je Einzelposition (vom Gesamtvermögen)"
+        txt = f"max {r.get('value')}% je Einzelposition (vom investierten Kapital)"
+        exceptions = r.get("exceptions") or {}
+        if exceptions:
+            txt += f" — Ausnahmen: {', '.join(exceptions)}"
+        return txt
     if t == "min_cash_pct":
-        return f"min {r.get('value')}% Cash"
+        return f"min {r.get('value')}% Cash (vom Gesamtvermögen)"
     if t == "max_keyword_pct":
-        return f"max {r.get('value')}% in {'/'.join(r.get('keywords', []))}"
+        return f"max {r.get('value')}% in {'/'.join(r.get('keywords', []))} (vom investierten Kapital)"
     if t == "max_sector_pct":
-        return f"max {r.get('value')}% im Sektor {r.get('sector')}"
+        return f"max {r.get('value')}% im Sektor {r.get('sector')} (vom investierten Kapital)"
     return t or "?"
 
 
@@ -178,6 +190,8 @@ def build_mandate_block(mandate: dict | None) -> str:
         reg = ", ".join(f"{k} {v}%" for k, v in targets["regions"].items())
         cash = f" · Cash {targets['cash_pct']}%" if targets.get("cash_pct") is not None else ""
         lines.append(f"SOLL-ALLOKATION (Ziel, nicht hart): {reg}{cash}")
+    if mandate.get("single_trade_cap_pct"):
+        lines.append(f"ORDER-GRÖSSE: einzelne Order max {mandate['single_trade_cap_pct']}% des Gesamtvermögens")
     for pref in (mandate.get("soft_preferences") or [])[:6]:
         lines.append(f"  - Präferenz: {pref}")
     for tax in (mandate.get("tax_directives") or [])[:4]:
@@ -217,6 +231,11 @@ def validate_against_mandate(rec: dict, mandate: dict | None, overview: dict | N
     - warn:  speichern, aber rec["mandate_warnings"] setzen.
     sell läuft IMMER durch (Risikoabbau ist nie ein Mandatsverstoss).
     Fehlt Datengrundlage für eine Regel → Regel überspringen (nie fälschlich blocken).
+
+    Bezugsgrössen: Konzentrations-Limits (Position/Sektor/Keyword) rechnen auf das
+    INVESTIERTE Kapital — bei hoher Cash-Quote wäre "% vom Gesamtvermögen" trügerisch
+    lax (12% von total sind bei 44% Cash real >21% des Depots). Cash-Regeln und der
+    single_trade_cap rechnen auf das Gesamtvermögen.
     """
     if not mandate:
         return "pass", []
@@ -224,13 +243,23 @@ def validate_against_mandate(rec: dict, mandate: dict | None, overview: dict | N
     if action == "sell":
         return "pass", []
 
+    from src.web.services.portfolio_service import _norm_sector
+
     ticker = (rec.get("ticker") or "").upper()
     name = (rec.get("name") or "")
     reasoning = (rec.get("reasoning") or "")
     haystack = f"{ticker} {name} {reasoning}".lower()
     overview = overview or {}
     total = overview.get("total_value_eur") or 0
-    positions = {(p.get("ticker") or "").upper(): p for p in overview.get("positions", [])}
+    invested = total - (overview.get("cash_total") or 0)
+    # Gleicher Ticker kann in mehreren Depots liegen (z.B. AMZN auf TR + Erste Bank):
+    # Werte über alle Depots summieren, Metadaten (Sektor) vom ersten Treffer.
+    positions = {}
+    value_by_ticker = {}
+    for p in overview.get("positions", []):
+        tk = (p.get("ticker") or "").upper()
+        positions.setdefault(tk, p)
+        value_by_ticker[tk] = value_by_ticker.get(tk, 0) + (p.get("current_value_eur") or 0)
 
     block_violations = []
     warn_violations = []
@@ -248,7 +277,7 @@ def validate_against_mandate(rec: dict, mandate: dict | None, overview: dict | N
 
         elif t == "forbidden_instrument":
             for kw in r.get("match", []):
-                if kw.lower() in haystack:
+                if _kw_hit(kw, haystack):
                     bucket.append(f"verbotenes Instrument (Stichwort '{kw}')")
                     break
 
@@ -260,10 +289,13 @@ def validate_against_mandate(rec: dict, mandate: dict | None, overview: dict | N
             added = _entry_value_eur(rec, overview)
             if added is None:
                 continue  # nicht berechenbar → nicht blocken
-            existing = positions.get(ticker, {}).get("current_value_eur", 0) or 0
-            new_pct = (existing + added) / total * 100
+            existing = value_by_ticker.get(ticker, 0)
+            base = invested + added
+            if base <= 0:
+                continue
+            new_pct = (existing + added) / base * 100
             if new_pct > limit:
-                bucket.append(f"{ticker} wäre {new_pct:.1f}% > max {limit}% je Einzelposition")
+                bucket.append(f"{ticker} wäre {new_pct:.1f}% > max {limit}% je Einzelposition (investiert)")
 
         elif t == "min_cash_pct":
             limit = r.get("value")
@@ -286,27 +318,47 @@ def validate_against_mandate(rec: dict, mandate: dict | None, overview: dict | N
             cur = sum(
                 (p.get("current_value_eur") or 0)
                 for p in overview.get("positions", [])
-                if any(k in f"{(p.get('ticker') or '')} {(p.get('name') or '')}".lower() for k in kws)
+                if any(_kw_hit(k, f"{(p.get('ticker') or '')} {(p.get('name') or '')}") for k in kws)
             )
-            adds_to_bucket = any(k in haystack for k in kws)
-            new_pct = (cur + (added if adds_to_bucket else 0)) / total * 100
+            adds_to_bucket = any(_kw_hit(k, haystack) for k in kws)
+            base = invested + (added if adds_to_bucket else 0)
+            new_pct = (cur + (added if adds_to_bucket else 0)) / base * 100 if base > 0 else 0
             if adds_to_bucket and new_pct > limit:
-                bucket.append(f"{'/'.join(kws)} wäre {new_pct:.1f}% > max {limit}%")
+                bucket.append(f"{'/'.join(kws)} wäre {new_pct:.1f}% > max {limit}% (investiert)")
 
         elif t == "max_sector_pct":
             limit = r.get("value")
             sector = r.get("sector")
             if limit is None or not sector or not total:
                 continue
+            # Sektor-Labels kanonisieren: Positionen tragen yfinance-Englisch
+            # ("Technology"), der Breakdown nach Fonds-Durchschau deutschen Kanon
+            # ("Technologie") — ohne Normierung war diese Regel faktisch tot.
+            want = _norm_sector(sector)
             pos = positions.get(ticker)
-            rec_sector = (pos or {}).get("sector")
-            if not rec_sector or rec_sector != sector:
+            rec_sector = _norm_sector((pos or {}).get("sector") or "")
+            if rec_sector == "Unbekannt" or rec_sector != want:
                 continue  # Sektor der Empfehlung unbekannt/anders → nicht prüfbar
-            cur = (overview.get("sector_breakdown") or {}).get(sector, 0)
+            breakdown = overview.get("sector_breakdown") or {}
+            cur = breakdown.get(want)
+            if cur is None:
+                cur = sum(v for k, v in breakdown.items() if _norm_sector(k) == want)
             added = _entry_value_eur(rec, overview) or 0
-            new_pct = (cur + added) / total * 100
+            base = invested + added
+            if base <= 0:
+                continue
+            new_pct = (cur + added) / base * 100
             if new_pct > limit:
-                bucket.append(f"Sektor {sector} wäre {new_pct:.1f}% > max {limit}%")
+                bucket.append(f"Sektor {want} wäre {new_pct:.1f}% > max {limit}% (investiert)")
+
+    # Ordergrössen-Deckel (Top-Level-Feld, kein hard_rule-Typ): bremst Klumpen-Orders,
+    # ohne sie hart zu verbieten — Verstoss ist immer nur eine Warnung.
+    cap = mandate.get("single_trade_cap_pct")
+    if cap and total:
+        added = _entry_value_eur(rec, overview)
+        if added is not None and added / total * 100 > cap:
+            warn_violations.append(
+                f"Ordergrösse {added:.0f}€ wäre {added / total * 100:.1f}% > max {cap}% je Trade")
 
     if block_violations:
         return "block", block_violations + warn_violations
@@ -359,6 +411,18 @@ def compute_strategy_drift(overview: dict | None, mandate: dict | None) -> dict 
                     "soll": round(soll, 1), "ist": round(ist, 1),
                     "abweichung_pp": round(dev, 1), "severity": _severity(dev),
                 })
+            # Ist-Kategorien ohne Soll (z.B. Rohstoffe, wenn das Mandat sie nicht
+            # kennt) mit Soll=0 ausweisen — sonst drücken sie still alle anderen
+            # Ist-Quoten und erzeugen Phantom-Untergewichte.
+            for region, val in region_vals.items():
+                if region in soll_regions or not val:
+                    continue
+                ist = val / region_total * 100
+                dims.append({
+                    "name": region, "kind": "region",
+                    "soll": 0, "ist": round(ist, 1),
+                    "abweichung_pp": round(ist, 1), "severity": _severity(ist),
+                })
 
     # Cash-Drift (Ist = % vom Gesamtvermögen)
     if targets.get("cash_pct") is not None:
@@ -370,15 +434,27 @@ def compute_strategy_drift(overview: dict | None, mandate: dict | None) -> dict 
             "abweichung_pp": round(dev, 1), "severity": _severity(dev),
         })
 
-    # Einzelpositions-Übergewicht vs. max_position_pct
+    # Einzelpositions-Übergewicht vs. max_position_pct — auf das INVESTIERTE Kapital
+    # (konsistent mit validate_against_mandate), über Depots aggregiert, und mit
+    # denselben Ausnahmen wie der Validator (sonst meldet der Drift ewig den
+    # bewusst grossen Welt-Kern als Verstoss).
     max_pos_rule = next((r for r in mandate.get("hard_rules", []) if r.get("type") == "max_position_pct"), None)
-    if max_pos_rule and max_pos_rule.get("value"):
+    invested = total - (overview.get("cash_total") or 0)
+    if max_pos_rule and max_pos_rule.get("value") and invested > 0:
         limit = max_pos_rule["value"]
+        exceptions = {k.upper() for k in (max_pos_rule.get("exceptions") or {})}
+        agg = {}
         for p in overview.get("positions", []):
-            pct = (p.get("current_value_eur") or 0) / total * 100
+            tk = (p.get("ticker") or "").upper()
+            entry = agg.setdefault(tk, {"name": p.get("name"), "ticker": p.get("ticker"), "value": 0.0})
+            entry["value"] += (p.get("current_value_eur") or 0)
+        for tk, entry in agg.items():
+            if tk in exceptions:
+                continue
+            pct = entry["value"] / invested * 100
             if pct > limit:
                 dims.append({
-                    "name": f"{p.get('name')} ({p.get('ticker')})", "kind": "position",
+                    "name": f"{entry['name']} ({entry['ticker']})", "kind": "position",
                     "soll": round(limit, 1), "ist": round(pct, 1),
                     "abweichung_pp": round(pct - limit, 1), "severity": "breach",
                 })
