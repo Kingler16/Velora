@@ -51,3 +51,33 @@ def test_unknown_ticker_no_live_check():
 def test_watchlist_ticker_used_for_live_check():
     ok, reason = _plausi_check({"ticker": "XYZ", "entry_price": 200}, MD)  # 200 vs 100 = +100%
     assert not ok and "weicht" in reason
+
+
+def _setup_recs(tmp_path, monkeypatch, recs):
+    import src.analysis.memory as mem
+    monkeypatch.setattr(mem, "MEMORY_DIR", tmp_path)
+    mem._save_json("recommendations.json", recs)
+    return mem
+
+
+def test_outcomes_hold_without_levels_survives(tmp_path, monkeypatch):
+    # Regression 2026-06-08: offene hold-Rec ohne target/stop/entry riss das
+    # Briefing mit TypeError (float >= None) ab. Muss offen bleiben, kein Crash.
+    mem = _setup_recs(tmp_path, monkeypatch, [{
+        "ticker": "NVDA", "action": "hold", "status": "open",
+        "target_price": None, "stop_loss": None, "entry_price": None,
+        "reasoning": "Alt-Daten ohne Levels", "date": "2026-05-25T07:00:00",
+    }])
+    out = mem.update_recommendation_outcomes(MD)
+    assert out[0]["status"] == "open"
+
+
+def test_outcomes_stop_only_sell_triggers(tmp_path, monkeypatch):
+    # sell nur mit Stop (target=None) ist legitim — Stop über Kurs muss weiter auslösen
+    mem = _setup_recs(tmp_path, monkeypatch, [{
+        "ticker": "NVDA", "action": "sell", "status": "open",
+        "target_price": None, "stop_loss": 130.0, "entry_price": None,
+        "reasoning": "Stop-only Sell", "date": "2026-05-25T07:00:00",
+    }])
+    out = mem.update_recommendation_outcomes(MD)  # Kurs 140 >= Stop 130
+    assert out[0]["status"] == "stop_hit"

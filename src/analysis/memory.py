@@ -245,9 +245,11 @@ def update_recommendation_outcomes(market_data: dict):
         entry_price = rec.get("entry_price")
 
         # Sell-Empfehlungen sind invertiert: Ziel liegt UNTER, Stop ÜBER dem Kurs.
+        # target/stop können None sein (hold nur mit Stop, sell ohne Ziel) — nie
+        # gegen None vergleichen, das riss als TypeError das ganze Briefing ab.
         is_sell = rec.get("action") == "sell"
-        hit_target = (current_price <= target) if is_sell else (current_price >= target)
-        hit_stop = (current_price >= stop_loss) if is_sell else (current_price <= stop_loss)
+        hit_target = target is not None and ((current_price <= target) if is_sell else (current_price >= target))
+        hit_stop = stop_loss is not None and ((current_price >= stop_loss) if is_sell else (current_price <= stop_loss))
 
         if target and hit_target:
             rec["status"] = "target_hit"
