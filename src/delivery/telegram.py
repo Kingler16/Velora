@@ -261,6 +261,14 @@ def update_portfolio_position(action: str, ticker: str, shares: float, price: fl
             "Trade geschrieben: %s %s shares=%s price=%s | pre=%s post=%s account=%s",
             action, ticker, shares, price, pre_state, post_state, matched_account,
         )
+        # Trade-History fürs Briefing-Gedächtnis (best-effort, nie den Trade gefährden)
+        try:
+            from src.analysis.memory import record_trade
+            record_trade(action, (pre_state or {}).get("ticker", ticker), shares, price,
+                         matched_account, shares_before=(pre_state or {}).get("shares"),
+                         shares_after=(post_state or {}).get("shares"))
+        except Exception as e:
+            logger.warning("record_trade Fehler: %s", e)
         # Region-Exposure aktualisieren (nach dem Write, portfolio neu laden)
         try:
             from src.web.services.portfolio_service import update_region_on_trade

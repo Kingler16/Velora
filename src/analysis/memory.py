@@ -318,6 +318,35 @@ def add_position_thesis(ticker: str, thesis: str, price_target=None):
     _save_json("notes.json", notes)
 
 
+TRADE_HISTORY_MAX = 40
+
+
+def record_trade(action: str, ticker: str, shares: float, price=None, account=None,
+                 shares_before=None, shares_after=None):
+    """Hängt einen AUSGEFÜHRTEN Trade an die Trade-History (memory/trade_history.json).
+
+    Diese fliesst ins nächste Briefing (get_context_for_prompt), damit die Analyse
+    Käufe/Verkäufe als Ereignis 'sieht' statt nur die veränderte Stückzahl — sonst
+    übernimmt das LLM veraltete Positions-Thesen (z.B. 'grösste Einzelwette' für eine
+    längst reduzierte Position). Best-effort: ein Fehler hier darf nie den Trade
+    selbst (Portfolio-Write) gefährden."""
+    try:
+        history = _load_json("trade_history.json", [])
+        history.append({
+            "date": datetime.now().isoformat(),
+            "action": action,
+            "ticker": ticker,
+            "shares": shares,
+            "price": price,
+            "account": account,
+            "shares_before": shares_before,
+            "shares_after": shares_after,
+        })
+        _save_json("trade_history.json", history[-TRADE_HISTORY_MAX:])
+    except Exception:
+        logger.exception("record_trade fehlgeschlagen (%s %s) — Trade selbst ist unberührt", action, ticker)
+
+
 def get_context_for_prompt() -> str:
     """Baut den Memory-Kontext für den Claude-Prompt zusammen."""
     memory = load_memory()
@@ -348,6 +377,24 @@ def get_context_for_prompt() -> str:
             rp = f" [{r['realized_pct']:+.1f}%]" if r.get("realized_pct") is not None else ""
             why = f" | These war: {r['reasoning'][:90]}" if r.get("reasoning") else ""
             parts.append(f"- {r['date'][:10]} {r.get('ticker','?')}: {r.get('action','?')} -> {r.get('outcome','?')}{rp}{why}")
+
+    # Letzte ausgeführte Trades (vom User) — damit die Analyse sie als Ereignis
+    # berücksichtigt und nicht an veralteten Thesen festhält.
+    trades = _load_json("trade_history.json", [])
+    if trades:
+        parts.append("\n=== DEINE LETZTEN TRADES (vom User ausgeführt — berücksichtige sie! Ein "
+                     "Verkauf/Zukauf ändert Positionsgröße und Gewicht; eine alte These kann damit "
+                     "überholt sein. Behandle jede Position nach ihrer AKTUELLEN Größe, nicht nach der "
+                     "alten Erzählung) ===")
+        for tr in trades[-8:]:
+            verb = "GEKAUFT" if tr.get("action") == "buy" else "VERKAUFT"
+            px = f" @ {tr['price']:.2f}€" if tr.get("price") else ""
+            sz = ""
+            sb, sa = tr.get("shares_before"), tr.get("shares_after")
+            if sb is not None and sa is not None:
+                sz = f" (Position {sb:.2f} → {sa:.2f} Stk)"
+            parts.append(f"- {tr.get('date','')[:10]}: {verb} {tr.get('shares','?')} Stk "
+                         f"{tr.get('ticker','?')}{px}{sz}")
 
     # Position-Thesen (versioniert — alte Prognose gegen Realität prüfen)
     notes = memory["notes"]

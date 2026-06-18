@@ -197,6 +197,12 @@ def _add_new_position(ticker: str, shares: float, price: float, account: str | N
             update_region_on_trade("buy", ticker)
         except Exception:
             pass
+        try:
+            from src.analysis.memory import record_trade
+            record_trade("buy", ticker, float(shares), float(price), acc_key,
+                         shares_before=0.0, shares_after=float(shares))
+        except Exception as e:
+            logger.warning("record_trade (neue Position) Fehler: %s", e)
     return added, None
 
 

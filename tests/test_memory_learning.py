@@ -81,3 +81,25 @@ def test_outcomes_stop_only_sell_triggers(tmp_path, monkeypatch):
     }])
     out = mem.update_recommendation_outcomes(MD)  # Kurs 140 >= Stop 130
     assert out[0]["status"] == "stop_hit"
+
+
+def test_record_trade_appends_and_truncates(tmp_path, monkeypatch):
+    import src.analysis.memory as mem
+    monkeypatch.setattr(mem, "MEMORY_DIR", tmp_path)
+    for i in range(mem.TRADE_HISTORY_MAX + 5):
+        mem.record_trade("buy", f"T{i}", 1, 10.0)
+    hist = mem._load_json("trade_history.json", [])
+    assert len(hist) == mem.TRADE_HISTORY_MAX  # älteste fallen raus
+    assert hist[-1]["ticker"] == f"T{mem.TRADE_HISTORY_MAX + 4}"
+
+
+def test_context_includes_recent_trades(tmp_path, monkeypatch):
+    # Regression 2026-06-18: nach Teilverkauf hielt das Briefing an alter These fest,
+    # weil der Trade nirgends im Prompt-Kontext auftauchte.
+    import src.analysis.memory as mem
+    monkeypatch.setattr(mem, "MEMORY_DIR", tmp_path)
+    mem.record_trade("sell", "ASML.AS", 1.0, 1671.0, "trade_republic",
+                     shares_before=1.157, shares_after=0.157)
+    ctx = mem.get_context_for_prompt()
+    assert "VERKAUFT" in ctx and "ASML.AS" in ctx
+    assert "1.16 → 0.16 Stk" in ctx  # Positionsänderung sichtbar fürs LLM
