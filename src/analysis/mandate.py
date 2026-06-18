@@ -192,13 +192,20 @@ def build_mandate_block(mandate: dict | None) -> str:
         lines.append(f"SOLL-ALLOKATION (Ziel, nicht hart): {reg}{cash}")
     if mandate.get("single_trade_cap_pct"):
         lines.append(f"ORDER-GRÖSSE: einzelne Order max {mandate['single_trade_cap_pct']}% des Gesamtvermögens")
+    frozen = mandate.get("frozen_tickers") or {}
+    if frozen:
+        items = "; ".join(f"{tk} ({why})" if why else tk for tk, why in frozen.items())
+        lines.append(f"EINGEFROREN (halten ok, NICHT aufstocken, KEIN Verkaufsdruck — die bestehende Grösse "
+                     f"ist bewusst akzeptiert, schlage weder Zukauf noch erzwungenen Abbau vor): {items}")
     for pref in (mandate.get("soft_preferences") or [])[:6]:
         lines.append(f"  - Präferenz: {pref}")
     for tax in (mandate.get("tax_directives") or [])[:4]:
         lines.append(f"  - Steuer: {tax}")
     lines.append("Verstößt eine Idee gegen eine BLOCK-Regel → schlage sie NICHT vor, erkläre kurz warum. "
                  "Bei WARN-Regeln nur mit expliziter Begründung im reasoning abweichen. "
-                 "Bevorzuge Aktionen, die das Depot näher an die Soll-Allokation bringen.")
+                 "Die Soll-Allokation ist Orientierung, KEIN Rebalancing-Zwang — eine Abweichung allein "
+                 "(z.B. eine hohe Cash-Quote) ist kein Grund für eine Order, solange keine überzeugende "
+                 "Einzelidee dahintersteht. Lieber Cash halten als auf Krampf investieren.")
     return "\n".join(lines)
 
 
@@ -249,6 +256,17 @@ def validate_against_mandate(rec: dict, mandate: dict | None, overview: dict | N
     name = (rec.get("name") or "")
     reasoning = (rec.get("reasoning") or "")
     haystack = f"{ticker} {name} {reasoning}".lower()
+
+    # Eingefrorene Positionen: halten ja, aufstocken nein. buy/watch (= Aufstock- oder
+    # Wiedereinstiegs-Order) werden geblockt; hold (halten/Stop nachziehen) und sell
+    # (oben schon durch) bleiben erlaubt. Die bestehende Grösse zählt NICHT als Verstoss
+    # — der Strategie-Drift überspringt eingefrorene Titel ebenfalls (bewusster Stillstand,
+    # kein Rebalancing-Druck). Anders als eine max_position_pct-exception, die Aufstocken
+    # erlauben würde.
+    frozen = {k.upper(): v for k, v in (mandate.get("frozen_tickers") or {}).items()}
+    if ticker in frozen and action in ("buy", "watch"):
+        return "block", [f"{ticker} ist eingefroren ({frozen[ticker] or 'halten, nicht aufstocken'})"]
+
     overview = overview or {}
     total = overview.get("total_value_eur") or 0
     invested = total - (overview.get("cash_total") or 0)
@@ -437,12 +455,14 @@ def compute_strategy_drift(overview: dict | None, mandate: dict | None) -> dict 
     # Einzelpositions-Übergewicht vs. max_position_pct — auf das INVESTIERTE Kapital
     # (konsistent mit validate_against_mandate), über Depots aggregiert, und mit
     # denselben Ausnahmen wie der Validator (sonst meldet der Drift ewig den
-    # bewusst grossen Welt-Kern als Verstoss).
+    # bewusst grossen Welt-Kern als Verstoss). Eingefrorene Titel zählen ebenfalls
+    # als akzeptiert: bewusster Stillstand soll keinen Verkaufsdruck erzeugen.
     max_pos_rule = next((r for r in mandate.get("hard_rules", []) if r.get("type") == "max_position_pct"), None)
     invested = total - (overview.get("cash_total") or 0)
     if max_pos_rule and max_pos_rule.get("value") and invested > 0:
         limit = max_pos_rule["value"]
         exceptions = {k.upper() for k in (max_pos_rule.get("exceptions") or {})}
+        exceptions |= {k.upper() for k in (mandate.get("frozen_tickers") or {})}
         agg = {}
         for p in overview.get("positions", []):
             tk = (p.get("ticker") or "").upper()

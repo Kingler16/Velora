@@ -261,3 +261,56 @@ def test_build_block_contains_rules():
     assert "§0" in block and "v3" in block
     assert "HARTE REGELN" in block and "WEICHE REGELN" in block
     assert "Langfristig wachsen." in block
+
+
+def test_frozen_blocks_buy():
+    mandate = _mandate()
+    mandate["frozen_tickers"] = {"NVDA": "Alt-Bestand, halten"}
+    rec = {"action": "buy", "ticker": "NVDA", "shares": 1, "entry_price": 1, "reasoning": "x" * 20}
+    verdict, viol = validate_against_mandate(rec, mandate, _overview())
+    assert verdict == "block"
+    assert any("eingefroren" in v for v in viol)
+
+
+def test_frozen_blocks_watch():
+    # watch mit entry_price = Wiedereinstiegs-Limit = Aufstocken -> block
+    mandate = _mandate()
+    mandate["frozen_tickers"] = {"NVDA": ""}
+    rec = {"action": "watch", "ticker": "NVDA", "entry_price": 100, "reasoning": "x" * 20}
+    verdict, _ = validate_against_mandate(rec, mandate, _overview())
+    assert verdict == "block"
+
+
+def test_frozen_allows_hold_and_sell():
+    # halten/Stop-nachziehen und Verkauf bleiben für eingefrorene Titel erlaubt
+    mandate = _mandate()
+    mandate["frozen_tickers"] = {"NVDA": "eingefroren"}
+    hold = {"action": "hold", "ticker": "NVDA", "stop_loss": 120, "reasoning": "x" * 20}
+    sell = {"action": "sell", "ticker": "NVDA", "shares": 1, "entry_price": 1, "reasoning": "x" * 20}
+    assert validate_against_mandate(hold, mandate, _overview())[0] == "pass"
+    assert validate_against_mandate(sell, mandate, _overview())[0] == "pass"
+
+
+def test_frozen_excluded_from_drift_breach():
+    # Eingefrorene Position über dem Limit erzeugt KEINEN Position-breach (bewusster Stillstand)
+    mandate = {
+        "hard_rules": [{"type": "max_position_pct", "value": 12, "rule": "block"}],
+        "frozen_tickers": {"FROZ": "Alt-Fonds, halten"},
+        "targets": {},
+    }
+    ov = {
+        "total_value_eur": 50000.0,
+        "cash_total": 5000.0,  # invested 45000
+        "positions": [{"ticker": "FROZ", "name": "Alt-Fonds", "current_value_eur": 20000.0}],  # 44% > 12
+    }
+    drift = compute_strategy_drift(ov, mandate)
+    assert not any(d["kind"] == "position" for d in drift["dimensions"])
+
+
+def test_build_block_shows_frozen():
+    block = build_mandate_block({
+        "version": 5,
+        "hard_rules": _mandate()["hard_rules"],
+        "frozen_tickers": {"AT0000646799": "Alt-Fonds, halten"},
+    })
+    assert "EINGEFROREN" in block and "AT0000646799" in block
