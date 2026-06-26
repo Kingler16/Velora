@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import AsyncIterator, Optional
 
-from src.analysis.claude import _LOCK_PATH
+from src.analysis.claude import _LOCK_PATH, build_claude_env
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +189,7 @@ async def stream_chat(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
+            env=build_claude_env(),
         )
     finally:
         try:

@@ -28,6 +28,7 @@ _ENV_OVERRIDES: dict[tuple[str, str], str] = {
     ("web_push", "vapid_subject"):       "VAPID_SUBJECT",
     ("web", "public_url"):               "VELORA_PUBLIC_URL",
     ("notifications", "telegram_enabled"): "TELEGRAM_ENABLED",
+    ("claude", "oauth_token"):             "CLAUDE_CODE_OAUTH_TOKEN",
 }
 
 _BOOL_KEYS = {("notifications", "telegram_enabled")}

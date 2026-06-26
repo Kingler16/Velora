@@ -1,0 +1,14 @@
+[Unit]
+Description=Velora Claude-CLI Auth-Wächter (täglich vor dem Briefing)
+
+[Timer]
+# Täglich 06:30 — kurz VOR dem Briefing-Cron (07:00 Mo/Do), damit eine defekte
+# Auth rechtzeitig per Telegram gemeldet wird, statt dass das Briefing still scheitert.
+OnCalendar=*-*-* 06:30:00
+OnBootSec=5min
+RandomizedDelaySec=3min
+Persistent=true
+Unit=velora-auth-watchdog.service
+
+[Install]
+WantedBy=timers.target

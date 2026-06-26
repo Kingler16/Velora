@@ -57,6 +57,32 @@ def _resolve_claude_bin() -> str:
     return claude_bin
 
 
+def build_claude_env() -> dict:
+    """Prozess-Environment für jeden CLI-Aufruf.
+
+    Injiziert den langlebigen OAuth-Token (erzeugt via `claude setup-token`) als
+    CLAUDE_CODE_OAUTH_TOKEN, sofern in settings (``claude.oauth_token``) oder der
+    gleichnamigen ENV-Variable hinterlegt. Dieser 1-Jahres-Token ersetzt die
+    fragile 8h-Subscription-Auth mit rotierendem Refresh-Token, die auf einem
+    geteilten Headless-Server (RockPi neben Mac/Handy am selben Konto) regelmäßig
+    invalidiert wurde — Symptom: "Velora ist nicht eingeloggt" / CLI-401.
+
+    Wird hier explizit ins Subprocess-Env gesetzt (statt nur via systemd), damit
+    der Token AUCH greift, wenn Velora als Cron-Job (Briefing) oder manuell läuft.
+    Ohne hinterlegten Token (z.B. lokaler Mac mit Keychain) bleibt das Environment
+    unverändert und die CLI nutzt ihre Standard-Credentials.
+    """
+    env = os.environ.copy()
+    try:
+        from src.config_loader import load_settings
+        token = ((load_settings().get("claude", {}) or {}).get("oauth_token") or "").strip()
+        if token:
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = token
+    except Exception:
+        logger.warning("OAuth-Token konnte nicht geladen werden — CLI nutzt Standard-Auth", exc_info=True)
+    return env
+
+
 def ask_claude(system_prompt: str, user_prompt: str, timeout: int = 1200, web_tools: bool = False) -> dict:
     """
     Ruft Claude Code CLI auf und gibt Analyse + strukturierte Daten zurück.
@@ -98,6 +124,7 @@ def ask_claude(system_prompt: str, user_prompt: str, timeout: int = 1200, web_to
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                env=build_claude_env(),
             )
         except subprocess.TimeoutExpired:
             logger.error(f"Claude CLI Timeout nach {timeout}s")

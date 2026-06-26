@@ -428,7 +428,8 @@ async def holdings_page(request: Request):
 # sobald gesetzt, verlangt jede nicht-öffentliche Route ein Cookie.
 
 _SECRET_PATHS = (("telegram", "bot_token"), ("brave_search", "api_key"),
-                 ("fred", "api_key"), ("finnhub", "api_key"))
+                 ("fred", "api_key"), ("finnhub", "api_key"),
+                 ("claude", "oauth_token"))
 
 
 def _mask_secret(value: str) -> str:

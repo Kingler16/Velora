@@ -1,0 +1,14 @@
+[Unit]
+Description=Velora Claude-CLI Auth-Wächter (Telegram-Alarm bei defektem Login)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+Group=admin
+Environment=HOME=/home/admin
+WorkingDirectory=/home/admin/velora
+ExecStart=/home/admin/velora/venv/bin/python /home/admin/velora/scripts/auth_watchdog.py
+StandardOutput=journal
+StandardError=journal
