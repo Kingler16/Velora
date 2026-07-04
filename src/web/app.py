@@ -811,6 +811,65 @@ async def api_add_position(request: Request):
     return JSONResponse({"error": result.get("error", "Erfassen fehlgeschlagen")}, status_code=400)
 
 
+# ─── Cash-/Bank-Konten-Editor (Kontostände ändern sich laufend) ──────────────
+
+@app.post("/api/portfolio/bank/edit")
+async def api_edit_bank_account(request: Request):
+    """Korrigiert ein Cash-/Bank-Konto (Stand, Zins, Notiz, Typ)."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ungültiger JSON-Body"}, status_code=400)
+    from src.delivery.portfolio_io import edit_bank_account
+    key = body.get("key", "")
+    if not key:
+        return JSONResponse({"error": "key erforderlich"}, status_code=400)
+    updates = {k: body[k] for k in ("value", "interest", "note", "bank", "is_depot_cash")
+               if k in body and body[k] is not None and body[k] != ""}
+    result = edit_bank_account(key, updates)
+    if result.get("ok"):
+        return JSONResponse({"status": "ok", "message": f"Konto {key} aktualisiert"})
+    return JSONResponse({"error": result.get("error", "Bearbeiten fehlgeschlagen")}, status_code=400)
+
+
+@app.post("/api/portfolio/bank/add")
+async def api_add_bank_account(request: Request):
+    """Legt ein neues Cash-/Bank-Konto an."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ungültiger JSON-Body"}, status_code=400)
+    from src.delivery.portfolio_io import add_bank_account
+    result = add_bank_account(
+        body.get("key", ""),
+        body.get("bank", ""),
+        body.get("value", 0),
+        interest=body.get("interest", 0),
+        note=body.get("note", ""),
+        is_depot_cash=bool(body.get("is_depot_cash", False)),
+    )
+    if result.get("ok"):
+        return JSONResponse({"status": "ok", "message": "Konto angelegt"})
+    return JSONResponse({"error": result.get("error", "Anlegen fehlgeschlagen")}, status_code=400)
+
+
+@app.post("/api/portfolio/bank/delete")
+async def api_delete_bank_account(request: Request):
+    """Entfernt ein Cash-/Bank-Konto."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ungültiger JSON-Body"}, status_code=400)
+    from src.delivery.portfolio_io import delete_bank_account
+    key = body.get("key", "")
+    if not key:
+        return JSONResponse({"error": "key erforderlich"}, status_code=400)
+    result = delete_bank_account(key)
+    if result.get("ok"):
+        return JSONResponse({"status": "ok", "message": f"Konto {key} gelöscht"})
+    return JSONResponse({"error": result.get("error", "Löschen fehlgeschlagen")}, status_code=400)
+
+
 @app.get("/api/accounts")
 async def api_accounts():
     """Gibt verfügbare Accounts zurück."""

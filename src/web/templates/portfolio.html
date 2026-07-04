@@ -239,6 +239,7 @@
                     <th class="text-right">{{ t.portfolio.value }}</th>
                     <th class="text-right">{{ t.portfolio.interest_rate }}</th>
                     <th>{{ t.portfolio.type }}</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -255,6 +256,15 @@
                         <span class="rec-status target_hit">{{ t.portfolio.free_cash }}</span>
                         {% endif %}
                     </td>
+                    <td style="white-space: nowrap; text-align: right;">
+                        <button class="btn btn-ghost" title="Kontostand bearbeiten" style="padding: 4px 8px; font-size: 13px; line-height: 1;"
+                                data-key="{{ acc.name }}" data-bank="{{ acc.bank }}" data-value="{{ acc.value }}"
+                                data-interest="{{ acc.interest }}" data-note="{{ acc.note }}" data-depot="{{ 1 if acc.is_depot_cash else 0 }}"
+                                onclick="editBankFromBtn(this)">&#9998;</button>
+                        <button class="btn btn-ghost" title="Konto löschen" style="padding: 4px 8px; font-size: 13px; line-height: 1; color: var(--red);"
+                                data-key="{{ acc.name }}" data-depot="{{ 1 if acc.is_depot_cash else 0 }}"
+                                onclick="deleteBankFromBtn(this)">&#10005;</button>
+                    </td>
                 </tr>
                 {% endfor %}
                 <tr class="data-table-summary" style="border-top: 2px solid var(--border);">
@@ -262,9 +272,13 @@
                     <td class="text-right tabular-nums" data-label="{{ t.portfolio.value }}" style="font-weight: 700; font-size: 15px;">{{ overview.cash_total|eur }}</td>
                     <td data-label="{{ t.portfolio.interest_rate }}"></td>
                     <td data-label="{{ t.portfolio.type }}"></td>
+                    <td></td>
                 </tr>
             </tbody>
         </table>
+    </div>
+    <div style="padding-top: 10px;">
+        <button class="btn btn-ghost" style="font-size: 12px; padding: 5px 10px;" onclick="addBank()">+ Konto erfassen</button>
     </div>
 </div>
 {% endif %}
@@ -864,6 +878,65 @@ function submitAddPos() {
         currency: document.getElementById('apCurrency').value || 'EUR',
     }, 'Position erfasst');
 }
+
+// ─── Cash-/Bank-Konten-Editor ────────────────────────────────
+function _openBankModal(mode) {
+    // mode 'edit': key fixiert; mode 'add': key-Feld editierbar
+    document.getElementById('bkKeyRow').style.display = mode === 'add' ? 'block' : 'none';
+    document.getElementById('bkMode').value = mode;
+    _pfModal('veloraBankModal', true);
+}
+function editBankFromBtn(btn) {
+    const d = btn.dataset;
+    document.getElementById('bkTitle').textContent = 'Konto bearbeiten: ' + d.key;
+    document.getElementById('bkExistingKey').value = d.key;
+    document.getElementById('bkKey').value = d.key;
+    document.getElementById('bkBank').value = d.bank || '';
+    document.getElementById('bkValue').value = d.value;
+    document.getElementById('bkInterest').value = d.interest;
+    document.getElementById('bkNote').value = d.note || '';
+    document.getElementById('bkDepot').checked = d.depot === '1';
+    _openBankModal('edit');
+}
+function addBank() {
+    document.getElementById('bkTitle').textContent = 'Neues Konto erfassen';
+    document.getElementById('bkExistingKey').value = '';
+    document.getElementById('bkKey').value = '';
+    document.getElementById('bkBank').value = '';
+    document.getElementById('bkValue').value = '';
+    document.getElementById('bkInterest').value = '0';
+    document.getElementById('bkNote').value = '';
+    document.getElementById('bkDepot').checked = false;
+    _openBankModal('add');
+}
+function submitBank() {
+    const mode = document.getElementById('bkMode').value;
+    const value = parseFloat(document.getElementById('bkValue').value);
+    if (isNaN(value) || value < 0) { alert('Kontostand muss eine Zahl ≥ 0 sein'); return; }
+    const body = {
+        bank: document.getElementById('bkBank').value,
+        value: value,
+        interest: parseFloat(document.getElementById('bkInterest').value) || 0,
+        note: document.getElementById('bkNote').value,
+        is_depot_cash: document.getElementById('bkDepot').checked,
+    };
+    if (mode === 'add') {
+        body.key = document.getElementById('bkKey').value;
+        _pfPost('/api/portfolio/bank/add', body, 'Konto angelegt');
+    } else {
+        body.key = document.getElementById('bkExistingKey').value;
+        _pfPost('/api/portfolio/bank/edit', body, 'Konto aktualisiert');
+    }
+}
+function deleteBankFromBtn(btn) {
+    const d = btn.dataset;
+    let msg = 'Konto "' + d.key + '" wirklich löschen?';
+    if (d.depot === '1') {
+        msg += '\n\nACHTUNG: Das ist ein Depot-Cash-Konto — Trades buchen ihr Cash automatisch dagegen. Nach dem Löschen ist dieses Cash-Tracking aus.';
+    }
+    if (!confirm(msg)) return;
+    _pfPost('/api/portfolio/bank/delete', { key: d.key }, 'Konto gelöscht');
+}
 </script>
 
 <!-- ─── Portfolio-Editor-Modals ─── -->
@@ -906,6 +979,34 @@ function submitAddPos() {
         <div style="display:flex; gap:10px; justify-content:flex-end;">
             <button class="btn btn-ghost" onclick="_pfModal('veloraAddPosModal',false)">Abbrechen</button>
             <button class="btn" style="background:var(--accent-bg); color:var(--accent); border:1px solid var(--accent); font-weight:700;" onclick="submitAddPos()">Erfassen</button>
+        </div>
+    </div>
+</div>
+
+<div id="veloraBankModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;" onclick="if(event.target===this)_pfModal('veloraBankModal',false)">
+    <div style="background:var(--bg-primary); border:1px solid var(--border); border-radius:14px; padding:22px; width:min(400px,92vw);">
+        <div id="bkTitle" style="font-size:16px; font-weight:700; margin-bottom:4px;">Konto bearbeiten</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:16px;">Bestandskorrektur — Kontostand wie beim Broker/der Bank eintragen.</div>
+        <input type="hidden" id="bkMode"><input type="hidden" id="bkExistingKey">
+        <div id="bkKeyRow" style="display:none;">
+            <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Konto-Kennung (z.B. tr_cash, ing_tagesgeld)</label>
+            <input id="bkKey" type="text" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        </div>
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Bank</label>
+        <input id="bkBank" type="text" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Kontostand (EUR)</label>
+        <input id="bkValue" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Zins (wie in der Tabelle angezeigt)</label>
+        <input id="bkInterest" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Notiz</label>
+        <input id="bkNote" type="text" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-secondary); margin-bottom:18px; cursor:pointer;">
+            <input id="bkDepot" type="checkbox" style="width:16px; height:16px;">
+            Depot-Cash (Verrechnungskonto — Trades buchen automatisch dagegen)
+        </label>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn btn-ghost" onclick="_pfModal('veloraBankModal',false)">Abbrechen</button>
+            <button class="btn" style="background:var(--accent-bg); color:var(--accent); border:1px solid var(--accent); font-weight:700;" onclick="submitBank()">Speichern</button>
         </div>
     </div>
 </div>

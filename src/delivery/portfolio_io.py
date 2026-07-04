@@ -270,6 +270,87 @@ def add_position_correction(account: str, ticker: str, shares: float, buy_in: fl
     return {"ok": True}
 
 
+def edit_bank_account(key: str, updates: dict) -> dict:
+    """Korrigiert Felder eines Cash-/Bank-Kontos (value, interest, note, bank, is_depot_cash).
+
+    Reine Bestandskorrektur — Kontostände ändern sich laufend (Gehalt, Zinsen,
+    Ausgaben), das hier ist der Abgleich mit der Realität. Kein Trade-Effekt.
+    """
+    from datetime import datetime
+    try:
+        with portfolio_write_lock() as portfolio:
+            banks = portfolio.setdefault("bank_accounts", {})
+            if key not in banks:
+                raise _AbortWrite(f"Konto '{key}' nicht gefunden")
+            acc = banks[key]
+            if updates.get("value") is not None:
+                acc["value"] = round(float(updates["value"]), 2)
+            if updates.get("interest") is not None:
+                acc["interest"] = float(updates["interest"])
+            if updates.get("note") is not None:
+                acc["note"] = updates["note"]
+            if updates.get("bank") is not None:
+                acc["bank"] = updates["bank"]
+            if updates.get("is_depot_cash") is not None:
+                acc["is_depot_cash"] = bool(updates["is_depot_cash"])
+            portfolio["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+    except _AbortWrite as e:
+        return {"ok": False, "error": e.error}
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "value und interest müssen Zahlen sein"}
+    logger.info("Bank-Konto bearbeitet: %s -> %s", key, updates)
+    return {"ok": True}
+
+
+def add_bank_account(key: str, bank: str, value, interest=0.0, note: str = "",
+                     is_depot_cash: bool = False) -> dict:
+    """Legt ein neues Cash-/Bank-Konto an (z.B. neues Tagesgeld-Konto)."""
+    from datetime import datetime
+    key = (key or "").strip().lower().replace(" ", "_")
+    if not key:
+        return {"ok": False, "error": "Konto-Name fehlt"}
+    try:
+        value = round(float(value), 2)
+        interest = float(interest or 0)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "value und interest müssen Zahlen sein"}
+    if value < 0:
+        return {"ok": False, "error": "value darf nicht negativ sein"}
+    try:
+        with portfolio_write_lock() as portfolio:
+            banks = portfolio.setdefault("bank_accounts", {})
+            if key in banks:
+                raise _AbortWrite(f"Konto '{key}' existiert bereits — bitte bearbeiten")
+            banks[key] = {"bank": bank or key, "value": value, "interest": interest,
+                          "note": note or "", "is_depot_cash": bool(is_depot_cash)}
+            portfolio["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+    except _AbortWrite as e:
+        return {"ok": False, "error": e.error}
+    logger.info("Bank-Konto angelegt: %s (%s, %.2f EUR)", key, bank, value)
+    return {"ok": True}
+
+
+def delete_bank_account(key: str) -> dict:
+    """Entfernt ein Cash-/Bank-Konto (z.B. aufgelöstes Tagesgeld).
+
+    Achtung: Depot-Cash-Konten (is_depot_cash) sind Ziel des automatischen
+    Cash-Trackings bei Trades (ACCOUNT_CASH_MAP) — Löschen deaktiviert dieses
+    Tracking still. Der Aufrufer (UI) soll davor warnen.
+    """
+    from datetime import datetime
+    try:
+        with portfolio_write_lock() as portfolio:
+            banks = portfolio.setdefault("bank_accounts", {})
+            if key not in banks:
+                raise _AbortWrite(f"Konto '{key}' nicht gefunden")
+            del banks[key]
+            portfolio["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+    except _AbortWrite as e:
+        return {"ok": False, "error": e.error}
+    logger.info("Bank-Konto gelöscht: %s", key)
+    return {"ok": True}
+
+
 @contextlib.contextmanager
 def portfolio_write_lock():
     """Context-Manager: Lock, Load, (Mutate), Backup, Atomic-Save, Unlock.
