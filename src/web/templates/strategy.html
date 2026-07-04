@@ -87,6 +87,15 @@
     {% else %}
     {# Gruppierung nach kind: Region / Cash / Einzelposition #}
     {% set kind_labels = {'region': t.strategy.kind_region, 'cash': t.strategy.kind_cash, 'position': t.strategy.kind_position} %}
+    {# GEMEINSAME Balken-Skala über ALLE Dimensionen (globales Max aus Soll+Ist).
+       Pro-Zeile-Skalierung machte Längen unvergleichbar: 12% war so lang wie 36%,
+       weil jede Zeile an ihrem eigenen Maximum endete. #}
+    {% set ns = namespace(scale=1) %}
+    {% for d in drift.dimensions %}
+        {% if d.soll and d.soll > ns.scale %}{% set ns.scale = d.soll %}{% endif %}
+        {% if d.ist and d.ist > ns.scale %}{% set ns.scale = d.ist %}{% endif %}
+    {% endfor %}
+    {% set scale = ns.scale %}
     {% for kind in ['region', 'cash', 'position'] %}
     {% set group = drift.dimensions|selectattr('kind', 'equalto', kind)|list %}
     {% if group %}
@@ -98,8 +107,6 @@
         {% for d in group %}
         {% set sev_color = 'var(--text-muted)' if d.severity == 'ok' else ('var(--yellow)' if d.severity == 'warn' else 'var(--red)') %}
         {% set fill_color = 'var(--accent)' if d.severity == 'ok' else sev_color %}
-        {# Balken-Skala: max von soll/ist (mind. 1), damit beide Balken sichtbar bleiben. #}
-        {% set scale = [d.soll, d.ist, 1]|max %}
         <div>
             <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px;">
                 <span style="font-size: 13px; color: var(--text-primary); font-weight: 500;">{{ d.name }}</span>
@@ -107,7 +114,9 @@
                     <span>{{ t.strategy.target_short }} <strong style="color: var(--text-secondary);">{{ d.soll }}%</strong></span>
                     <span>{{ t.strategy.actual_short }} <strong style="color: {{ sev_color }};">{{ d.ist }}%</strong></span>
                     <span style="color: {{ sev_color }}; font-weight: 700; min-width: 52px; text-align: right;">
-                        {{ '+' if d.abweichung_pp > 0 else '' }}{{ d.abweichung_pp }} pp
+                        {# -0.0 → 0.0 normalisieren (Rundungsartefakt) #}
+                        {% set pp = 0.0 if d.abweichung_pp == 0 else d.abweichung_pp %}
+                        {{ '+' if pp > 0 else '' }}{{ pp }} pp
                     </span>
                 </span>
             </div>
