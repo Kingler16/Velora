@@ -1,0 +1,218 @@
+{# ─── Orders-Panel (geteilt: Portfolio + Empfehlungen) ─────────────────────
+   Offene-Orders-Karte + Platzieren-/Ausführen-Modals + JS.
+   Erwartet im Kontext: open_orders (Liste), accounts (Liste der Depot-Keys).
+   Öffentliche JS-Funktionen:
+     manualOrder()                                    — leeres Platzieren-Modal (Ticker frei)
+     placeOrder(ticker, action, shares, limit, ccy)   — vorbefüllt aus Empfehlung
+     openFillModal(id, ticker, action, shares, limit, ccy, account)
+     cancelOrder(id, ticker) / bookNow(action, ticker, shares, price, ccy)
+#}
+
+<!-- Offene Orders: platziert beim Broker, noch NICHT im Depot -->
+{% if open_orders %}
+<div class="card" style="margin-bottom: 24px; border-left: 3px solid var(--yellow);">
+    <div class="card-title" style="display:flex; align-items:center; gap:10px;">
+        Offene Orders
+        <span style="background: var(--yellow-bg); color: var(--yellow); font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 10px;">{{ open_orders|length }}</span>
+    </div>
+    <div style="font-size: 12px; color: var(--text-muted); margin: 4px 0 14px;">
+        Beim Broker platziert — noch nicht im Depot. Erst „Ausgeführt" (mit echtem Kurs) schreibt die Position.
+    </div>
+    <div style="display: grid; gap: 10px;">
+        {% for o in open_orders %}
+        <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border-left: 3px solid {{ 'var(--accent)' if o.action=='buy' else 'var(--red)' }};">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <span class="ticker-badge">{{ o.ticker }}</span>
+                <span style="padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.5px;
+                             background: {{ 'var(--accent-bg)' if o.action=='buy' else 'var(--red-bg)' }}; color: {{ 'var(--accent)' if o.action=='buy' else 'var(--red)' }};">
+                    {{ 'KAUF' if o.action=='buy' else 'VERKAUF' }}
+                </span>
+                <span style="font-size: 13px; color: var(--text-secondary);">
+                    <strong style="color: var(--text-primary);">{{ o.shares }}</strong> Stk
+                    {% if o.limit_price %}@ Limit <strong style="color: var(--text-primary);">{{ o.limit_price }} {{ o.currency }}</strong>{% endif %}
+                    · {{ o.account }}
+                </span>
+                <span style="font-size: 11px; color: var(--text-muted);">{{ o.placed_date[:10] }}</span>
+            </div>
+            <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                <button class="btn" style="padding: 7px 12px; font-size: 12px; font-weight: 700; background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent);"
+                        onclick="openFillModal('{{ o.id }}', '{{ o.ticker }}', '{{ o.action }}', {{ o.shares }}, {{ o.limit_price if o.limit_price is not none else 'null' }}, '{{ o.currency }}', '{{ o.account }}')">
+                    &#10003; Ausgeführt
+                </button>
+                <button class="btn" style="padding: 7px 12px; font-size: 12px;"
+                        onclick="cancelOrder('{{ o.id }}', '{{ o.ticker }}')">Storniert</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ─── Order-Modals ─── -->
+<div id="veloraPlaceModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;" onclick="if(event.target===this)_voModal('veloraPlaceModal',false)">
+    <div style="background:var(--bg-primary); border:1px solid var(--border); border-radius:14px; padding:22px; width:min(400px,92vw);">
+        <div id="poTitle" style="font-size:16px; font-weight:700; margin-bottom:4px;">Order platzieren</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:16px;">Landet in der Offene-Orders-Liste — das Depot bleibt unberührt, bis die Order ausgeführt ist.</div>
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Ticker (z.B. ASML.AS, AMZN)</label>
+        <input id="poTicker" type="text" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Aktion</label>
+        <select id="poAction" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+            <option value="buy">Kauf</option>
+            <option value="sell">Verkauf</option>
+        </select>
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Stück</label>
+        <input id="poShares" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1;">
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Limit-Preis (leer = Market)</label>
+                <input id="poLimit" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+            </div>
+            <div style="width:90px;">
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Währung</label>
+                <select id="poCurrency" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+                    <option value="EUR">EUR</option>
+                    <option value="USD">USD</option>
+                </select>
+            </div>
+        </div>
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Account</label>
+        <select id="poAccount" style="width:100%; padding:10px 12px; margin-bottom:18px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);"></select>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn btn-ghost" onclick="_voModal('veloraPlaceModal',false)">Abbrechen</button>
+            <button class="btn" style="background:var(--accent-bg); color:var(--accent); border:1px solid var(--accent); font-weight:700;" onclick="submitPlaceOrder()">Order platzieren</button>
+        </div>
+    </div>
+</div>
+
+<div id="veloraFillModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;" onclick="if(event.target===this)_voModal('veloraFillModal',false)">
+    <div style="background:var(--bg-primary); border:1px solid var(--border); border-radius:14px; padding:22px; width:min(400px,92vw);">
+        <div id="foTitle" style="font-size:16px; font-weight:700; margin-bottom:16px;">Order ausführen</div>
+        <input type="hidden" id="foId">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Tatsächlicher Ausführungspreis (<span id="foCcyLabel">EUR</span>)</label>
+        <input id="foPrice" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Ausführungsdatum</label>
+        <input id="foDate" type="date" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Account</label>
+        <select id="foAccount" style="width:100%; padding:10px 12px; margin-bottom:18px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);"></select>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn btn-ghost" onclick="_voModal('veloraFillModal',false)">Abbrechen</button>
+            <button class="btn" style="background:var(--accent-bg); color:var(--accent); border:1px solid var(--accent); font-weight:700;" onclick="submitFillOrder()">Ins Depot buchen</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ─── Order-Management (geteilte Komponente) ──────────────────
+window.VELORA_ORDER_ACCOUNTS = {{ accounts|tojson }};
+
+function _voAccountOptions(sel, selected) {
+    sel.innerHTML = '';
+    (window.VELORA_ORDER_ACCOUNTS || []).forEach(a => {
+        const o = document.createElement('option');
+        o.value = a; o.textContent = a;
+        if (a === selected) o.selected = true;
+        sel.appendChild(o);
+    });
+}
+function _voModal(id, show) { document.getElementById(id).style.display = show ? 'flex' : 'none'; }
+
+function _voPost(url, body, okMsg) {
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+    .then(({ ok, data }) => {
+        if (ok) {
+            if (window.toast && window.toast.success) window.toast.success(data.message || okMsg);
+            setTimeout(() => location.reload(), 500);
+        } else {
+            const e = data.error || 'Unbekannt';
+            if (window.toast && window.toast.error) window.toast.error('Fehler: ' + e); else alert('Fehler: ' + e);
+        }
+    })
+    .catch(() => { if (window.toast && window.toast.error) window.toast.error('Verbindungsfehler'); else alert('Verbindungsfehler'); });
+}
+
+// Manuell: leeres Modal, Ticker frei eingebbar
+function manualOrder() {
+    document.getElementById('poTitle').textContent = 'Order platzieren';
+    const t = document.getElementById('poTicker');
+    t.value = ''; t.readOnly = false;
+    document.getElementById('poAction').value = 'buy';
+    document.getElementById('poShares').value = '';
+    document.getElementById('poLimit').value = '';
+    document.getElementById('poCurrency').value = 'EUR';
+    _voAccountOptions(document.getElementById('poAccount'), (window.VELORA_ORDER_ACCOUNTS || [])[0]);
+    _voModal('veloraPlaceModal', true);
+}
+
+// Aus Empfehlung: vorbefüllt, Ticker fixiert
+function placeOrder(ticker, action, shares, limit, currency) {
+    document.getElementById('poTitle').textContent = (action === 'sell' ? 'Verkauf' : 'Kauf') + '-Order platzieren: ' + ticker;
+    const t = document.getElementById('poTicker');
+    t.value = ticker; t.readOnly = true;
+    document.getElementById('poAction').value = action;
+    document.getElementById('poShares').value = (shares != null ? shares : '');
+    document.getElementById('poLimit').value = (limit != null ? limit : '');
+    document.getElementById('poCurrency').value = (currency || 'EUR');
+    _voAccountOptions(document.getElementById('poAccount'), (window.VELORA_ORDER_ACCOUNTS || [])[0]);
+    _voModal('veloraPlaceModal', true);
+}
+
+function submitPlaceOrder() {
+    const ticker = (document.getElementById('poTicker').value || '').trim().toUpperCase();
+    if (!ticker) { alert('Ticker fehlt'); return; }
+    const shares = parseFloat(document.getElementById('poShares').value);
+    if (!(shares > 0)) { alert('Stückzahl muss > 0 sein'); return; }
+    const limitRaw = document.getElementById('poLimit').value;
+    _voPost('/api/orders/place', {
+        ticker: ticker,
+        action: document.getElementById('poAction').value,
+        shares: shares,
+        limit_price: limitRaw ? parseFloat(limitRaw) : null,
+        account: document.getElementById('poAccount').value,
+        currency: document.getElementById('poCurrency').value,
+        rec_ticker: ticker,
+    }, 'Order platziert');
+}
+
+// Order ausführen → schreibt jetzt erst die Position
+function openFillModal(id, ticker, action, shares, limit, currency, account) {
+    document.getElementById('foId').value = id;
+    document.getElementById('foTitle').textContent = 'Order ausführen: ' + ticker + ' (' + shares + ' Stk ' + (action === 'sell' ? 'Verkauf' : 'Kauf') + ')';
+    document.getElementById('foPrice').value = (limit != null ? limit : '');
+    document.getElementById('foCcyLabel').textContent = currency || 'EUR';
+    document.getElementById('foDate').value = new Date().toISOString().slice(0, 10);
+    _voAccountOptions(document.getElementById('foAccount'), account || (window.VELORA_ORDER_ACCOUNTS || [])[0]);
+    _voModal('veloraFillModal', true);
+}
+function submitFillOrder() {
+    const price = parseFloat(document.getElementById('foPrice').value);
+    if (!(price > 0)) { alert('Fill-Preis muss > 0 sein'); return; }
+    _voPost('/api/orders/fill', {
+        id: document.getElementById('foId').value,
+        fill_price: price,
+        fill_date: document.getElementById('foDate').value,
+        account: document.getElementById('foAccount').value,
+    }, 'Order ausgeführt');
+}
+
+function cancelOrder(id, ticker) {
+    if (!confirm('Order für ' + ticker + ' stornieren? (Depot bleibt unberührt)')) return;
+    _voPost('/api/orders/cancel', { id: id }, 'Order storniert');
+}
+
+// Sofort (Markt) ausgeführt → direkt buchen, fragt echten Fill-Preis
+function bookNow(action, ticker, shares, defaultPrice, currency) {
+    if (!(shares > 0)) { alert('Keine Stückzahl in der Empfehlung — bitte „Order platziert" nutzen'); return; }
+    const p = prompt('Tatsächlicher Ausführungspreis pro Stück (' + (currency || 'EUR') + '):', defaultPrice != null ? defaultPrice : '');
+    if (p === null) return;
+    const price = parseFloat(p);
+    if (!(price > 0)) { alert('Ungültiger Preis'); return; }
+    const accs = window.VELORA_ORDER_ACCOUNTS || [];
+    let account = accs[0];
+    if (accs.length > 1) {
+        account = prompt('Account (' + accs.join(' / ') + '):', accs[0]);
+        if (account === null) return;
+    }
+    _voPost('/api/trade', { action: action, ticker: ticker, shares: shares, price: price, account: account, trade_currency: currency || 'EUR' }, ticker + ' gebucht');
+}
+</script>

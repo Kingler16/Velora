@@ -20,11 +20,17 @@
             <span class="spinner"></span>
             <span class="refresh-label">{{ t.dashboard.refresh }}</span>
         </button>
+        <button class="btn btn-ghost" onclick="manualOrder()" title="Limit-/Market-Order erfassen — Depot bleibt bis zur Ausführung unberührt">
+            &#128203; Order platzieren
+        </button>
         <button class="btn btn-accent" onclick="TradeModal.open()">
             {{ t.portfolio.log_trade_btn }}
         </button>
     </div>
 </div>
+
+{# Offene Orders + Order-Modals + Order-JS (geteilt mit Empfehlungs-Seite) #}
+{% include "components/orders_panel.html" %}
 
 <div id="tradeModal" class="modal-overlay" onclick="if(event.target===this)TradeModal.close()">
     <div class="card glass-strong glass-elevated" style="width: 440px; max-width: 95vw; padding: 24px;">

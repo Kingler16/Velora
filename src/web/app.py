@@ -310,10 +310,12 @@ async def portfolio_page(request: Request):
     tax_loss = compute_tax_loss_data(portfolio, market_data) if market_data.get("positions") else None
     kest_mode = settings.get("user", {}).get("kest_mode", "per_account")
 
+    from src.analysis.orders import get_open_orders
     return templates.TemplateResponse(request, "portfolio.html", _ctx(request, "portfolio",
         overview=overview, portfolio_raw=portfolio, cache_status=cache_status,
         default_currency=default_currency,
         snapshots=snapshots, benchmarks=benchmarks, tax_loss=tax_loss, kest_mode=kest_mode,
+        open_orders=get_open_orders(), accounts=list(portfolio.get("accounts", {}).keys()),
     ))
 
 
