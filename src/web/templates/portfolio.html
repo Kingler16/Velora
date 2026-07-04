@@ -196,22 +196,33 @@
             </div>
         </summary>
         {% for pos in account_data.positions %}
-        <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--glass-border);">
-            <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--glass-border);">
+            <div style="min-width: 0;">
                 <div style="font-size: 13px; font-weight: 500;">{{ pos.name }}</div>
                 <div style="font-size: 11px; color: var(--text-muted);">
                     <span class="ticker-badge">{{ pos.ticker or '–' }}</span>
                     <span class="tabular-nums">{{ pos.shares|number }}</span> {{ t.portfolio.shares_abbr }}
                 </div>
             </div>
-            <div style="text-align: right;">
-                <div style="font-size: 13px; font-weight: 600;" class="tabular-nums">{{ pos.current_value_eur|eur }}</div>
-                <div style="font-size: 11px;" class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }} tabular-nums">
-                    {{ pos.pnl_eur|eur }} ({{ pos.pnl_pct|pct }})
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="text-align: right;">
+                    <div style="font-size: 13px; font-weight: 600;" class="tabular-nums">{{ pos.current_value_eur|eur }}</div>
+                    <div style="font-size: 11px;" class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }} tabular-nums">
+                        {{ pos.pnl_eur|eur }} ({{ pos.pnl_pct|pct }})
+                    </div>
+                </div>
+                <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                    <button class="btn btn-ghost" title="Bearbeiten" style="padding: 4px 8px; font-size: 13px; line-height: 1;"
+                            onclick="editPos('{{ account_name }}', '{{ pos.ticker }}', {{ pos.shares }}, {{ pos.buy_in }}, '{{ pos.currency }}')">&#9998;</button>
+                    <button class="btn btn-ghost" title="Löschen" style="padding: 4px 8px; font-size: 13px; line-height: 1; color: var(--red);"
+                            onclick="deletePos('{{ account_name }}', '{{ pos.ticker }}')">&#10005;</button>
                 </div>
             </div>
         </div>
         {% endfor %}
+        <div style="padding-top: 10px;">
+            <button class="btn btn-ghost" style="font-size: 12px; padding: 5px 10px;" onclick="addPos('{{ account_name }}')">+ Position erfassen</button>
+        </div>
     </details>
     {% endfor %}
 </div>
@@ -773,5 +784,129 @@ function initPerformanceCharts() {
     tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
     // positions ist initial aktiv (keine Charts) — nichts zu tun beim Load.
 })();
+
+// ─── Portfolio-Editor (Bestandskorrektur, KEIN Cash-Effekt) ──────────────
+const VELORA_ACCOUNTS = {{ overview.accounts_grouped.keys()|list|tojson }};
+
+function _pfAccountOptions(sel, selected) {
+    sel.innerHTML = '';
+    (VELORA_ACCOUNTS || []).forEach(a => {
+        const o = document.createElement('option');
+        o.value = a; o.textContent = a;
+        if (a === selected) o.selected = true;
+        sel.appendChild(o);
+    });
+}
+function _pfModal(id, show) { document.getElementById(id).style.display = show ? 'flex' : 'none'; }
+function _pfPost(url, body, okMsg) {
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+    .then(({ ok, data }) => {
+        if (ok) {
+            if (window.toast && window.toast.success) window.toast.success(data.message || okMsg);
+            setTimeout(() => location.reload(), 500);
+        } else {
+            const e = data.error || 'Unbekannt';
+            if (window.toast && window.toast.error) window.toast.error('Fehler: ' + e); else alert('Fehler: ' + e);
+        }
+    })
+    .catch(() => { if (window.toast && window.toast.error) window.toast.error('Verbindungsfehler'); else alert('Verbindungsfehler'); });
+}
+
+function editPos(account, ticker, shares, buyIn, currency) {
+    document.getElementById('epAccount').value = account;
+    document.getElementById('epTicker').value = ticker;
+    document.getElementById('epTitle').textContent = 'Position bearbeiten: ' + ticker;
+    document.getElementById('epShares').value = shares;
+    document.getElementById('epBuyIn').value = buyIn;
+    document.getElementById('epCurrency').value = currency || 'EUR';
+    _pfAccountOptions(document.getElementById('epNewAccount'), account);
+    _pfModal('veloraEditPosModal', true);
+}
+function submitEditPos() {
+    const account = document.getElementById('epAccount').value;
+    const newAccount = document.getElementById('epNewAccount').value;
+    const body = {
+        account: account,
+        ticker: document.getElementById('epTicker').value,
+        shares: parseFloat(document.getElementById('epShares').value),
+        buy_in: parseFloat(document.getElementById('epBuyIn').value),
+        currency: document.getElementById('epCurrency').value,
+    };
+    if (newAccount && newAccount !== account) body.new_account = newAccount;
+    _pfPost('/api/portfolio/position/edit', body, 'Position aktualisiert');
+}
+
+function deletePos(account, ticker) {
+    if (!confirm('Position ' + ticker + ' in ' + account + ' wirklich löschen?\n(Reine Bestandskorrektur — kein Cash-Effekt)')) return;
+    _pfPost('/api/portfolio/position/delete', { account: account, ticker: ticker }, 'Position gelöscht');
+}
+
+function addPos(account) {
+    document.getElementById('apTicker').value = '';
+    document.getElementById('apName').value = '';
+    document.getElementById('apShares').value = '';
+    document.getElementById('apBuyIn').value = '';
+    document.getElementById('apCurrency').value = 'EUR';
+    _pfAccountOptions(document.getElementById('apAccount'), account);
+    _pfModal('veloraAddPosModal', true);
+}
+function submitAddPos() {
+    const shares = parseFloat(document.getElementById('apShares').value);
+    const buyIn = parseFloat(document.getElementById('apBuyIn').value);
+    if (!(shares > 0) || !(buyIn > 0)) { alert('Stück und Buy-in müssen > 0 sein'); return; }
+    _pfPost('/api/portfolio/position/add', {
+        account: document.getElementById('apAccount').value,
+        ticker: document.getElementById('apTicker').value,
+        name: document.getElementById('apName').value,
+        shares: shares,
+        buy_in: buyIn,
+        currency: document.getElementById('apCurrency').value || 'EUR',
+    }, 'Position erfasst');
+}
 </script>
+
+<!-- ─── Portfolio-Editor-Modals ─── -->
+<div id="veloraEditPosModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;" onclick="if(event.target===this)_pfModal('veloraEditPosModal',false)">
+    <div style="background:var(--bg-primary); border:1px solid var(--border); border-radius:14px; padding:22px; width:min(400px,92vw);">
+        <div id="epTitle" style="font-size:16px; font-weight:700; margin-bottom:4px;">Position bearbeiten</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:16px;">Reine Bestandskorrektur — verändert kein Cash-Konto.</div>
+        <input type="hidden" id="epAccount"><input type="hidden" id="epTicker">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Stück</label>
+        <input id="epShares" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Buy-in pro Stück</label>
+        <input id="epBuyIn" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Währung</label>
+        <input id="epCurrency" type="text" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Account (verschieben)</label>
+        <select id="epNewAccount" style="width:100%; padding:10px 12px; margin-bottom:18px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);"></select>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn btn-ghost" onclick="_pfModal('veloraEditPosModal',false)">Abbrechen</button>
+            <button class="btn" style="background:var(--accent-bg); color:var(--accent); border:1px solid var(--accent); font-weight:700;" onclick="submitEditPos()">Speichern</button>
+        </div>
+    </div>
+</div>
+
+<div id="veloraAddPosModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;" onclick="if(event.target===this)_pfModal('veloraAddPosModal',false)">
+    <div style="background:var(--bg-primary); border:1px solid var(--border); border-radius:14px; padding:22px; width:min(400px,92vw);">
+        <div style="font-size:16px; font-weight:700; margin-bottom:4px;">Position erfassen</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:16px;">Für den Abgleich mit dem Broker — kein Cash-Effekt.</div>
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Ticker (z.B. ASML.AS)</label>
+        <input id="apTicker" type="text" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Name (optional)</label>
+        <input id="apName" type="text" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Stück</label>
+        <input id="apShares" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Buy-in pro Stück</label>
+        <input id="apBuyIn" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Währung</label>
+        <input id="apCurrency" type="text" value="EUR" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Account</label>
+        <select id="apAccount" style="width:100%; padding:10px 12px; margin-bottom:18px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);"></select>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn btn-ghost" onclick="_pfModal('veloraAddPosModal',false)">Abbrechen</button>
+            <button class="btn" style="background:var(--accent-bg); color:var(--accent); border:1px solid var(--accent); font-weight:700;" onclick="submitAddPos()">Erfassen</button>
+        </div>
+    </div>
+</div>
 {% endblock %}

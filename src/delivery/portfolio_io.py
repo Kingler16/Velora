@@ -144,6 +144,132 @@ def add_new_position(ticker: str, shares: float, price_eur: float, account: str,
     return True
 
 
+class _AbortWrite(Exception):
+    """Signalisiert dem Write-Lock, dass NICHT gespeichert werden soll (Validierung fehlgeschlagen)."""
+
+    def __init__(self, error: str):
+        super().__init__(error)
+        self.error = error
+
+
+def _find_position(positions: list[dict], ticker: str) -> dict | None:
+    """Findet eine Position per Ticker (mit/ohne Exchange-Suffix, case-insensitiv)."""
+    t = (ticker or "").upper()
+    for pos in positions:
+        pt = (pos.get("ticker") or "").upper()
+        if pt == t or pt.split(".")[0] == t or t.split(".")[0] == pt:
+            return pos
+    return None
+
+
+def edit_position(account: str, ticker: str, updates: dict) -> dict:
+    """Korrigiert Felder einer bestehenden Position — REINE Korrektur, KEIN Cash-Effekt.
+
+    `updates` darf enthalten: shares, buy_in, buy_in_eur, currency, name, isin, new_account.
+    Cash wird bewusst NICHT angefasst (Korrektur ≠ Trade). Returns {"ok": bool, "error": str}.
+    """
+    from datetime import datetime
+    try:
+        with portfolio_write_lock() as portfolio:
+            accounts = portfolio.get("accounts", {})
+            if account not in accounts:
+                raise _AbortWrite(f"Account '{account}' nicht gefunden")
+            positions = accounts[account].setdefault("positions", [])
+            target = _find_position(positions, ticker)
+            if target is None:
+                raise _AbortWrite(f"Position {ticker} in {account} nicht gefunden")
+
+            new_account = updates.get("new_account")
+            if new_account and new_account != account:
+                if new_account not in accounts:
+                    raise _AbortWrite(f"Zielaccount '{new_account}' nicht gefunden")
+                positions.remove(target)
+                accounts[new_account].setdefault("positions", []).append(target)
+
+            for field in ("name", "isin", "currency"):
+                if updates.get(field) is not None:
+                    target[field] = updates[field]
+            if updates.get("shares") is not None:
+                target["shares"] = float(updates["shares"])
+            if updates.get("buy_in") is not None:
+                bi = float(updates["buy_in"])
+                target["buy_in"] = bi
+                # buy_in_eur nur automatisch mitziehen, wenn Position in EUR notiert.
+                if (target.get("currency") or "EUR").upper() == "EUR":
+                    target["buy_in_eur"] = bi
+            if updates.get("buy_in_eur") is not None:
+                target["buy_in_eur"] = float(updates["buy_in_eur"])
+
+            portfolio["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+    except _AbortWrite as e:
+        return {"ok": False, "error": e.error}
+    logger.info("Position bearbeitet: %s in %s -> %s", ticker, account, updates)
+    return {"ok": True}
+
+
+def delete_position(account: str, ticker: str) -> dict:
+    """Entfernt eine Position (Phantom-Korrektur) — KEIN Cash-Effekt."""
+    from datetime import datetime
+    try:
+        with portfolio_write_lock() as portfolio:
+            accounts = portfolio.get("accounts", {})
+            if account not in accounts:
+                raise _AbortWrite(f"Account '{account}' nicht gefunden")
+            positions = accounts[account].setdefault("positions", [])
+            target = _find_position(positions, ticker)
+            if target is None:
+                raise _AbortWrite(f"Position {ticker} in {account} nicht gefunden")
+            positions.remove(target)
+            portfolio["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+    except _AbortWrite as e:
+        return {"ok": False, "error": e.error}
+    logger.info("Position gelöscht: %s in %s", ticker, account)
+    return {"ok": True}
+
+
+def add_position_correction(account: str, ticker: str, shares: float, buy_in: float,
+                            currency: str = "EUR", name: str = "", isin: str = "",
+                            buy_in_eur: float | None = None) -> dict:
+    """Fügt eine Position manuell hinzu (Bestandskorrektur) — KEIN Cash-Effekt, KEINE yfinance-Prüfung.
+
+    Für den Abgleich mit dem echten Broker-Depot: der Nutzer erfasst, was er bereits besitzt.
+    """
+    from datetime import datetime
+    ticker = (ticker or "").strip().upper()
+    try:
+        shares = float(shares)
+        buy_in = float(buy_in)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "shares und buy_in müssen Zahlen sein"}
+    if not ticker:
+        return {"ok": False, "error": "Ticker fehlt"}
+    if shares <= 0 or buy_in <= 0:
+        return {"ok": False, "error": "shares und buy_in müssen > 0 sein"}
+    currency = (currency or "EUR").upper()
+    try:
+        with portfolio_write_lock() as portfolio:
+            accounts = portfolio.get("accounts", {})
+            if account not in accounts:
+                raise _AbortWrite(f"Account '{account}' nicht gefunden")
+            positions = accounts[account].setdefault("positions", [])
+            if _find_position(positions, ticker) is not None:
+                raise _AbortWrite(f"Position {ticker} existiert bereits in {account} — bitte bearbeiten statt neu anlegen")
+            positions.append({
+                "name": name or ticker,
+                "isin": isin or "",
+                "ticker": ticker,
+                "shares": shares,
+                "buy_in": buy_in,
+                "buy_in_eur": float(buy_in_eur) if buy_in_eur is not None else (buy_in if currency == "EUR" else buy_in),
+                "currency": currency,
+            })
+            portfolio["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+    except _AbortWrite as e:
+        return {"ok": False, "error": e.error}
+    logger.info("Position manuell erfasst: %s shares=%s @ %s %s in %s", ticker, shares, buy_in, currency, account)
+    return {"ok": True}
+
+
 @contextlib.contextmanager
 def portfolio_write_lock():
     """Context-Manager: Lock, Load, (Mutate), Backup, Atomic-Save, Unlock.

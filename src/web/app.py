@@ -370,6 +370,7 @@ def _resolve_ticker_currency(ticker: str, md: dict) -> str:
 
 @app.get("/recommendations", response_class=HTMLResponse)
 async def recommendations_page(request: Request):
+    from src.analysis.orders import get_open_orders
     md = get_market_data()
     eur_usd = safe_eur_usd(md)
     recommendations = get_recommendations()
@@ -377,8 +378,10 @@ async def recommendations_page(request: Request):
     for rec in recommendations:
         if isinstance(rec, dict):
             rec["_ccy"] = _resolve_ticker_currency(rec.get("ticker", ""), md)
+    accounts = list(load_portfolio().get("accounts", {}).keys())
     return templates.TemplateResponse(request, "recommendations.html", _ctx(request, "recommendations",
         recommendations=recommendations, notes=get_notes(), eur_usd=eur_usd,
+        open_orders=get_open_orders(), accounts=accounts,
     ))
 
 
@@ -652,100 +655,160 @@ async def api_cache_status():
 
 @app.post("/api/trade")
 async def api_log_trade(request: Request):
-    """Loggt einen Kauf oder Verkauf."""
-    import json as _json
+    """Loggt einen sofort ausgeführten Kauf/Verkauf (schreibt direkt ins Depot).
+
+    Für Limit-Orders, die erst platziert und später ausgeführt werden, siehe
+    /api/orders/place + /api/orders/fill.
+    """
     try:
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "Ungültiger JSON-Body"}, status_code=400)
 
-    action = body.get("action")
-    ticker = body.get("ticker", "").strip().upper()
-    account = body.get("account", "")
-    trade_currency = body.get("trade_currency", "EUR")
+    from src.delivery.trade_exec import book_trade
+    result = book_trade(
+        body.get("action"),
+        body.get("ticker", ""),
+        body.get("account", ""),
+        body.get("shares", 0),
+        body.get("price", 0),
+        trade_currency=body.get("trade_currency", "EUR"),
+    )
+    if result.get("ok"):
+        return JSONResponse({"status": "ok", "message": result["message"]})
+    return JSONResponse({"error": result.get("error", "Trade fehlgeschlagen")},
+                        status_code=result.get("status_code", 400))
 
+
+# ─── Order Management (platzierte Limit-Orders, noch nicht im Depot) ──────────
+
+@app.get("/api/orders")
+async def api_orders():
+    """Alle offenen (platzierten, noch nicht ausgeführten) Orders."""
+    from src.analysis.orders import get_open_orders
+    return JSONResponse(get_open_orders())
+
+
+@app.post("/api/orders/place")
+async def api_place_order(request: Request):
+    """Platziert eine Order — landet in der Order-Liste, verändert das Depot NICHT."""
     try:
-        shares = float(body.get("shares", 0))
-        price = float(body.get("price", 0))
-    except (ValueError, TypeError):
-        return JSONResponse({"error": "shares und price müssen Zahlen sein"}, status_code=400)
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ungültiger JSON-Body"}, status_code=400)
+    from src.analysis.orders import place_order
+    result = place_order(
+        body.get("ticker", ""),
+        body.get("action", ""),
+        body.get("shares"),
+        body.get("limit_price"),
+        body.get("account", ""),
+        currency=body.get("currency", "EUR"),
+        rec_ticker=body.get("rec_ticker"),
+        note=body.get("note"),
+    )
+    if result.get("ok"):
+        return JSONResponse({"status": "ok", "message": result["message"]})
+    return JSONResponse({"error": result.get("error", "Order fehlgeschlagen")},
+                        status_code=result.get("status_code", 400))
 
-    if action not in ("buy", "sell"):
-        return JSONResponse({"error": "action muss 'buy' oder 'sell' sein"}, status_code=400)
-    if not ticker:
-        return JSONResponse({"error": "Ticker fehlt"}, status_code=400)
-    if shares <= 0 or price <= 0:
-        return JSONResponse({"error": "shares und price müssen > 0 sein"}, status_code=400)
 
-    # USD → EUR umrechnen für buy_in_eur und Cash-Tracking.
-    # Trade-Pfad: bei fehlendem/unplausiblem EUR/USD-Kurs den USD-Trade ABLEHNEN,
-    # statt einen falschen, steuerrelevanten Buy-In 1:1 als EUR zu verbuchen.
-    price_eur = price
-    md = get_market_data()
-    if trade_currency == "USD":
-        eur_usd = get_eur_usd(md)
-        if eur_usd is None:
-            return JSONResponse(
-                {"error": "EUR/USD-Kurs nicht verfügbar — USD-Trade abgelehnt, bitte Daten aktualisieren"},
-                status_code=400,
-            )
-        price_eur = price / eur_usd
+@app.post("/api/orders/fill")
+async def api_fill_order(request: Request):
+    """Führt eine offene Order aus → schreibt jetzt erst die Position ins Depot."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ungültiger JSON-Body"}, status_code=400)
+    from src.analysis.orders import fill_order
+    result = fill_order(
+        body.get("id", ""),
+        fill_price=body.get("fill_price"),
+        fill_date=body.get("fill_date"),
+        account=body.get("account"),
+    )
+    if result.get("ok"):
+        return JSONResponse({"status": "ok", "message": result.get("message", "Order ausgeführt")})
+    return JSONResponse({"error": result.get("error", "Ausführung fehlgeschlagen")},
+                        status_code=result.get("status_code", 400))
 
-    from src.delivery.telegram import update_portfolio_position, close_recommendation_on_trade
 
-    portfolio = load_portfolio()
-    if account not in portfolio.get("accounts", {}):
-        return JSONResponse({"error": f"Account '{account}' nicht gefunden"}, status_code=404)
+@app.post("/api/orders/cancel")
+async def api_cancel_order(request: Request):
+    """Storniert eine offene Order. Depot unberührt."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ungültiger JSON-Body"}, status_code=400)
+    from src.analysis.orders import cancel_order
+    result = cancel_order(body.get("id", ""))
+    if result.get("ok"):
+        return JSONResponse({"status": "ok", "message": result.get("message", "Order storniert")})
+    return JSONResponse({"error": result.get("error", "Storno fehlgeschlagen")},
+                        status_code=result.get("status_code", 400))
 
-    from src.delivery.push_sender import send_push_safe
 
-    success = update_portfolio_position(action, ticker, shares, price_eur)
-    if success:
-        close_recommendation_on_trade(ticker, action)
-        currency_sym = '€' if trade_currency == 'EUR' else '$'
-        action_label = 'Kauf' if action == 'buy' else 'Verkauf'
-        send_push_safe(
-            category="trade_confirmed",
-            title=f"{action_label}: {ticker}",
-            body=f"{shares} × @ {price}{currency_sym} auf {account}",
-            url="/portfolio",
-            tag=f"trade-{ticker}",
-            data={"ticker": ticker, "action": action, "shares": shares, "price": price},
-        )
-        return JSONResponse({"status": "ok", "message": f"{shares}x {ticker} {'gekauft' if action == 'buy' else 'verkauft'} @ {price}{currency_sym}"})
-    else:
-        # Position nicht gefunden — bei Kauf neue Position anlegen (mit Lock + Cash-Update)
-        if action == "buy":
-            from src.delivery.portfolio_io import add_new_position
-            from src.data.market import fetch_price_data
-            # Ticker gegen yfinance validieren — None = ungültiger Ticker (Tippfehler).
-            price_data = fetch_price_data(ticker)
-            if price_data is None:
-                return JSONResponse(
-                    {"error": f"Ticker '{ticker}' nicht gefunden — Tippfehler? Keine Position angelegt"},
-                    status_code=404,
-                )
-            # Echte Quote-Währung aus dem Lookup übernehmen statt aus dem Ticker zu raten.
-            pos_currency = price_data.get("currency") or _ticker_currency(ticker)
-            created = add_new_position(ticker, shares, price_eur, account, trade_currency=pos_currency)
-            if created:
-                close_recommendation_on_trade(ticker, action)
-                try:
-                    from src.web.services.portfolio_service import update_region_on_trade
-                    update_region_on_trade("buy", ticker)
-                except Exception:
-                    pass
-                send_push_safe(
-                    category="trade_confirmed",
-                    title=f"Neue Position: {ticker}",
-                    body=f"{shares} × @ {price} in {account}",
-                    url="/portfolio",
-                    tag=f"trade-{ticker}",
-                    data={"ticker": ticker, "action": action, "shares": shares, "price": price, "new_position": True},
-                )
-                return JSONResponse({"status": "ok", "message": f"Neue Position: {shares}x {ticker} @ {price} in {account}"})
+# ─── Portfolio-Editor (Bestandskorrektur, KEIN Cash-Effekt) ──────────────────
 
-        return JSONResponse({"error": f"Ticker {ticker} nicht gefunden in {account}"}, status_code=404)
+@app.post("/api/portfolio/position/edit")
+async def api_edit_position(request: Request):
+    """Korrigiert Felder einer Position (Stück, Buy-in, Account, Währung)."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ungültiger JSON-Body"}, status_code=400)
+    from src.delivery.portfolio_io import edit_position
+    account = body.get("account", "")
+    ticker = body.get("ticker", "")
+    if not account or not ticker:
+        return JSONResponse({"error": "account und ticker erforderlich"}, status_code=400)
+    updates = {k: body[k] for k in ("shares", "buy_in", "buy_in_eur", "currency", "name", "isin", "new_account")
+               if k in body and body[k] is not None and body[k] != ""}
+    result = edit_position(account, ticker, updates)
+    if result.get("ok"):
+        return JSONResponse({"status": "ok", "message": f"{ticker} aktualisiert"})
+    return JSONResponse({"error": result.get("error", "Bearbeiten fehlgeschlagen")}, status_code=400)
+
+
+@app.post("/api/portfolio/position/delete")
+async def api_delete_position(request: Request):
+    """Löscht eine Position (Phantom-Korrektur)."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ungültiger JSON-Body"}, status_code=400)
+    from src.delivery.portfolio_io import delete_position
+    account = body.get("account", "")
+    ticker = body.get("ticker", "")
+    if not account or not ticker:
+        return JSONResponse({"error": "account und ticker erforderlich"}, status_code=400)
+    result = delete_position(account, ticker)
+    if result.get("ok"):
+        return JSONResponse({"status": "ok", "message": f"{ticker} gelöscht"})
+    return JSONResponse({"error": result.get("error", "Löschen fehlgeschlagen")}, status_code=400)
+
+
+@app.post("/api/portfolio/position/add")
+async def api_add_position(request: Request):
+    """Erfasst eine bereits gehaltene Position manuell (Bestandskorrektur, kein Cash-Effekt)."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Ungültiger JSON-Body"}, status_code=400)
+    from src.delivery.portfolio_io import add_position_correction
+    result = add_position_correction(
+        body.get("account", ""),
+        body.get("ticker", ""),
+        body.get("shares", 0),
+        body.get("buy_in", 0),
+        currency=body.get("currency", "EUR"),
+        name=body.get("name", ""),
+        isin=body.get("isin", ""),
+        buy_in_eur=body.get("buy_in_eur"),
+    )
+    if result.get("ok"):
+        return JSONResponse({"status": "ok", "message": f"{body.get('ticker','').upper()} erfasst"})
+    return JSONResponse({"error": result.get("error", "Erfassen fehlgeschlagen")}, status_code=400)
 
 
 @app.get("/api/accounts")
