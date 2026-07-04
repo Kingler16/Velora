@@ -194,11 +194,15 @@ def edit_position(account: str, ticker: str, updates: dict) -> dict:
             if updates.get("buy_in") is not None:
                 bi = float(updates["buy_in"])
                 target["buy_in"] = bi
-                # buy_in_eur nur automatisch mitziehen, wenn Position in EUR notiert.
+                # buy_in_eur nur automatisch mitziehen, wenn der Buy-in in EUR erfasst ist.
                 if (target.get("currency") or "EUR").upper() == "EUR":
                     target["buy_in_eur"] = bi
             if updates.get("buy_in_eur") is not None:
-                target["buy_in_eur"] = float(updates["buy_in_eur"])
+                bie = float(updates["buy_in_eur"])
+                target["buy_in_eur"] = bie
+                # Umgekehrt genauso: bei EUR-Buy-in beschreibt buy_in denselben Wert.
+                if (target.get("currency") or "EUR").upper() == "EUR":
+                    target["buy_in"] = bie
 
             portfolio["last_updated"] = datetime.now().strftime("%Y-%m-%d")
     except _AbortWrite as e:

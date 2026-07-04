@@ -51,3 +51,17 @@ def safe_eur_usd(market_data: dict | None, default: float = 1.0) -> float:
     """
     val = get_eur_usd(market_data)
     return val if val is not None else default
+
+
+def resolve_quote_currency(price_data: dict | None, pos_currency: str | None) -> str:
+    """Notierungswährung des LIVE-Kurses — Marktdaten (yfinance) haben Vorrang.
+
+    Das currency-Feld der Portfolio-Position beschreibt, in welcher Währung der
+    Buy-in erfasst wurde — NICHT zwingend, in welcher Währung der Ticker notiert.
+    Wer den Live-Kurs umrechnet, muss die echte Quote-Währung nehmen, sonst wird
+    z.B. ein USD-Kurs als EUR interpretiert, sobald ein User die Position auf
+    EUR gestellt hat (weil er seinen Buy-in in EUR eingibt) → Rendite um den
+    FX-Kurs falsch.
+    """
+    ccy = (price_data or {}).get("currency") or pos_currency or "EUR"
+    return str(ccy).upper()

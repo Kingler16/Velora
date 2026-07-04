@@ -222,7 +222,11 @@ def compute_portfolio_overview(portfolio: dict, market_data: dict) -> dict:
 
             has_live_price = current_price is not None
             if has_live_price:
-                current_price_eur = current_price if currency == "EUR" else current_price / eur_usd
+                # Live-Kurs in der ECHTEN Quote-Währung (yfinance) umrechnen — nicht
+                # nach pos.currency, das nur die Buy-in-Währung beschreibt.
+                from src.data.fx import resolve_quote_currency
+                quote_ccy = resolve_quote_currency(price_data, currency)
+                current_price_eur = current_price if quote_ccy == "EUR" else current_price / eur_usd
                 current_value_eur = shares * current_price_eur
                 pnl_eur = current_value_eur - invested_eur
                 pnl_pct = (pnl_eur / invested_eur * 100) if invested_eur else 0

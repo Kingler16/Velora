@@ -250,19 +250,24 @@ def build_portfolio_summary(portfolio: dict, market_data: dict) -> str:
             invested_eur = shares * buy_in_eur
 
             current_price = None
+            price_data = {}
             if ticker and ticker in market_data.get("positions", {}):
-                current_price = market_data["positions"][ticker].get("price", {}).get("current_price")
+                price_data = market_data["positions"][ticker].get("price", {})
+                current_price = price_data.get("current_price")
 
             if current_price:
-                # Aktuellen Wert in EUR umrechnen
-                current_price_eur = current_price if currency == "EUR" else current_price / eur_usd
+                # Aktuellen Wert in EUR umrechnen — Quote-Währung aus Marktdaten,
+                # nicht aus pos.currency (das ist nur die Buy-in-Währung).
+                from src.data.fx import resolve_quote_currency
+                quote_ccy = resolve_quote_currency(price_data, currency)
+                current_price_eur = current_price if quote_ccy == "EUR" else current_price / eur_usd
                 current_value_eur = shares * current_price_eur
                 pnl_eur = current_value_eur - invested_eur
                 pnl_pct = (pnl_eur / invested_eur) * 100 if invested_eur else 0
                 total_value_eur += current_value_eur
                 total_invested_eur += invested_eur
 
-                currency_note = f" [USD→EUR, Kurs in {currency}: {current_price:.2f}]" if currency == "USD" else ""
+                currency_note = f" [{quote_ccy}→EUR, Kurs in {quote_ccy}: {current_price:.2f}]" if quote_ccy != "EUR" else ""
                 lines.append(
                     f"{pos['name']} ({ticker}): {shares:.2f} Stk @ {current_price_eur:.2f}€{currency_note} "
                     f"= {current_value_eur:.2f}€ | P/L: {pnl_eur:+.2f}€ ({pnl_pct:+.1f}%) | Buy-In: {buy_in_eur:.2f}€"

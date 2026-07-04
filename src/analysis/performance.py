@@ -87,7 +87,8 @@ def compute_tax_loss_data(portfolio: dict, market_data: dict, tax_rate: float = 
             shares = pos["shares"]
             buy_in = pos["buy_in"]
             currency = pos.get("currency", "EUR")
-            current_price = market_data["positions"][ticker].get("price", {}).get("current_price")
+            price_data = market_data["positions"][ticker].get("price", {})
+            current_price = price_data.get("current_price")
 
             if not current_price:
                 continue
@@ -100,7 +101,9 @@ def compute_tax_loss_data(portfolio: dict, market_data: dict, tax_rate: float = 
             else:
                 buy_in_eur = buy_in
 
-            if currency == "USD":
+            # Live-Kurs: echte Quote-Währung (Marktdaten), nicht pos.currency
+            from src.data.fx import resolve_quote_currency
+            if resolve_quote_currency(price_data, currency) != "EUR":
                 current_eur = current_price / eur_usd
             else:
                 current_eur = current_price

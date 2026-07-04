@@ -213,7 +213,7 @@
                 </div>
                 <div style="display: flex; gap: 4px; flex-shrink: 0;">
                     <button class="btn btn-ghost" title="Bearbeiten" style="padding: 4px 8px; font-size: 13px; line-height: 1;"
-                            onclick="editPos('{{ account_name }}', '{{ pos.ticker }}', {{ pos.shares }}, {{ pos.buy_in }}, '{{ pos.currency }}')">&#9998;</button>
+                            onclick="editPos('{{ account_name }}', '{{ pos.ticker }}', {{ pos.shares }}, {{ pos.buy_in_eur }}, '{{ pos.currency }}')">&#9998;</button>
                     <button class="btn btn-ghost" title="Löschen" style="padding: 4px 8px; font-size: 13px; line-height: 1; color: var(--red);"
                             onclick="deletePos('{{ account_name }}', '{{ pos.ticker }}')">&#10005;</button>
                 </div>
@@ -827,25 +827,30 @@ function _pfPost(url, body, okMsg) {
     .catch(() => { if (window.toast && window.toast.error) window.toast.error('Verbindungsfehler'); else alert('Verbindungsfehler'); });
 }
 
-function editPos(account, ticker, shares, buyIn, currency) {
+function editPos(account, ticker, shares, buyInEur, currency) {
     document.getElementById('epAccount').value = account;
     document.getElementById('epTicker').value = ticker;
     document.getElementById('epTitle').textContent = 'Position bearbeiten: ' + ticker;
     document.getElementById('epShares').value = shares;
-    document.getElementById('epBuyIn').value = buyIn;
-    document.getElementById('epCurrency').value = currency || 'EUR';
+    document.getElementById('epBuyIn').value = buyInEur;
+    // Notierungswährung nur als Info — die Rendite rechnet gegen den EUR-Buy-in,
+    // der Live-Kurs wird automatisch aus der echten Quote-Währung umgerechnet.
+    document.getElementById('epCcyNote').textContent = (currency && currency !== 'EUR')
+        ? 'Ticker notiert in ' + currency + ' — Umrechnung passiert automatisch.'
+        : '';
     _pfAccountOptions(document.getElementById('epNewAccount'), account);
     _pfModal('veloraEditPosModal', true);
 }
 function submitEditPos() {
     const account = document.getElementById('epAccount').value;
     const newAccount = document.getElementById('epNewAccount').value;
+    const buyInEur = parseFloat(document.getElementById('epBuyIn').value);
+    if (!(buyInEur > 0)) { alert('Buy-in (EUR) muss > 0 sein'); return; }
     const body = {
         account: account,
         ticker: document.getElementById('epTicker').value,
         shares: parseFloat(document.getElementById('epShares').value),
-        buy_in: parseFloat(document.getElementById('epBuyIn').value),
-        currency: document.getElementById('epCurrency').value,
+        buy_in_eur: buyInEur,
     };
     if (newAccount && newAccount !== account) body.new_account = newAccount;
     _pfPost('/api/portfolio/position/edit', body, 'Position aktualisiert');
@@ -861,7 +866,6 @@ function addPos(account) {
     document.getElementById('apName').value = '';
     document.getElementById('apShares').value = '';
     document.getElementById('apBuyIn').value = '';
-    document.getElementById('apCurrency').value = 'EUR';
     _pfAccountOptions(document.getElementById('apAccount'), account);
     _pfModal('veloraAddPosModal', true);
 }
@@ -869,13 +873,15 @@ function submitAddPos() {
     const shares = parseFloat(document.getElementById('apShares').value);
     const buyIn = parseFloat(document.getElementById('apBuyIn').value);
     if (!(shares > 0) || !(buyIn > 0)) { alert('Stück und Buy-in müssen > 0 sein'); return; }
+    // Buy-in immer in EUR — currency beschreibt die Währung des Buy-in-Felds,
+    // die Live-Kurs-Umrechnung läuft über die echte Quote-Währung aus den Marktdaten.
     _pfPost('/api/portfolio/position/add', {
         account: document.getElementById('apAccount').value,
         ticker: document.getElementById('apTicker').value,
         name: document.getElementById('apName').value,
         shares: shares,
         buy_in: buyIn,
-        currency: document.getElementById('apCurrency').value || 'EUR',
+        currency: 'EUR',
     }, 'Position erfasst');
 }
 
@@ -947,10 +953,9 @@ function deleteBankFromBtn(btn) {
         <input type="hidden" id="epAccount"><input type="hidden" id="epTicker">
         <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Stück</label>
         <input id="epShares" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
-        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Buy-in pro Stück</label>
-        <input id="epBuyIn" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
-        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Währung</label>
-        <input id="epCurrency" type="text" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Buy-in pro Stück (EUR)</label>
+        <input id="epBuyIn" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:4px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <div id="epCcyNote" style="font-size:11px; color:var(--text-muted); margin-bottom:12px;"></div>
         <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Account (verschieben)</label>
         <select id="epNewAccount" style="width:100%; padding:10px 12px; margin-bottom:18px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);"></select>
         <div style="display:flex; gap:10px; justify-content:flex-end;">
@@ -970,10 +975,9 @@ function deleteBankFromBtn(btn) {
         <input id="apName" type="text" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
         <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Stück</label>
         <input id="apShares" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
-        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Buy-in pro Stück</label>
-        <input id="apBuyIn" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
-        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Währung</label>
-        <input id="apCurrency" type="text" value="EUR" style="width:100%; padding:10px 12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Buy-in pro Stück (EUR)</label>
+        <input id="apBuyIn" type="number" step="any" style="width:100%; padding:10px 12px; margin-bottom:4px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);">
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">Immer in EUR — bei USD-Titeln rechnet Velora den Live-Kurs automatisch um.</div>
         <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">Account</label>
         <select id="apAccount" style="width:100%; padding:10px 12px; margin-bottom:18px; border-radius:8px; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-primary);"></select>
         <div style="display:flex; gap:10px; justify-content:flex-end;">
