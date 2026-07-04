@@ -133,6 +133,9 @@ async def run_briefing():
         from src.analysis.mandate import load_mandate, compute_strategy_drift
         drift_str = format_strategy_drift(compute_strategy_drift(overview, load_mandate()))
         drift_section = f"\n=== STRATEGIE-DRIFT (Soll vs. Ist deines Mandats) ===\n\n{drift_str}\n" if drift_str else ""
+        from src.analysis.factors import compute_factor_data, format_factor_data
+        factor_str = format_factor_data(compute_factor_data(market_data, overview))
+        factor_section = f"\n=== FAKTOR-PROFIL (Style-Exposure der Einzelaktien, regelbasiert) ===\n\n{factor_str}\n" if factor_str else ""
         from src.data.holdings import compute_lookthrough
         lookthrough_str = format_lookthrough(compute_lookthrough(portfolio, market_data))
         lookthrough_section = f"\n=== ECHTE EXPOSURE (Fonds/Anleihen durchgerechnet) ===\n\n{lookthrough_str}\n" if lookthrough_str else ""
@@ -160,7 +163,7 @@ async def run_briefing():
 === KORRELATION & KLUMPENRISIKO ===
 
 {format_correlation(correlation)}
-{drift_section}{lookthrough_section}
+{factor_section}{drift_section}{lookthrough_section}
 === FINANZKALENDER (Börsen, Earnings, Makro-Events) ===
 
 {calendar_str}
