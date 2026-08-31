@@ -40,11 +40,32 @@ _EUR_ISIN_PREFIXES = ("AT0", "DE0", "FR0", "NL0", "IE0", "ES0", "IT0", "BE0", "F
 
 # Keywords, die in normaler Analyse-Prosa vorkommen und deshalb NUR gegen
 # Ticker/Name geprüft werden — nie gegen das Reasoning:
-#   "Risk/Reward 2x", "Stop bei 2x ATR", "operating leverage", "Bruttomargin",
-#   "Öl-Futures signalisieren…", "eine Option wäre…"
+#   "operating leverage", "Margin-Expansion", "Öl-Futures signalisieren…",
+#   "eine Option wäre…", "Turbo für das Wachstum"
 # Eindeutige Hebel-Begriffe (hebel, cfd, optionsschein, knock-out …) bleiben
 # gegen den ganzen Text aktiv, damit "Turbo-Schein auf NVDA" weiter blockt.
-_AMBIGUOUS_INSTRUMENT_KW = {"2x", "3x", "option", "margin", "turbo", "futures", "leverage"}
+_AMBIGUOUS_INSTRUMENT_KW = {"option", "margin", "turbo", "futures", "leverage"}
+
+# Hebel-Faktoren ("2x", "3x") sind der Sonderfall: in Analyse-Prosa alltäglich
+# ("Risk/Reward 2x", "Stop bei 2x ATR" — was der Briefing-Prompt selbst verlangt),
+# im Produktnamen aber ein echtes Ausschlusskriterium. Im Reasoning zählen sie
+# deshalb nur, wenn ein Hebel-Kontextwort daneben steht: "3x leverage long
+# nasdaq etp" blockt, "Risk/Reward 2x bei Stop 340" nicht.
+_LEVERAGE_FACTOR_KW = {"2x", "3x", "4x", "5x"}
+_LEVERAGE_CONTEXT = r"(leverage[dn]?|gehebelt|hebel|etp|etn|etf|zertifikat|knock|turbo|daily|faktor)"
+
+
+def _leverage_factor_hit(kw: str, instrument_text: str, full_text: str) -> bool:
+    """Hebel-Faktor ('2x'): im Ticker/Namen immer ein Treffer, im Reasoning nur
+    mit Hebel-Kontextwort im Umkreis von ~40 Zeichen."""
+    if _kw_hit(kw, instrument_text):
+        return True
+    esc = re.escape(kw.lower())
+    near = (
+        rf"(?<!\w){esc}(?!\w).{{0,40}}?{_LEVERAGE_CONTEXT}"
+        rf"|{_LEVERAGE_CONTEXT}.{{0,40}}?(?<!\w){esc}(?!\w)"
+    )
+    return re.search(near, full_text.lower(), re.DOTALL) is not None
 
 
 def _kw_hit(kw: str, text: str) -> bool:
@@ -310,10 +331,15 @@ def validate_against_mandate(rec: dict, mandate: dict | None, overview: dict | N
 
         elif t == "forbidden_instrument":
             for kw in r.get("match", []):
-                # Mehrdeutige Keywords nur gegen Ticker/Name prüfen, eindeutige
-                # Hebel-Begriffe weiter gegen den ganzen Text (siehe _AMBIGUOUS_KW).
-                hay = instrument_haystack if kw.lower() in _AMBIGUOUS_INSTRUMENT_KW else haystack
-                if _kw_hit(kw, hay):
+                k = kw.lower()
+                if k in _LEVERAGE_FACTOR_KW:
+                    hit = _leverage_factor_hit(k, instrument_haystack, haystack)
+                else:
+                    # Mehrdeutige Keywords nur gegen Ticker/Name, eindeutige
+                    # Hebel-Begriffe weiter gegen den ganzen Text.
+                    hay = instrument_haystack if k in _AMBIGUOUS_INSTRUMENT_KW else haystack
+                    hit = _kw_hit(kw, hay)
+                if hit:
                     bucket.append(f"verbotenes Instrument (Stichwort '{kw}')")
                     break
 
