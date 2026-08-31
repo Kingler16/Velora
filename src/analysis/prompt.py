@@ -41,10 +41,16 @@ WICHTIGE REGELN:
    - Fokussiere auf NEUE Entwicklungen und VERÄNDERTE Situationen
 
 5. NEUE IDEEN:
-   - Wenn du in den News/Opportunities-Daten interessante Titel findest
-   - Prüfe: Passt es ins Portfolio? (Diversifikation, Sektor, Risiko)
-   - Nur vorschlagen wenn wirklich überzeugend, nicht auf Krampf
-   - KEINE Morningstar/Analyst-Empfehlungen nachplappern. Eigene Analyse.
+   - Du bekommst zwei Quellen für Titel ausserhalb des Depots: die WATCHLIST des Nutzers
+     und SCREENER-KANDIDATEN (regelbasiert gefiltert nach Sektoren, die im Depot fehlen)
+   - Beide liefern echte Kursdaten (Kurs, ATR, RSI, SMA200, 52W-Range, KGV, Marktkap.).
+     Das sind Rohdaten für deine eigene Analyse — keine fremden Kaufempfehlungen.
+     Du kannst damit Einstieg, Stop (aus ATR) und Ziel genauso rechnen wie bei einer
+     Depot-Position. "Dazu habe ich keine Daten" gilt für diese Titel also NICHT.
+   - Prüfe: Passt es ins Portfolio? (Diversifikation, Sektor, Risiko, Mandat)
+   - Nur vorschlagen wenn wirklich überzeugend, nicht auf Krampf. Überzeugt einer,
+     dann als vollwertige Empfehlung mit Stückzahl — nicht als vages "beobachten".
+   - Fremde Analysten-/Morningstar-Ranglisten bleiben tabu: nicht nachplappern.
 
 6. NEWS-QUALITÄT:
    - Jede News hat ein Alter-Label. Ignoriere News älter als 7 Tage für taktische Einschätzungen
@@ -121,9 +127,13 @@ BRIEFING_TEMPLATE = """
 
 {macro_news}
 
-=== NEUE INVESTMENT-IDEEN (aus Research) ===
+=== WATCHLIST (beobachtet, noch NICHT im Depot — mit echten Kursdaten) ===
 
-{opportunities}
+{watchlist}
+
+=== SCREENER-KANDIDATEN (Sektoren, die im Depot fehlen — echte Kursdaten, keine Analystenliste) ===
+
+{candidates}
 
 === MEMORY (vergangene Briefings & offene Empfehlungen) ===
 
@@ -137,7 +147,7 @@ Erstelle das Briefing. Struktur:
 2. PORTFOLIO-CHECK (nur Positionen erwähnen wo sich etwas RELEVANTES getan hat. Fonds-Positionen einordnen falls vorhanden. EUR/USD Auswirkung auf USD-Positionen berechnen. KRITISCH: Verwende für die Performance jeder Position IMMER die "P/L: ...€ (...%)" Werte aus dem PORTFOLIO-Abschnitt oben — diese basieren auf dem persönlichen Buy-In. Die "Kursperf. 1M/6M/1Y" Werte aus den MARKTDATEN zeigen die allgemeine Aktienperformance und sind NICHT identisch mit der Position-Performance!)
 3. EARNINGS & EVENTS (welche Positionen reporten bald? Was ist zu erwarten? Kommende Katalysatoren.)
 4. EMPFEHLUNGEN — STRENG: max. 3 Einträge pro Briefing, nur High-Conviction. Wenn nichts überzeugt: 0 Empfehlungen ist die richtige Antwort. "Halten" / "Beobachten ohne Order" gehört in den Fließtext, NICHT in die JSON-Liste. Jede Empfehlung MUSS konkret sein: Einstieg, Stop-Loss, Ziel, Risk/Reward UND Stückzahl. Bei Kauf: Anzahl Stück. Bei Verkauf: Prozent der Position ODER Anzahl Stück. Bei buy/watch IMMER eine konkrete Stückzahl (`shares`) ODER einen €-Betrag angeben — orientiert an der freien Cash-Quote (z.B. 2-5% des Depotwerts pro Position). Ohne Stückzahl ist die Empfehlung nicht direkt ausführbar. Berücksichtige Tax-Loss-Harvesting wenn sinnvoll. WICHTIG: Leite Stop-Distanzen aus dem ATR ab (z.B. Stop ≈ Kurs − 1,5–2×ATR) statt sie zu raten — zu enge Stops sind der häufigste Verlustgrund. Berücksichtige Klumpenrisiko/Korrelation (effektive Positionen) und nutze die Analysten-Kursziele als Konsens-Anker für deine Ziele. Jede Empfehlung MUSS das Mandat (§0) einhalten — Block-Verstöße werden beim Speichern automatisch verworfen, Warn-Verstöße markiert; schlage Block-Verstöße gar nicht erst vor. KALIBRIERUNG: Schau VOR dem Empfehlen auf deine Hit-Rate + Expectancy in der EMPFEHLUNGS-BILANZ. Bei Hit-Rate < 50% nenne explizit, was deine letzten Fehlschläge gemeinsam hatten und warum diese Empfehlung anders ist; übergewichte nicht systematisch dieselbe These/denselben Sektor, in der du zuletzt falsch lagst.
-5. NEUE IDEEN (nur wenn wirklich überzeugend. Eigene Analyse, keine Morningstar-Listen.)
+5. NEUE IDEEN — Kandidaten kommen aus WATCHLIST und SCREENER-KANDIDATEN oben. Beide Listen liefern dir echte Kursdaten (Kurs, ATR, RSI, SMA200, 52W-Range), du kannst also Einstieg, Stop und Ziel genauso sauber rechnen wie bei einer Depot-Position — nichts davon musst du schätzen. Der Screener zeigt bewusst Sektoren, die im Depot fehlen: das ist Diversifikation, kein Aktionismus. Prüfe pro Kandidat: Bewertung, Technik, Portfolio-Fit, Mandats-Konformität. Wenn einer überzeugt, gehört er als vollwertige buy/watch-Empfehlung in die JSON-Liste unter Punkt 4 (mit Stückzahl) — nicht nur als Fließtext-Erwähnung. Wenn keiner überzeugt: sag knapp warum, das ist eine valide Antwort. Es ist KEINE Liste fremder Analystenempfehlungen, die du abnicken sollst — es sind Rohdaten für deine eigene Analyse.
 6. RISIKEN AUF DEM RADAR (was könnte schiefgehen?)
 7. EMPFEHLUNGS-BILANZ (wenn es offene Empfehlungen gibt: wie haben sie sich entwickelt? Für frisch ABGESCHLOSSENE Empfehlungen: kurzes POST-MORTEM — war die ursprüngliche These richtig oder falsch, und WARUM? Was lernst du daraus für künftige Empfehlungen?)
 
@@ -393,6 +403,65 @@ def _position_signal_lines(p: dict, data: dict) -> str:
     return "\n".join(out)
 
 
+def _quote_block(ticker: str, name: str, p: dict, head_extra: str = "") -> str:
+    """Kompakter Kursblock für Titel ausserhalb des Depots (Watchlist/Screener).
+    Bewusst mit ATR/RSI/SMA — ohne die kann Velora keinen Stop und kein Ziel rechnen."""
+    lines = [f"{name} ({ticker}):{head_extra}"]
+    cur = p.get("current_price")
+    ccy = p.get("currency") or ""
+    lines.append(
+        f"  Kurs: {cur} {ccy} | Tagesänderung: {p.get('change_pct', '?')}% | "
+        f"52W: {p.get('52w_low')}–{p.get('52w_high')}"
+    )
+    perf = " | ".join(
+        f"{lbl} {p.get(k)}%" for lbl, k in
+        (("1M", "perf_1m_pct"), ("6M", "perf_6m_pct"), ("1Y", "perf_1y_pct"))
+        if p.get(k) is not None
+    )
+    if perf:
+        lines.append(f"  Kursperf.: {perf}")
+    lines.append(
+        f"  KGV: {p.get('pe_ratio', '?')} | Forward KGV: {p.get('forward_pe', '?')} | "
+        f"Div.-Rendite: {p.get('dividend_yield', '?')} | Beta: {p.get('beta', '?')}"
+    )
+    sig = _position_signal_lines(p, {})
+    if sig:
+        lines.append(sig)
+    return "\n".join(lines)
+
+
+def format_watchlist(market_data: dict) -> str:
+    """Rendert die Watchlist des Nutzers mit Kursdaten.
+
+    Diese Daten wurden schon immer geholt (collect_all_market_data), landeten aber
+    nie im Prompt — Velora hat seine eigene Watchlist im Briefing nie gesehen.
+    """
+    wl = market_data.get("watchlist") or {}
+    if not wl:
+        return "Watchlist ist leer."
+    blocks = []
+    for ticker, data in wl.items():
+        p = data.get("price") or {}
+        if not p.get("current_price"):
+            blocks.append(f"{data.get('name', ticker)} ({ticker}): KEIN LIVE-KURS")
+            continue
+        blocks.append(_quote_block(ticker, data.get("name", ticker), p))
+    return "\n\n".join(blocks)
+
+
+def format_candidates(candidates: list[dict] | None) -> str:
+    """Rendert die Screener-Kandidaten (src/data/screener.py) für den Prompt."""
+    if not candidates:
+        return "Keine Kandidaten (Screener lieferte nichts oder alle Sektoren sind belegt)."
+    blocks = []
+    for c in candidates:
+        cap = c.get("market_cap")
+        cap_str = f" [{cap / 1_000_000_000:.0f} Mrd. Marktkap.]" if cap else ""
+        head = f" — Sektor {c.get('sector', '?')}{cap_str}"
+        blocks.append(_quote_block(c["ticker"], c.get("name", c["ticker"]), c.get("price") or {}, head))
+    return "\n\n".join(blocks)
+
+
 def format_regime(regime: dict) -> str:
     """Rendert das berechnete Markt-Regime (classify_regime) für den Prompt."""
     if not regime or not regime.get("label"):
@@ -509,7 +578,8 @@ def format_news(news: dict, section: str = "position_news") -> str:
     return "Keine News verfügbar."
 
 
-def build_briefing_prompt(portfolio: dict, market_data: dict, macro_data: dict, news: dict, memory_context: str) -> str:
+def build_briefing_prompt(portfolio: dict, market_data: dict, macro_data: dict, news: dict,
+                          memory_context: str, candidates: list[dict] | None = None) -> str:
     """Baut den kompletten Briefing-Prompt zusammen."""
     fg = macro_data.get("fear_greed")
     fg_str = "Nicht verfügbar"
@@ -550,7 +620,8 @@ def build_briefing_prompt(portfolio: dict, market_data: dict, macro_data: dict, 
         fear_greed=fg_str,
         position_news=format_news(news, "position_news"),
         macro_news=format_news(news, "macro_news"),
-        opportunities=format_news(news, "opportunities"),
+        watchlist=format_watchlist(market_data),
+        candidates=format_candidates(candidates),
         memory_context=memory_context,
     )
 

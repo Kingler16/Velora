@@ -26,7 +26,7 @@
         </span>
         <span class="label">{{ t.nav.briefings }}</span>
     </a>
-    <button type="button" class="bottom-nav-item bottom-nav-more {{ 'active' if page in ('holdings','market','analysis','strategy','settings','install') }}"
+    <button type="button" class="bottom-nav-item bottom-nav-more {{ 'active' if page in ('chat','holdings','market','analysis','strategy','settings','install') }}"
             aria-label="Mehr" aria-expanded="false"
             onclick="(function(b){var s=document.getElementById('bottom-more-sheet');var open=!s.classList.contains('open');s.classList.toggle('open',open);b.setAttribute('aria-expanded',open);document.body.classList.toggle('bottom-more-open',open);})(this)">
         <span class="icon">
@@ -38,6 +38,10 @@
 
 <!-- Mehr-Sheet: Items, die nicht in die 5 Hauptslots passen. Nur Phone-Layer relevant. -->
 <div id="bottom-more-sheet" class="bottom-more-sheet" role="menu" aria-label="Mehr">
+    <a href="/chat" class="bottom-more-item {{ 'active' if page == 'chat' }}" role="menuitem">
+        <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+        <span>Chat</span>
+    </a>
     <a href="/holdings" class="bottom-more-item {{ 'active' if page == 'holdings' }}" role="menuitem">
         <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
         <span>{{ t.nav.holdings }}</span>

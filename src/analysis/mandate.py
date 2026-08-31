@@ -38,6 +38,15 @@ _EUR_SUFFIXES = (".DE", ".AS", ".PA", ".VI", ".MI", ".MC", ".BR", ".LS", ".HE", 
 _EUR_ISIN_PREFIXES = ("AT0", "DE0", "FR0", "NL0", "IE0", "ES0", "IT0", "BE0", "FI0", "PT0", "LU0")
 
 
+# Keywords, die in normaler Analyse-Prosa vorkommen und deshalb NUR gegen
+# Ticker/Name geprüft werden — nie gegen das Reasoning:
+#   "Risk/Reward 2x", "Stop bei 2x ATR", "operating leverage", "Bruttomargin",
+#   "Öl-Futures signalisieren…", "eine Option wäre…"
+# Eindeutige Hebel-Begriffe (hebel, cfd, optionsschein, knock-out …) bleiben
+# gegen den ganzen Text aktiv, damit "Turbo-Schein auf NVDA" weiter blockt.
+_AMBIGUOUS_INSTRUMENT_KW = {"2x", "3x", "option", "margin", "turbo", "futures", "leverage"}
+
+
 def _kw_hit(kw: str, text: str) -> bool:
     """Keyword-Match mit Wortgrenzen — 'hebel' trifft 'Hebel-ETF', aber nicht mehr
     'Hebelwirkung' im Reasoning. Deutsche Komposita ohne Bindestrich (Optionsschein,
@@ -256,6 +265,12 @@ def validate_against_mandate(rec: dict, mandate: dict | None, overview: dict | N
     name = (rec.get("name") or "")
     reasoning = (rec.get("reasoning") or "")
     haystack = f"{ticker} {name} {reasoning}".lower()
+    # Instrument-Haystack OHNE Reasoning: forbidden_instrument prüft, WAS gekauft wird
+    # (Ticker/Name), nicht wie die Begründung formuliert ist. Mehrdeutige Keywords wie
+    # "2x", "option" oder "margin" sind in Analyse-Prosa Alltag ("Risk/Reward 2x",
+    # "Stop bei 2x ATR" — was der Briefing-Prompt sogar selbst verlangt) und haben so
+    # nachweislich valide Empfehlungen geblockt (ASML 15.06., GOOGL 06.07. + 23.07.).
+    instrument_haystack = f"{ticker} {name}".lower()
 
     # Eingefrorene Positionen: halten ja, aufstocken nein. buy/watch (= Aufstock- oder
     # Wiedereinstiegs-Order) werden geblockt; hold (halten/Stop nachziehen) und sell
@@ -295,7 +310,10 @@ def validate_against_mandate(rec: dict, mandate: dict | None, overview: dict | N
 
         elif t == "forbidden_instrument":
             for kw in r.get("match", []):
-                if _kw_hit(kw, haystack):
+                # Mehrdeutige Keywords nur gegen Ticker/Name prüfen, eindeutige
+                # Hebel-Begriffe weiter gegen den ganzen Text (siehe _AMBIGUOUS_KW).
+                hay = instrument_haystack if kw.lower() in _AMBIGUOUS_INSTRUMENT_KW else haystack
+                if _kw_hit(kw, hay):
                     bucket.append(f"verbotenes Instrument (Stichwort '{kw}')")
                     break
 

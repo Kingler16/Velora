@@ -262,7 +262,10 @@
     color: var(--text-muted);
 }
 
-@media (max-width: 640px) {
+/* 767.98px = derselbe Breakpoint, ab dem mobile.css die Bottom-Nav einblendet.
+   Vorher stand hier 640px — im Bereich 640–768px klebte der FAB dadurch an der
+   Desktop-Position und lag unter der Bottom-Nav. */
+@media (max-width: 767.98px) {
     /* FAB über die Bottom-Nav heben, damit er die 60px-Leiste nicht überlappt.
        --bottom-nav-h (60px) + --safe-bottom + 12px Luft. */
     .velora-widget-toggle {

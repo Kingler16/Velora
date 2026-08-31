@@ -140,6 +140,11 @@ async def run_briefing():
         lookthrough_str = format_lookthrough(compute_lookthrough(portfolio, market_data))
         lookthrough_section = f"\n=== ECHTE EXPOSURE (Fonds/Anleihen durchgerechnet) ===\n\n{lookthrough_str}\n" if lookthrough_str else ""
 
+        # 2b. Kandidaten für neue Ideen (Sektoren, die im Depot fehlen)
+        logger.info("Suche Screener-Kandidaten...")
+        from src.data.screener import find_candidates
+        candidates = find_candidates(portfolio, market_data)
+
         # 3. Memory laden + offene Empfehlungen updaten
         logger.info("Lade Memory...")
         update_recommendation_outcomes(market_data)
@@ -147,7 +152,8 @@ async def run_briefing():
 
         # 4. Prompt bauen + Claude aufrufen
         logger.info("Baue Prompt...")
-        base_prompt = build_briefing_prompt(portfolio, market_data, macro_data, news, memory_context)
+        base_prompt = build_briefing_prompt(portfolio, market_data, macro_data, news,
+                                            memory_context, candidates=candidates)
 
         # Zusätzliche Sektionen anhängen
         extra = f"""

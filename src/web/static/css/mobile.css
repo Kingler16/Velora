@@ -206,9 +206,10 @@
     .chat-send-btn { width: 44px; height: 44px; }
     .chat-thread-item { padding: 14px 12px; min-height: 52px; }
 
-    /* Chat-Widget aus — auf Phone gibt's den Bottom-Nav-Tab "Chat". */
-    .velora-widget-toggle,
-    .velora-widget-panel { display: none !important; }
+    /* Chat-Widget bleibt auf Phone AN. Es war hier ausgeblendet mit Verweis auf
+       einen Bottom-Nav-Tab "Chat", den es nie gab — dadurch war der Chat unter
+       768px komplett unerreichbar (Sidebar-Link ist auf Phone versteckt).
+       Positionierung über der Bottom-Nav: siehe chat_widget.css. */
 
     /* ─── Typografie-Scale auf Phone ─────────────────────────────── */
 
