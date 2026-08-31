@@ -11,6 +11,7 @@ from pathlib import Path
 import hmac
 
 from fastapi import FastAPI, Request, BackgroundTasks
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -166,8 +167,61 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Velora Dashboard", lifespan=lifespan)
 
+class _SelectiveGZip(GZipMiddleware):
+    """GZip für alles ausser dem SSE-Chatstream.
+
+    Der Chat liefert Token für Token über eine StreamingResponse. Ein
+    Kompressor davor sammelt Bytes, bis sich ein Block lohnt — die Antwort
+    käme dann in Schüben statt tippend an. Diese eine Route bleibt deshalb
+    unkomprimiert; sie überträgt ohnehin nur wenige Bytes pro Chunk.
+    """
+
+    _SSE_PREFIX = "/api/chat/threads/"
+
+    async def __call__(self, scope, receive, send):
+        if (scope.get("type") == "http"
+                and scope.get("path", "").startswith(self._SSE_PREFIX)
+                and scope.get("path", "").endswith("/message")):
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
+
+
+# GZip: die HTML-Seiten sind 40-155 KB unkomprimiert (Portfolio-Seite ~154 KB).
+# Über Mobilfunk/Tailscale war das der grösste Bremsklotz — Text komprimiert
+# etwa 6-8x. minimum_size hält winzige JSON-Antworten unangetastet, wo sich
+# der CPU-Aufwand auf dem RK3399 nicht lohnt.
+app.add_middleware(_SelectiveGZip, minimum_size=1024)
+
+
+class _CachedStatic(StaticFiles):
+    """Static-Auslieferung mit Cache-Control.
+
+    Vorher kam nur ein ETag mit: der Browser fragte bei jedem Seitenaufruf für
+    alle ~25 Assets erneut an (If-None-Match) und wartete je eine Rundreise ab
+    — mobil mit 50-100 ms Latenz summiert sich das spürbar.
+
+    Templates hängen an jedes Asset ein ?v=<git-sha>. Solche URLs sind
+    unveränderlich und dürfen ein Jahr im Cache bleiben; bei einem neuen Commit
+    ändert sich die URL und der Browser lädt automatisch neu. Ohne Versions-
+    Parameter bleibt es bei einer Stunde, damit nichts dauerhaft festhängt.
+    sw.js läuft über eine eigene Route mit no-cache und ist hiervon nicht
+    betroffen — PWA-Updates kommen weiterhin sofort durch.
+    """
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            query = scope.get("query_string", b"").decode("latin-1")
+            versioned = "v=" in query
+            response.headers["Cache-Control"] = (
+                "public, max-age=31536000, immutable" if versioned else "public, max-age=3600"
+            )
+        return response
+
+
 # Static files
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/static", _CachedStatic(directory=str(STATIC_DIR)), name="static")
 
 # Jinja2 custom filters
 templates.env.filters["eur"] = format_eur
