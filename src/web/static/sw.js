@@ -8,7 +8,7 @@
  * Push-Handler folgt in Phase 3.
  */
 
-const VERSION = 'velora-0.6.1-mobilechat';
+const VERSION = 'velora-0.6.3-chatlayout';
 const STATIC_CACHE = `velora-static-${VERSION}`;
 const RUNTIME_CACHE = `velora-runtime-${VERSION}`;
 const API_CACHE = `velora-api-${VERSION}`;

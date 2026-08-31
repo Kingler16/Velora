@@ -155,11 +155,36 @@
         animation: none;
     }
 
+    /* Spezifität mit body[data-page] statt nur .chat-layout: chat.css wird nach
+       mobile.css geladen und würde eine gleich spezifische Regel überstimmen. */
+    body[data-page="chat"] .chat-layout,
     .chat-layout {
         grid-template-columns: 1fr;
-        height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom));
-        max-height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom));
+        /* Das Desktop-Layout zieht sich mit margin:-20px -24px aus dem Padding
+           von .main-content heraus (Full-Bleed). Mobil ist dieses Padding oben
+           auf 0 gesetzt — das negative Margin blieb aber stehen und machte den
+           Chat 48px breiter als den Viewport (423px statt 375px), linksbündig
+           bei -24px. Sichtbar als angeschnittene Bottom-Nav und überstehendes
+           Eingabefeld. Ohne Padding braucht es auch kein Gegen-Margin. */
+        margin: 0;
+        width: 100%;
+        max-width: 100%;
+        /* --kb-inset wird von base.html per VisualViewport gesetzt, sobald die
+           Bildschirmtastatur aufgeht (iOS kennt interactive-widget noch nicht
+           überall). Ohne Tastatur ist der Wert 0px und ändert nichts. */
+        height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom) - var(--kb-inset, 0px));
+        max-height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom) - var(--kb-inset, 0px));
         overflow: hidden;
+    }
+
+    /* Tastatur offen: die Bottom-Nav ist unter der Tastatur ohnehin nicht
+       bedienbar und wurde von iOS mit nach oben geschoben — sie landete
+       mitten im Bild. Weg damit, der Platz gehört dem Chat. */
+    body.kb-open .bottom-nav { display: none; }
+    body.kb-open[data-page="chat"] .chat-layout,
+    body.kb-open .chat-layout {
+        height: calc(100dvh - var(--kb-inset, 0px));
+        max-height: calc(100dvh - var(--kb-inset, 0px));
     }
 
     /* chat-header beruecksichtigt iOS-Notch via safe-top und gibt links/

@@ -2,7 +2,11 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <!-- interactive-widget=resizes-content: die Bildschirmtastatur verkleinert den
+         Layout-Viewport, statt die Seite nur hochzuschieben. Browser ohne Support
+         (u.a. ältere iOS-Versionen) ignorieren den Zusatz — für die springt der
+         VisualViewport-Handler weiter unten ein. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <meta name="theme-color" content="#050814" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#eef3fb" media="(prefers-color-scheme: light)">
     <meta name="color-scheme" content="dark light">
@@ -118,6 +122,37 @@
       // Beim SW-push wird hier kein direkter Event-Listener für Badge-Count zentral geführt
       // (pro Kategorie müsste zählen); simple Alternative: beim Öffnen der PWA alles clearen.
       window.addEventListener('focus', () => window.VeloraBadge.clear());
+
+      // Bildschirmtastatur: iOS unterstützt interactive-widget noch nicht überall.
+      // Dort bleibt der Layout-Viewport in voller Höhe stehen und iOS schiebt die
+      // Seite nur hoch — das Eingabefeld rutschte dabei aus dem Bild und die
+      // Bottom-Nav landete mitten drin. visualViewport liefert die tatsächlich
+      // sichtbare Höhe; die Differenz geht als --kb-inset ins Chat-Layout.
+      (function () {
+        const vv = window.visualViewport;
+        if (!vv) return;
+        const root = document.documentElement;
+        let frame = null;
+
+        function update() {
+          frame = null;
+          // Verdeckte Höhe = Layout-Viewport minus sichtbarer Bereich (inkl. Scroll-Offset).
+          const verdeckt = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+          // Kleine Abweichungen entstehen auch durch ein-/ausblendende Browserleisten.
+          // Erst ab 120px ist es sicher die Tastatur.
+          const tastaturOffen = verdeckt > 120;
+          root.style.setProperty('--kb-inset', (tastaturOffen ? verdeckt : 0) + 'px');
+          document.body.classList.toggle('kb-open', tastaturOffen);
+        }
+
+        function planen() {
+          if (frame === null) frame = requestAnimationFrame(update);
+        }
+
+        vv.addEventListener('resize', planen);
+        vv.addEventListener('scroll', planen);
+        update();
+      })();
     </script>
 </body>
 </html>
