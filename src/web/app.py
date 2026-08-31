@@ -369,6 +369,7 @@ async def portfolio_page(request: Request):
         overview=overview, portfolio_raw=portfolio, cache_status=cache_status,
         default_currency=default_currency,
         snapshots=snapshots, benchmarks=benchmarks, tax_loss=tax_loss, kest_mode=kest_mode,
+        stop_overview=_stop_overview_safe(portfolio, market_data), stop_labels=_STOP_LABELS,
         open_orders=get_open_orders(), accounts=list(portfolio.get("accounts", {}).keys()),
     ))
 
@@ -806,6 +807,30 @@ async def api_cancel_order(request: Request):
 
 # ─── Portfolio-Editor (Bestandskorrektur, KEIN Cash-Effekt) ──────────────────
 
+_STOP_LABELS = {
+    "kein_stop": "kein Stop",
+    "ungueltig": "ungültig",
+    "zu_eng": "zu eng",
+    "zu_weit": "zu weit",
+    "nachziehbar": "nachziehbar",
+    "gesetzt": "gesetzt",
+    "ok": "ok",
+    "kein_stop_noetig": "nicht nötig",
+    "nicht_bewertbar": "kein Kurs",
+}
+
+
+def _stop_overview_safe(portfolio: dict, market_data: dict):
+    """Stop-Übersicht für die Portfolio-Seite. Fehler hier dürfen die Seite
+    nicht abschiessen — im Zweifel lieber kein Panel als keine Seite."""
+    try:
+        from src.analysis.stops import compute_stop_overview
+        return compute_stop_overview(portfolio, market_data)
+    except Exception:
+        logger.exception("Stop-Übersicht fehlgeschlagen")
+        return None
+
+
 @app.post("/api/portfolio/position/edit")
 async def api_edit_position(request: Request):
     """Korrigiert Felder einer Position (Stück, Buy-in, Account, Währung)."""
@@ -820,6 +845,10 @@ async def api_edit_position(request: Request):
         return JSONResponse({"error": "account und ticker erforderlich"}, status_code=400)
     updates = {k: body[k] for k in ("shares", "buy_in", "buy_in_eur", "currency", "name", "isin", "new_account")
                if k in body and body[k] is not None and body[k] != ""}
+    # stop_loss bewusst ohne Leer-Filter: ein leerer Wert bedeutet hier "Stop entfernt"
+    # (z.B. beim Broker gelöscht) und muss durchgereicht werden.
+    if "stop_loss" in body:
+        updates["stop_loss"] = body["stop_loss"]
     result = edit_position(account, ticker, updates)
     if result.get("ok"):
         return JSONResponse({"status": "ok", "message": f"{ticker} aktualisiert"})

@@ -165,7 +165,8 @@ def _find_position(positions: list[dict], ticker: str) -> dict | None:
 def edit_position(account: str, ticker: str, updates: dict) -> dict:
     """Korrigiert Felder einer bestehenden Position — REINE Korrektur, KEIN Cash-Effekt.
 
-    `updates` darf enthalten: shares, buy_in, buy_in_eur, currency, name, isin, new_account.
+    `updates` darf enthalten: shares, buy_in, buy_in_eur, currency, name, isin,
+    new_account, stop_loss.
     Cash wird bewusst NICHT angefasst (Korrektur ≠ Trade). Returns {"ok": bool, "error": str}.
     """
     from datetime import datetime
@@ -203,6 +204,21 @@ def edit_position(account: str, ticker: str, updates: dict) -> dict:
                 # Umgekehrt genauso: bei EUR-Buy-in beschreibt buy_in denselben Wert.
                 if (target.get("currency") or "EUR").upper() == "EUR":
                     target["buy_in"] = bie
+
+            # Stop-Loss: der beim Broker TATSÄCHLICH gesetzte Stop, in Quote-Währung
+            # des Tickers (USD für US-Titel, EUR für europäische) — gleiche Konvention
+            # wie bei Empfehlungen. Leerer Wert = Stop entfernt.
+            if "stop_loss" in updates:
+                raw = updates["stop_loss"]
+                if raw in (None, "", "null"):
+                    target.pop("stop_loss", None)
+                    target.pop("stop_set_at", None)
+                else:
+                    stop = float(raw)
+                    if stop <= 0:
+                        raise _AbortWrite("Stop-Loss muss grösser als 0 sein")
+                    target["stop_loss"] = stop
+                    target["stop_set_at"] = datetime.now().strftime("%Y-%m-%d")
 
             portfolio["last_updated"] = datetime.now().strftime("%Y-%m-%d")
     except _AbortWrite as e:

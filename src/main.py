@@ -139,6 +139,10 @@ async def run_briefing():
         from src.data.holdings import compute_lookthrough
         lookthrough_str = format_lookthrough(compute_lookthrough(portfolio, market_data))
         lookthrough_section = f"\n=== ECHTE EXPOSURE (Fonds/Anleihen durchgerechnet) ===\n\n{lookthrough_str}\n" if lookthrough_str else ""
+        from src.analysis.stops import compute_stop_overview, format_stop_overview
+        stop_overview = compute_stop_overview(portfolio, market_data)
+        stop_str = format_stop_overview(stop_overview)
+        stop_section = f"\n=== STOP-LOSS-LAGE (Ist beim Broker vs. Soll aus ATR) ===\n\n{stop_str}\n" if stop_str else ""
 
         # 2b. Kandidaten für neue Ideen (Sektoren, die im Depot fehlen)
         logger.info("Suche Screener-Kandidaten...")
@@ -169,7 +173,7 @@ async def run_briefing():
 === KORRELATION & KLUMPENRISIKO ===
 
 {format_correlation(correlation)}
-{factor_section}{drift_section}{lookthrough_section}
+{factor_section}{drift_section}{lookthrough_section}{stop_section}
 === FINANZKALENDER (Börsen, Earnings, Makro-Events) ===
 
 {calendar_str}

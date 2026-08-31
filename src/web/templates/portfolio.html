@@ -167,6 +167,52 @@
     transition: color var(--dur-fast) var(--ease-apple), border-color var(--dur-fast) var(--ease-apple);
 }
 .depot-tab-btn:hover { color: var(--text-primary); }
+
+/* Stop-Tab: Zähler ungesicherter Positionen direkt am Reiter. */
+.stop-warn-dot {
+    display: inline-block;
+    min-width: 17px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--red);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 17px;
+    text-align: center;
+    vertical-align: middle;
+}
+.stop-badge {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 1px 7px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    /* Bewusst kein Grün für "ok" — Grün bleibt dem P&L vorbehalten. */
+    background: var(--glass-bg);
+    color: var(--text-muted);
+    border: 1px solid var(--glass-border);
+}
+.stop-badge.stop-kein_stop,
+.stop-badge.stop-ungueltig { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+.stop-badge.stop-zu_eng,
+.stop-badge.stop-zu_weit { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+.stop-badge.stop-nachziehbar { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-ring); }
+.stop-input {
+    width: 92px;
+    padding: 5px 8px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    color: var(--text-primary);
+    font-size: 13px;
+    text-align: right;
+}
+.stop-input:focus { outline: none; border-color: var(--accent); }
+.stop-save { margin-left: 6px; }
 .depot-tab-btn.active {
     color: var(--accent);
     border-bottom-color: var(--accent);
@@ -183,6 +229,9 @@
     <button type="button" class="depot-tab-btn active" data-tab="positions" role="tab" aria-selected="true">{{ t.portfolio.tab_positions }}</button>
     <button type="button" class="depot-tab-btn" data-tab="allocation" role="tab" aria-selected="false">{{ t.portfolio.tab_allocation }}</button>
     <button type="button" class="depot-tab-btn" data-tab="performance" role="tab" aria-selected="false">{{ t.portfolio.tab_performance }}</button>
+    <button type="button" class="depot-tab-btn" data-tab="stops" role="tab" aria-selected="false">
+        Stops{% if stop_overview and stop_overview.ohne_stop %} <span class="stop-warn-dot" title="{{ stop_overview.ohne_stop }} Positionen ohne Stop">{{ stop_overview.ohne_stop }}</span>{% endif %}
+    </button>
     <button type="button" class="depot-tab-btn" data-tab="tax" role="tab" aria-selected="false">{{ t.portfolio.tab_tax }}</button>
 </div>
 
@@ -421,6 +470,93 @@
 </div><!-- /panel performance -->
 
 <!-- ── TAB: Steuer ── -->
+<div class="depot-panel" data-panel="stops" role="tabpanel" hidden>
+    {% if stop_overview and stop_overview.positions %}
+    {% set ov = stop_overview %}
+    <div class="card">
+        <div class="card-title">Stop-Loss-Lage</div>
+        <p style="color: var(--text-secondary); font-size: 13px; margin: 0 0 var(--space-4);">
+            Trade Republic und Erste Bank lassen keinen Stop zur Kauf-Order zu — er muss nach der
+            Ausführung von Hand nachgetragen werden. Hier siehst du, wo einer fehlt.
+            <strong>Soll-Stop = Kurs − 2×ATR</strong>; trage ein, was beim Broker wirklich liegt.
+        </p>
+
+        <div class="grid grid-cols-3" style="gap: 12px; margin-bottom: var(--space-4);">
+            <div class="stat-tile">
+                <div class="stat-label">Ohne Stop</div>
+                <div class="stat-value" style="color: {{ 'var(--red)' if ov.ohne_stop else 'var(--text-primary)' }};">{{ ov.ohne_stop }}</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-label">Ungesichert</div>
+                <div class="stat-value" style="color: {{ 'var(--red)' if ov.ungesichert_eur else 'var(--text-primary)' }};">{{ ov.ungesichert_eur | eur }}</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-label">Mit Stop</div>
+                <div class="stat-value">{{ ov.mit_stop }}</div>
+            </div>
+        </div>
+
+        <div style="overflow-x: auto;">
+        <table class="data-table-stack">
+            <thead>
+                <tr>
+                    <th>Position</th>
+                    <th style="text-align:right;">Kurs</th>
+                    <th style="text-align:right;">Ist-Stop</th>
+                    <th style="text-align:right;">Soll-Stop</th>
+                    <th style="text-align:right;">Risiko</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for p in ov.positions %}
+                <tr data-stop-row data-account="{{ p.account }}" data-ticker="{{ p.ticker }}">
+                    <td>
+                        <div style="font-weight:600;">{{ p.name }}</div>
+                        <div style="font-size:11px; color: var(--text-muted);">
+                            {{ p.ticker }} · {{ p.account.replace('_', ' ') }}
+                        </div>
+                        <span class="stop-badge stop-{{ p.status }}">{{ stop_labels.get(p.status, p.status) }}</span>
+                    </td>
+                    <td style="text-align:right;">{{ p.current_price if p.current_price else '—' }}<span style="color:var(--text-muted); font-size:11px;"> {{ p.currency or '' }}</span></td>
+                    <td style="text-align:right;">
+                        {% if p.ist_stop %}{{ p.ist_stop }}<div style="font-size:11px; color:var(--text-muted);">{{ p.abstand_pct }}%</div>
+                        {% else %}<span style="color: var(--red);">—</span>{% endif %}
+                    </td>
+                    <td style="text-align:right;">
+                        {% if p.soll_stop %}{{ p.soll_stop }}<div style="font-size:11px; color:var(--text-muted);">{{ p.soll_abstand_pct }}%</div>
+                        {% else %}<span style="color:var(--text-muted);">—</span>{% endif %}
+                    </td>
+                    <td style="text-align:right;">
+                        {% if p.risiko_eur %}{{ p.risiko_eur | eur }}
+                        {% elif p.risiko_soll_eur %}<span style="color:var(--text-muted);">({{ p.risiko_soll_eur | eur }})</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td style="text-align:right; white-space:nowrap;">
+                        {% if p.status not in ('nicht_bewertbar', 'kein_stop_noetig') %}
+                        <input type="number" step="0.01" class="stop-input" placeholder="{{ p.soll_stop or '' }}"
+                               value="{{ p.ist_stop or '' }}" aria-label="Stop für {{ p.name }}">
+                        <button type="button" class="btn btn-sm stop-save">Speichern</button>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% if ov.risiko_eur_gesamt %}
+        <p style="color: var(--text-muted); font-size:12px; margin-top: var(--space-3);">
+            Lösen alle gesetzten Stops aus, sind das zusammen {{ ov.risiko_eur_gesamt | eur }} Verlust.
+            Werte in Klammern zeigen, was der Soll-Stop kosten würde.
+        </p>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="card"><div class="card-title">Stop-Loss-Lage</div>
+        <p style="color: var(--text-secondary);">Keine Positionen mit Kursdaten vorhanden.</p></div>
+    {% endif %}
+</div>
+
 <div class="depot-panel" data-panel="tax" role="tabpanel" hidden>
     {% if tax_loss %}
     <details open>
@@ -802,6 +938,44 @@ function initPerformanceCharts() {
         requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
     }
     tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
+
+    // Stop-Loss eintragen: speichert den beim Broker TATSÄCHLICH gesetzten Stop.
+    // Leeres Feld = Stop entfernt (z.B. beim Broker gelöscht).
+    document.querySelectorAll('[data-stop-row]').forEach(row => {
+        const input = row.querySelector('.stop-input');
+        const btn = row.querySelector('.stop-save');
+        if (!input || !btn) return;
+
+        async function speichern() {
+            const wert = input.value.trim();
+            btn.disabled = true;
+            const alt = btn.textContent;
+            btn.textContent = '…';
+            try {
+                const r = await fetch('/api/portfolio/position/edit', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        account: row.dataset.account,
+                        ticker: row.dataset.ticker,
+                        stop_loss: wert,
+                    }),
+                });
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(d.error || 'Speichern fehlgeschlagen');
+                if (window.toast) window.toast.success(wert ? 'Stop gespeichert' : 'Stop entfernt');
+                // Neu laden, damit Status, Risiko und der Zähler am Reiter stimmen.
+                setTimeout(() => location.reload(), 600);
+            } catch (e) {
+                if (window.toast) window.toast.error(e.message);
+                btn.disabled = false;
+                btn.textContent = alt;
+            }
+        }
+
+        btn.addEventListener('click', speichern);
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); speichern(); } });
+    });
     // positions ist initial aktiv (keine Charts) — nichts zu tun beim Load.
 })();
 
