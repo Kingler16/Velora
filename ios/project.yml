@@ -37,9 +37,10 @@ targets:
         CFBundleDisplayName: Velora
         ITSAppUsesNonExemptEncryption: false
         # Der Pi spricht nur HTTP (Heimnetz bzw. Tailscale, das selbst verschlüsselt).
+        # Bewusst ohne NSAllowsLocalNetworking: ist das gesetzt, ignoriert iOS
+        # NSAllowsArbitraryLoads und blockiert HTTP zu *.ts.net-Namen.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
-          NSAllowsLocalNetworking: true
         NSLocalNetworkUsageDescription: Velora verbindet sich im Heim-WLAN direkt mit deinem Velora-Server.
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:

@@ -12,14 +12,19 @@ public struct ServerEndpoints: Codable, Sendable, Equatable {
 
     public static let standard = ServerEndpoints(lan: "http://192.168.1.27:8080", remote: "")
 
-    /// Normalisiert Eingaben wie `rockpi:8080` → `http://rockpi:8080`.
+    /// Standard-Port des Velora-Webservers (`web.port` in settings.json).
+    public static let defaultPort = 8080
+
+    /// Normalisiert Eingaben wie `100.69.43.83` → `http://100.69.43.83:8080`.
     public static func url(from string: String) -> URL? {
         var s = string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !s.isEmpty else { return nil }
         if !s.contains("://") { s = "http://" + s }
         while s.hasSuffix("/") { s.removeLast() }
-        guard let url = URL(string: s), url.host() != nil else { return nil }
-        return url
+        guard var components = URLComponents(string: s), components.host?.isEmpty == false else { return nil }
+        // Ohne Port würde HTTP auf 80 landen – Velora lauscht aber auf 8080.
+        if components.port == nil, components.scheme == "http" { components.port = defaultPort }
+        return components.url
     }
 
     var candidates: [(Route, URL)] {
@@ -36,7 +41,7 @@ public enum Route: String, Sendable {
 
 public enum VeloraError: LocalizedError, Sendable {
     case notConfigured
-    case unreachable
+    case unreachable([String])
     case unauthorized
     case server(Int, String)
     case decoding(String)
@@ -44,7 +49,9 @@ public enum VeloraError: LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .notConfigured: "Keine Server-Adresse eingetragen."
-        case .unreachable: "Velora ist nicht erreichbar. Im WLAN zu Hause oder mit aktivem Tailscale erneut versuchen."
+        case .unreachable(let attempts):
+            (["Velora ist nicht erreichbar. Im WLAN zu Hause oder mit aktivem Tailscale erneut versuchen."] + attempts)
+                .joined(separator: "\n")
         case .unauthorized: "Der Server verlangt ein Passwort. Bitte in den Einstellungen eintragen."
         case .server(let code, let message): message.isEmpty ? "Serverfehler \(code)" : message
         case .decoding(let detail): "Unerwartete Antwort vom Server (\(detail))."
@@ -86,21 +93,38 @@ public actor VeloraClient {
         if let resolved { return resolved }
         let candidates = endpoints.candidates
         guard !candidates.isEmpty else { throw VeloraError.notConfigured }
+        var attempts: [String] = []
         for (route, url) in candidates {
             // Im fremden Netz läuft die Heim-IP ins Leere – kurz halten, damit Tailscale schnell dran ist.
-            if await probe(url, timeout: route == .lan ? 1.5 : 8) {
+            if let failure = await probe(url, timeout: route == .lan ? 2 : 10) {
+                attempts.append("\(route.rawValue) \(url.absoluteString): \(failure)")
+            } else {
                 resolved = (route, url)
                 return (route, url)
             }
         }
-        throw VeloraError.unreachable
+        throw VeloraError.unreachable(attempts)
     }
 
-    private func probe(_ base: URL, timeout: TimeInterval) async -> Bool {
+    /// `nil`, wenn der Server antwortet (auch 401 heisst: er ist da), sonst der Grund.
+    private func probe(_ base: URL, timeout: TimeInterval) async -> String? {
         var request = URLRequest(url: base.appending(path: "api/refresh/status"), timeoutInterval: timeout)
         authorize(&request)
-        // Jede HTTP-Antwort (auch 401) heisst: der Server ist da.
-        return (try? await session.data(for: request).1 as? HTTPURLResponse) != nil
+        do {
+            _ = try await session.data(for: request)
+            return nil
+        } catch let error as URLError {
+            switch error.code {
+            case .timedOut: return "keine Antwort"
+            case .cannotConnectToHost: return "Verbindung abgelehnt (Port?)"
+            case .cannotFindHost, .dnsLookupFailed: return "Name unbekannt"
+            case .notConnectedToInternet: return "kein Netz"
+            case .appTransportSecurityRequiresSecureConnection: return "von iOS blockiert (HTTP)"
+            default: return error.localizedDescription
+            }
+        } catch {
+            return error.localizedDescription
+        }
     }
 
     private func authorize(_ request: inout URLRequest) {
@@ -135,15 +159,15 @@ public actor VeloraClient {
                 return data
             } catch is URLError where attempt == 0 {
                 resolved = nil
-            } catch is URLError {
-                throw VeloraError.unreachable
+            } catch let error as URLError {
+                throw VeloraError.unreachable([error.localizedDescription])
             }
         }
-        throw VeloraError.unreachable
+        throw VeloraError.unreachable([])
     }
 
     private static func check(_ response: URLResponse, data: Data) throws {
-        guard let http = response as? HTTPURLResponse else { throw VeloraError.unreachable }
+        guard let http = response as? HTTPURLResponse else { throw VeloraError.unreachable([]) }
         if http.statusCode == 401 { throw VeloraError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
             struct Failure: Decodable { var error: String?; var detail: String? }
@@ -215,7 +239,7 @@ public actor VeloraClient {
                     }
                     continuation.finish()
                 } catch let error as URLError where error.code != .cancelled {
-                    continuation.finish(throwing: VeloraError.unreachable)
+                    continuation.finish(throwing: VeloraError.unreachable([error.localizedDescription]))
                 } catch {
                     continuation.finish(throwing: error)
                 }

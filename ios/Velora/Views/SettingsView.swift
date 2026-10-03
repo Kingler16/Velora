@@ -27,7 +27,7 @@ struct SettingsView: View {
                             .multilineTextAlignment(.trailing)
                     }
                     LabeledContent("Tailscale") {
-                        TextField("http://rockpi:8080", text: $remote)
+                        TextField("100.x.y.z:8080", text: $remote)
                             .multilineTextAlignment(.trailing)
                     }
                     LabeledContent("Passwort") {
@@ -46,7 +46,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Server")
                 } footer: {
-                    Text("Velora versucht zuerst die WLAN-Adresse und nimmt unterwegs automatisch Tailscale (Tailscale-App am iPhone muss verbunden sein). Das Passwort ist nur nötig, wenn am Pi web.auth_token gesetzt ist.")
+                    Text("Velora versucht zuerst die WLAN-Adresse und nimmt unterwegs automatisch Tailscale (Tailscale-App am iPhone muss verbunden sein). Ohne Port-Angabe wird 8080 verwendet. Das Passwort ist nur nötig, wenn am Pi web.auth_token gesetzt ist.")
                 }
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -114,6 +114,8 @@ struct SettingsView: View {
                 }
             }
             .task { await loadInitial() }
+            // Auch beim Wegwischen übernehmen, nicht nur über „Fertig“.
+            .onDisappear { Task { await applyServer() } }
             .errorAlert($error)
         }
     }
@@ -161,7 +163,7 @@ struct SettingsView: View {
             testResult = "✓ verbunden über \(route?.rawValue ?? "?")"
             await loadServerInfo()
         } catch {
-            testResult = "✕ " + ((error as? VeloraError) == nil ? "Fehler" : "nicht erreichbar")
+            testResult = "✕ nicht erreichbar"
             self.error = error.localizedDescription
         }
     }
