@@ -201,6 +201,8 @@ struct RemoteView<T: Decodable, Content: View>: View {
             error = nil
             staleSince = nil
         } catch is CancellationError {
+        } catch where Task.isCancelled {
+            // Tab gewechselt oder neu geladen – der nächste Ladevorgang übernimmt.
         } catch {
             self.error = error
             if value != nil, staleSince == nil { staleSince = .now }

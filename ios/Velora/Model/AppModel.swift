@@ -15,7 +15,7 @@ final class AppModel {
 
     @ObservationIgnored let client: VeloraClient
     @ObservationIgnored private let monitor = NWPathMonitor()
-    @ObservationIgnored private var seenFirstPath = false
+    @ObservationIgnored private var network: NetworkState?
 
     private static let endpointsKey = "serverEndpoints"
 
@@ -40,15 +40,22 @@ final class AppModel {
     }
 
     /// Wechsel zwischen WLAN und Mobilfunk: Route neu bestimmen, damit nicht die Heim-IP ins Leere läuft.
+    /// Mit aktivem VPN meldet iOS viele Pfad-Updates ohne echte Änderung (Tailscale verbindet
+    /// sich neu, Schnittstellen wechseln) – nur eine echte Änderung der Netzlage zählt.
     private func watchNetwork() {
         monitor.pathUpdateHandler = { [weak self] path in
+            let online = path.status == .satisfied
+            let wifi = path.availableInterfaces.contains { $0.type == .wifi }
             Task { @MainActor in
                 guard let self else { return }
-                await self.client.invalidateRoute()
-                self.route = nil
-                // Der erste Aufruf kommt sofort beim Start – da laden die Ansichten ohnehin.
-                if self.seenFirstPath, path.status == .satisfied { self.reloadToken += 1 }
-                self.seenFirstPath = true
+                let state = NetworkState(online: online, wifi: wifi)
+                guard state != self.network else { return }
+                let cameBack = self.network?.online == false && online
+                self.network = state
+                await self.client.setNetwork(wifiAvailable: wifi)
+                self.route = await self.client.route
+                // Nur neu laden, wenn das Netz weg war – sonst bricht jedes Update laufende Anfragen ab.
+                if cameBack { self.reloadToken += 1 }
             }
         }
         monitor.start(queue: DispatchQueue(label: "velora.network"))
@@ -97,6 +104,11 @@ final class AppModel {
         }
         reloadToken += 1
     }
+}
+
+private struct NetworkState: Equatable {
+    var online: Bool
+    var wifi: Bool
 }
 
 enum AppTab: Hashable {

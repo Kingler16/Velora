@@ -199,3 +199,78 @@ private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
         #expect(p.pending.first?.actionId == "a9")
     }
 }
+
+/// Antwortet lokal statt über das Netz; zählt die Verbindungsproben.
+final class StubProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var probes = 0
+    nonisolated(unsafe) static var reachableHosts: Set<String> = []
+    private static let lock = NSLock()
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let url = request.url!
+        if url.path().hasSuffix("refresh/status") { Self.lock.withLock { Self.probes += 1 } }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) { [self] in
+            guard Self.reachableHosts.contains(url.host() ?? "") else {
+                client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
+                return
+            }
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(#"{"running": false}"#.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+
+    override func stopLoading() {}
+}
+
+@Suite(.serialized) struct ClientTests {
+    struct Status: Decodable { var running: Bool }
+
+    private func client() -> VeloraClient {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [StubProtocol.self]
+        StubProtocol.probes = 0
+        StubProtocol.reachableHosts = ["100.69.43.83"]
+        return VeloraClient(endpoints: ServerEndpoints(lan: "192.168.1.27", remote: "100.69.43.83"),
+                            session: URLSession(configuration: config))
+    }
+
+    @Test func cancelledViewDoesNotBreakRouteSearch() async throws {
+        let client = client()
+        // Erste Ansicht wird mitten in der Suche verlassen (Tab-Wechsel) …
+        let first = Task { try await client.get("/api/app/test", as: Status.self) }
+        try await Task.sleep(for: .milliseconds(50))
+        first.cancel()
+        // … die zweite bekommt trotzdem eine Verbindung, ohne von vorn zu proben.
+        let status = try await client.get("/api/app/test", as: Status.self)
+        #expect(status.running == false)
+        #expect(await client.route == .remote)
+        #expect(StubProtocol.probes == 2)  // WLAN + Tailscale je einmal
+    }
+
+    @Test func withoutWifiTailscaleComesFirst() async throws {
+        let client = client()
+        await client.setNetwork(wifiAvailable: false)
+        _ = try await client.get("/api/app/test", as: Status.self)
+        #expect(await client.route == .remote)
+        #expect(StubProtocol.probes == 1)  // Heim-IP gar nicht erst probiert
+    }
+
+    @Test func unreachableNamesEveryAttempt() async {
+        let client = client()
+        StubProtocol.reachableHosts = []
+        do {
+            _ = try await client.get("/api/app/test", as: Status.self)
+            Issue.record("hätte scheitern müssen")
+        } catch {
+            let text = error.localizedDescription
+            #expect(text.contains("192.168.1.27:8080"))
+            #expect(text.contains("100.69.43.83:8080"))
+            #expect(text.contains("Port?"))
+        }
+    }
+}

@@ -63,6 +63,12 @@ public actor VeloraClient {
     public private(set) var endpoints: ServerEndpoints
     private var password: String
     private var resolved: (route: Route, url: URL)?
+    /// Laufende Routensuche – alle Ansichten warten auf dieselbe, statt parallel zu proben.
+    private var resolving: Task<(route: Route, url: URL), Error>?
+    /// Zählt Konfigurations- und Netzwechsel, damit eine veraltete Suche ihr Ergebnis verwirft.
+    private var generation = 0
+    /// Ohne WLAN zuerst Tailscale probieren, statt auf die Heim-IP zu warten.
+    private var preferRemote = false
     private let session: URLSession
 
     public init(endpoints: ServerEndpoints, password: String = "", session: URLSession? = nil) {
@@ -79,11 +85,22 @@ public actor VeloraClient {
     public func configure(endpoints: ServerEndpoints, password: String) {
         self.endpoints = endpoints
         self.password = password
-        resolved = nil
+        invalidateRoute()
     }
 
     /// Nach einem Netzwechsel neu ermitteln, ob WLAN oder Tailscale.
-    public func invalidateRoute() { resolved = nil }
+    public func invalidateRoute() {
+        resolved = nil
+        resolving = nil
+        generation += 1
+    }
+
+    /// Netzlage vom Gerät: ohne WLAN ist die Heim-IP sinnlos, Tailscale kommt zuerst dran.
+    public func setNetwork(wifiAvailable: Bool) {
+        guard preferRemote == wifiAvailable else { return }
+        preferRemote = !wifiAvailable
+        invalidateRoute()
+    }
 
     public var route: Route? { resolved?.route }
 
@@ -91,15 +108,34 @@ public actor VeloraClient {
 
     private func base() async throws -> (route: Route, url: URL) {
         if let resolved { return resolved }
-        let candidates = endpoints.candidates
+        if let resolving { return try await resolving.value }
+        let candidates = preferRemote ? Array(endpoints.candidates.reversed()) : endpoints.candidates
         guard !candidates.isEmpty else { throw VeloraError.notConfigured }
+        // Ungebundener Task: wechselt die Ansicht den Tab oder lädt neu, läuft die Suche trotzdem
+        // zu Ende, statt mit „Abgebrochen“ als Fehlversuch zu enden.
+        let generation = generation
+        let task = Task { try await self.resolve(candidates) }
+        resolving = task
+        do {
+            let result = try await task.value
+            if generation == self.generation {
+                resolved = result
+                resolving = nil
+            }
+            return result
+        } catch {
+            if generation == self.generation { resolving = nil }
+            throw error
+        }
+    }
+
+    private func resolve(_ candidates: [(Route, URL)]) async throws -> (route: Route, url: URL) {
         var attempts: [String] = []
         for (route, url) in candidates {
             // Im fremden Netz läuft die Heim-IP ins Leere – kurz halten, damit Tailscale schnell dran ist.
             if let failure = await probe(url, timeout: route == .lan ? 2 : 10) {
                 attempts.append("\(route.rawValue) \(url.absoluteString): \(failure)")
             } else {
-                resolved = (route, url)
                 return (route, url)
             }
         }
@@ -119,6 +155,7 @@ public actor VeloraClient {
             case .cannotConnectToHost: return "Verbindung abgelehnt (Port?)"
             case .cannotFindHost, .dnsLookupFailed: return "Name unbekannt"
             case .notConnectedToInternet: return "kein Netz"
+            case .networkConnectionLost: return "Verbindung unterbrochen"
             case .appTransportSecurityRequiresSecureConnection: return "von iOS blockiert (HTTP)"
             default: return error.localizedDescription
             }
@@ -157,8 +194,11 @@ public actor VeloraClient {
                 let (data, response) = try await session.data(for: request)
                 try Self.check(response, data: data)
                 return data
+            } catch let error as URLError where error.code == .cancelled {
+                // Ansicht wurde verlassen oder neu geladen – kein Verbindungsfehler.
+                throw CancellationError()
             } catch is URLError where attempt == 0 {
-                resolved = nil
+                invalidateRoute()
             } catch let error as URLError {
                 throw VeloraError.unreachable([error.localizedDescription])
             }
@@ -238,7 +278,9 @@ public actor VeloraClient {
                         }
                     }
                     continuation.finish()
-                } catch let error as URLError where error.code != .cancelled {
+                } catch let error as URLError where error.code == .cancelled {
+                    continuation.finish()  // Nutzer hat „Stopp“ getippt
+                } catch let error as URLError {
                     continuation.finish(throwing: VeloraError.unreachable([error.localizedDescription]))
                 } catch {
                     continuation.finish(throwing: error)
