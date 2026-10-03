@@ -1,0 +1,428 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		26DF5C13C0DB8074099C0454 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 728BFE54008226CFFD17E709 /* Keychain.swift */; };
+		35A76089092F0B76645B2041 /* Forms.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7469AD41D10D203C48320B9 /* Forms.swift */; };
+		46DE35379FDC5BE1B5C9F272 /* AdvisorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9660D45C23E274D9DBAAD07C /* AdvisorView.swift */; };
+		79704E2A638956D4E09D12C3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F60E1B18A1B024372789B25E /* Assets.xcassets */; };
+		868950805C4D47C69A0346A4 /* PositionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE06A0CFCF780815A84D7F57 /* PositionDetailView.swift */; };
+		87849C0AA73D3BC5C0C3B882 /* VeloraKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1CBA4DB7AB1B2E822BA66502 /* VeloraKit */; };
+		89095B7CD44F4CB981F9210D /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1592F022B2661A98BCC8A3D /* AppModel.swift */; };
+		8D7E1771AB2B9FB5E0A19AFA /* PortfolioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FC34B294FE5B82BBDFAE018 /* PortfolioView.swift */; };
+		9D9EC1138FC6199B5C1DF312 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E84B4BCFB3539749DFAB0F3F /* ChatView.swift */; };
+		A68590EA488144EF9A48C86A /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D8CA5AEBA82191FF40B3F4 /* DashboardView.swift */; };
+		C26699E1809C70CD2FE19C99 /* StrategyHoldingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF22370FFF6AF8B4C66286FF /* StrategyHoldingsView.swift */; };
+		D2B23E1F60F3D392C667197E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFD8CA827C5D2A0E821177B6 /* SettingsView.swift */; };
+		E72A047F4B7AFE1407F0B654 /* VeloraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95580F1D89BFE71568792FE8 /* VeloraApp.swift */; };
+		F02DEA08059F69A03CEA81F2 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56E3C442518A1D513111DF5A /* Components.swift */; };
+		F3EFF68F7CE9DF0E830CFF30 /* MarketView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 655168BD710DC4314645AC36 /* MarketView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		56E3C442518A1D513111DF5A /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		5A21D9882CF450C5A3EB34F6 /* VeloraKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = VeloraKit; path = VeloraKit; sourceTree = SOURCE_ROOT; };
+		655168BD710DC4314645AC36 /* MarketView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketView.swift; sourceTree = "<group>"; };
+		728BFE54008226CFFD17E709 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
+		7FC34B294FE5B82BBDFAE018 /* PortfolioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioView.swift; sourceTree = "<group>"; };
+		95580F1D89BFE71568792FE8 /* VeloraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeloraApp.swift; sourceTree = "<group>"; };
+		9654F93BC009403785C525A2 /* Velora.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Velora.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9660D45C23E274D9DBAAD07C /* AdvisorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvisorView.swift; sourceTree = "<group>"; };
+		97D8CA5AEBA82191FF40B3F4 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		BAE76722D6CE381C508F09FD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D1592F022B2661A98BCC8A3D /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		DE06A0CFCF780815A84D7F57 /* PositionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PositionDetailView.swift; sourceTree = "<group>"; };
+		E7469AD41D10D203C48320B9 /* Forms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Forms.swift; sourceTree = "<group>"; };
+		E84B4BCFB3539749DFAB0F3F /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		F60E1B18A1B024372789B25E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		FF22370FFF6AF8B4C66286FF /* StrategyHoldingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrategyHoldingsView.swift; sourceTree = "<group>"; };
+		FFD8CA827C5D2A0E821177B6 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A8AAC3D8BE7BC6BA4723FA90 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				87849C0AA73D3BC5C0C3B882 /* VeloraKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4715832DA220A5B5D550F323 /* Velora */ = {
+			isa = PBXGroup;
+			children = (
+				F60E1B18A1B024372789B25E /* Assets.xcassets */,
+				BAE76722D6CE381C508F09FD /* Info.plist */,
+				95580F1D89BFE71568792FE8 /* VeloraApp.swift */,
+				8A48DD517150D7BCDBC8BDCA /* Model */,
+				622512B83BD04883DF8F2DC6 /* Views */,
+			);
+			path = Velora;
+			sourceTree = "<group>";
+		};
+		622512B83BD04883DF8F2DC6 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				9660D45C23E274D9DBAAD07C /* AdvisorView.swift */,
+				E84B4BCFB3539749DFAB0F3F /* ChatView.swift */,
+				56E3C442518A1D513111DF5A /* Components.swift */,
+				97D8CA5AEBA82191FF40B3F4 /* DashboardView.swift */,
+				E7469AD41D10D203C48320B9 /* Forms.swift */,
+				655168BD710DC4314645AC36 /* MarketView.swift */,
+				7FC34B294FE5B82BBDFAE018 /* PortfolioView.swift */,
+				DE06A0CFCF780815A84D7F57 /* PositionDetailView.swift */,
+				FFD8CA827C5D2A0E821177B6 /* SettingsView.swift */,
+				FF22370FFF6AF8B4C66286FF /* StrategyHoldingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		8A48DD517150D7BCDBC8BDCA /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				D1592F022B2661A98BCC8A3D /* AppModel.swift */,
+				728BFE54008226CFFD17E709 /* Keychain.swift */,
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		BB83C7F7FDF7C3AF0DB7CAB0 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				5A21D9882CF450C5A3EB34F6 /* VeloraKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		DEAA67EECE57A24E863D9D7F = {
+			isa = PBXGroup;
+			children = (
+				BB83C7F7FDF7C3AF0DB7CAB0 /* Packages */,
+				4715832DA220A5B5D550F323 /* Velora */,
+				FE1F5FB4C3F385EC5088964F /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FE1F5FB4C3F385EC5088964F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9654F93BC009403785C525A2 /* Velora.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0E794155DCF258CE021A32E8 /* Velora */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 70446D2AC5A7AD191BDCFB25 /* Build configuration list for PBXNativeTarget "Velora" */;
+			buildPhases = (
+				D6349F13B6E5A5130EE950A8 /* Sources */,
+				0CC269052ADAF13623455952 /* Resources */,
+				A8AAC3D8BE7BC6BA4723FA90 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Velora;
+			packageProductDependencies = (
+				1CBA4DB7AB1B2E822BA66502 /* VeloraKit */,
+			);
+			productName = Velora;
+			productReference = 9654F93BC009403785C525A2 /* Velora.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1A539B5BDD77AF50CE415016 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					0E794155DCF258CE021A32E8 = {
+						DevelopmentTeam = 564XMJKP3J;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 8F0B8BBF48914333FE5EC465 /* Build configuration list for PBXProject "Velora" */;
+			developmentRegion = de;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				de,
+			);
+			mainGroup = DEAA67EECE57A24E863D9D7F;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				0C30BA676F6A3B86466A9004 /* XCLocalSwiftPackageReference "VeloraKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = FE1F5FB4C3F385EC5088964F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0E794155DCF258CE021A32E8 /* Velora */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0CC269052ADAF13623455952 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				79704E2A638956D4E09D12C3 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D6349F13B6E5A5130EE950A8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				46DE35379FDC5BE1B5C9F272 /* AdvisorView.swift in Sources */,
+				89095B7CD44F4CB981F9210D /* AppModel.swift in Sources */,
+				9D9EC1138FC6199B5C1DF312 /* ChatView.swift in Sources */,
+				F02DEA08059F69A03CEA81F2 /* Components.swift in Sources */,
+				A68590EA488144EF9A48C86A /* DashboardView.swift in Sources */,
+				35A76089092F0B76645B2041 /* Forms.swift in Sources */,
+				26DF5C13C0DB8074099C0454 /* Keychain.swift in Sources */,
+				F3EFF68F7CE9DF0E830CFF30 /* MarketView.swift in Sources */,
+				8D7E1771AB2B9FB5E0A19AFA /* PortfolioView.swift in Sources */,
+				868950805C4D47C69A0346A4 /* PositionDetailView.swift in Sources */,
+				D2B23E1F60F3D392C667197E /* SettingsView.swift in Sources */,
+				C26699E1809C70CD2FE19C99 /* StrategyHoldingsView.swift in Sources */,
+				E72A047F4B7AFE1407F0B654 /* VeloraApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		3AEDA3AD512B3E19DC5B8265 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				BUNDLE_ID_BASE = dev.max.velora;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 564XMJKP3J;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		7040BBB9BC30572600F8EF97 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				BUNDLE_ID_BASE = dev.max.velora;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 564XMJKP3J;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		8EE9D5607E0F80288283009E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Velora/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_BASE)";
+				SDKROOT = iphoneos;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C20AB208797AB21BB89954D4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Velora/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_ID_BASE)";
+				SDKROOT = iphoneos;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		70446D2AC5A7AD191BDCFB25 /* Build configuration list for PBXNativeTarget "Velora" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8EE9D5607E0F80288283009E /* Debug */,
+				C20AB208797AB21BB89954D4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8F0B8BBF48914333FE5EC465 /* Build configuration list for PBXProject "Velora" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7040BBB9BC30572600F8EF97 /* Debug */,
+				3AEDA3AD512B3E19DC5B8265 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		0C30BA676F6A3B86466A9004 /* XCLocalSwiftPackageReference "VeloraKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = VeloraKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1CBA4DB7AB1B2E822BA66502 /* VeloraKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = VeloraKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 1A539B5BDD77AF50CE415016 /* Project object */;
+}

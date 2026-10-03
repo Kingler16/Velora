@@ -251,6 +251,10 @@ app.include_router(push_router)
 from src.web.routes.share import router as share_router
 app.include_router(share_router)
 
+# JSON-API für die native iOS-App (ios/)
+from src.web.routes.app_api import router as app_api_router
+app.include_router(app_api_router)
+
 
 from src.config_loader import load_settings as _load_settings_impl
 
@@ -389,7 +393,14 @@ async def market_page(request: Request):
     indices = compute_index_data(market_data)
     cache_status = get_cache_status()
 
-    # Sector Heatmap: Durchschnittliche Tagesveränderung pro Sektor
+    return templates.TemplateResponse(request, "market.html", _ctx(request, "market",
+        indices=indices, macro=macro_data, calendar=calendar_data, cache_status=cache_status,
+        news=news_data or {}, sector_heatmap=_sector_heatmap(market_data),
+    ))
+
+
+def _sector_heatmap(market_data: dict) -> dict:
+    """Durchschnittliche Tagesveränderung pro Sektor über alle Positionen."""
     sector_heatmap = {}
     for ticker, pos in market_data.get("positions", {}).items():
         price = pos.get("price", {})
@@ -397,12 +408,7 @@ async def market_page(request: Request):
         change = price.get("change_pct")
         if sector and change is not None:
             sector_heatmap.setdefault(sector, []).append(change)
-    sector_heatmap = {s: round(sum(c) / len(c), 2) for s, c in sector_heatmap.items()}
-
-    return templates.TemplateResponse(request, "market.html", _ctx(request, "market",
-        indices=indices, macro=macro_data, calendar=calendar_data, cache_status=cache_status,
-        news=news_data or {}, sector_heatmap=sector_heatmap,
-    ))
+    return {s: round(sum(c) / len(c), 2) for s, c in sector_heatmap.items()}
 
 
 @app.get("/briefings", response_class=HTMLResponse)
@@ -454,14 +460,9 @@ async def strategy_page(request: Request):
         _ctx(request, "strategy", mandate=mandate, drift=drift))
 
 
-@app.get("/holdings", response_class=HTMLResponse)
-async def holdings_page(request: Request):
-    """Durchschau: Zusammensetzung jedes Fonds/ETF/Bonds + echte Look-Through-Exposure."""
-    from src.data.holdings import load_holdings_research, compute_lookthrough, needs_lookthrough
-    portfolio = load_portfolio()
-    market_data = get_market_data()
-    research = load_holdings_research()
-
+def _lookthrough_funds(portfolio: dict, research: dict) -> list:
+    """Fonds/ETF/Bond-Positionen für die Durchschau, je ISIN/Ticker nur einmal."""
+    from src.data.holdings import needs_lookthrough
     funds, seen = [], set()
     for acc in portfolio.get("accounts", {}).values():
         for pos in acc.get("positions", []):
@@ -475,7 +476,18 @@ async def holdings_page(request: Request):
             funds.append({"name": name, "isin": isin, "ticker": ticker,
                           "shares": pos.get("shares"), "research": research.get(key)})
     funds.sort(key=lambda f: f["research"] is None)  # noch-nicht-recherchierte zuerst
+    return funds
 
+
+@app.get("/holdings", response_class=HTMLResponse)
+async def holdings_page(request: Request):
+    """Durchschau: Zusammensetzung jedes Fonds/ETF/Bonds + echte Look-Through-Exposure."""
+    from src.data.holdings import load_holdings_research, compute_lookthrough
+    portfolio = load_portfolio()
+    market_data = get_market_data()
+    research = load_holdings_research()
+
+    funds = _lookthrough_funds(portfolio, research)
     lookthrough = compute_lookthrough(portfolio, market_data, research)
     return templates.TemplateResponse(request, "holdings.html",
         _ctx(request, "holdings", funds=funds, lookthrough=lookthrough,
