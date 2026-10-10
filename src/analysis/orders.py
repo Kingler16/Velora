@@ -90,7 +90,7 @@ def _set_rec_status(ticker: str, status: str, outcome: str | None = None,
 
 def place_order(ticker: str, action: str, shares, limit_price, account: str,
                 currency: str = "EUR", rec_ticker: str | None = None,
-                note: str | None = None) -> dict:
+                note: str | None = None, valid_until: str | None = None) -> dict:
     """Legt eine offene Order an. Verändert das Depot NICHT."""
     action = (action or "").strip().lower()
     ticker = (ticker or "").strip().upper()
@@ -105,6 +105,13 @@ def place_order(ticker: str, action: str, shares, limit_price, account: str,
         return {"ok": False, "error": "shares und Limit müssen Zahlen sein", "status_code": 400}
     if not shares or shares <= 0:
         return {"ok": False, "error": "shares muss > 0 sein", "status_code": 400}
+    # Gültig bis (wie beim Broker), optional — ISO-Datum YYYY-MM-DD.
+    valid_until = (valid_until or "").strip()[:10] or None
+    if valid_until:
+        try:
+            datetime.strptime(valid_until, "%Y-%m-%d")
+        except ValueError:
+            return {"ok": False, "error": "Gültig-bis muss ein Datum (JJJJ-MM-TT) sein", "status_code": 400}
 
     now = datetime.now()
     order = {
@@ -117,6 +124,7 @@ def place_order(ticker: str, action: str, shares, limit_price, account: str,
         "account": account or "",
         "status": "pending",
         "placed_date": now.isoformat(),
+        "valid_until": valid_until,
         "rec_ticker": (rec_ticker or ticker).upper(),
         "fill_price": None,
         "fill_date": None,

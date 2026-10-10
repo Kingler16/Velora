@@ -13,8 +13,11 @@ from __future__ import annotations
 
 import html
 import importlib
+import json
+import math
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from src.web.services.portfolio_service import (
     load_portfolio,
@@ -35,11 +38,62 @@ from src.web.services.cache_service import (
 from src.analysis.performance import compute_benchmark_data, compute_tax_loss_data
 from src.data.fx import safe_eur_usd
 
-router = APIRouter(prefix="/api/app", tags=["app"])
+def _finite(obj):
+    """Ersetzt NaN/inf rekursiv durch None. Ein einziger NaN aus yfinance liess
+    sonst die ganze Antwort mit 500 scheitern — und die App zeigte tagelang
+    "Offline", obwohl der Server lief."""
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _finite(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_finite(v) for v in obj]
+    return obj
+
+
+class _AppJSONResponse(JSONResponse):
+    def render(self, content) -> bytes:
+        return json.dumps(_finite(content), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
+router = APIRouter(prefix="/api/app", tags=["app"], default_response_class=_AppJSONResponse)
 
 
 def _web():
     return importlib.import_module("src.web.app")
+
+
+def _with_position_context(recs: list, portfolio: dict, market_data: dict) -> list:
+    """Hängt an jede Empfehlung Währung, Namen und — falls vorhanden — den Stop,
+    der beim Broker gerade steht. Erst damit kann die App aus "hold + stop_loss"
+    ein konkretes "Stop nachziehen: 290 € → 305 €" machen."""
+    web = _web()
+    stops = (web._stop_overview_safe(portfolio, market_data) or {}).get("positions") or []
+
+    def base(t: str) -> str:
+        return (t or "").upper().split(".")[0]
+
+    out = []
+    for rec in recs:
+        if not isinstance(rec, dict):
+            continue
+        ticker = rec.get("ticker", "")
+        match = next((p for p in stops if (p.get("ticker") or "").upper() == ticker.upper()), None) \
+            or next((p for p in stops if base(p.get("ticker")) == base(ticker)), None)
+        extra = {"currency": web._resolve_ticker_currency(ticker, market_data)}
+        if match:
+            extra.update({
+                "name": match.get("name"),
+                "account": match.get("account"),
+                "position_ticker": match.get("ticker"),
+                "shares_held": match.get("shares"),
+                "current_price": match.get("current_price"),
+                "current_stop": match.get("ist_stop"),
+                "current_stop_broker": match.get("ist_stop_broker"),
+                "current_stop_currency": match.get("stop_currency"),
+            })
+        out.append({**rec, **extra})
+    return out
 
 
 def _status() -> dict:
@@ -50,12 +104,14 @@ def _status() -> dict:
 async def dashboard():
     web = _web()
     market_data = get_market_data()
+    portfolio = load_portfolio()
     return {
-        "overview": compute_portfolio_overview(load_portfolio(), market_data),
+        "overview": compute_portfolio_overview(portfolio, market_data),
         "indices": compute_index_data(market_data),
         "snapshots": get_monthly_snapshots(),
         "benchmarks": compute_benchmark_data(market_data),
-        "actionable": web._actionable_recommendations(),
+        "actionable": _with_position_context(web._actionable_recommendations(), portfolio, market_data),
+        "eur_usd": safe_eur_usd(market_data),
         "latest_briefing": web._latest_briefing(),
         "status": _status(),
     }
@@ -79,6 +135,7 @@ async def portfolio():
         "stop_labels": web._STOP_LABELS,
         "open_orders": get_open_orders(),
         "accounts": list(portfolio.get("accounts", {}).keys()),
+        "eur_usd": safe_eur_usd(market_data),
         "status": _status(),
     }
 
@@ -125,16 +182,13 @@ async def recommendations():
     from src.analysis.orders import get_open_orders
     web = _web()
     md = get_market_data()
-    recs = []
-    for rec in get_recommendations():
-        if isinstance(rec, dict):
-            recs.append({**rec, "currency": web._resolve_ticker_currency(rec.get("ticker", ""), md)})
+    portfolio = load_portfolio()
     return {
-        "recommendations": recs,
+        "recommendations": _with_position_context(get_recommendations() or [], portfolio, md),
         "actionable_count": len(web._actionable_recommendations()),
         "eur_usd": safe_eur_usd(md),
         "open_orders": get_open_orders(),
-        "accounts": list(load_portfolio().get("accounts", {}).keys()),
+        "accounts": list(portfolio.get("accounts", {}).keys()),
         "theses": get_notes().get("position_theses", {}),
     }
 

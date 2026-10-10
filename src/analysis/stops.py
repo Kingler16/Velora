@@ -8,7 +8,10 @@ und nichts im System hat je nachgehakt. Velora kannte Stops ausschliesslich als
 Empfehlungswert, nie als Zustand des Depots.
 
 Dieses Modul führt beides zusammen:
-  - Ist-Stop:  pro Position gepflegtes Feld ``stop_loss`` (Quote-Währung des Tickers)
+  - Ist-Stop:  pro Position gepflegtes Feld ``stop_loss`` in der Währung, in der er
+               beim Broker steht (``stop_currency``; fehlt das Feld, gilt die
+               Quote-Währung). Trade Republic führt Stops auf US-Titel in EUR, die
+               Erste Bank in USD — gerechnet wird intern immer in Quote-Währung.
   - Soll-Stop: Kurs − 2×ATR14, dieselbe Regel, die der Briefing-Prompt für
                Empfehlungen verlangt ("Stop ≈ Kurs − 1,5–2×ATR")
 
@@ -39,6 +42,23 @@ def _pct(a: float, b: float) -> float | None:
     return round((a / b - 1) * 100, 1) if b else None
 
 
+def _convert(value: float | None, src: str, dst: str, eur_usd: float) -> float | None:
+    """Rechnet zwischen EUR und USD um (eur_usd = USD je EUR). Andere Paare
+    bleiben unverändert — dafür gibt es keinen Kurs im Cache."""
+    if value is None or src == dst or not eur_usd:
+        return value
+    if src == "EUR" and dst == "USD":
+        return value * eur_usd
+    if src == "USD" and dst == "EUR":
+        return value / eur_usd
+    return value
+
+
+def _eur(value: float | None, ccy: str, eur_usd: float) -> float | None:
+    v = _convert(value, ccy, "EUR", eur_usd)
+    return round(v, 2) if v is not None else None
+
+
 def compute_stop_overview(portfolio: dict, market_data: dict) -> dict:
     """Stellt für jede Depot-Position Ist- und Soll-Stop gegenüber.
 
@@ -64,8 +84,9 @@ def compute_stop_overview(portfolio: dict, market_data: dict) -> dict:
             ticker = pos.get("ticker")
             shares = float(pos.get("shares") or 0)
             name = pos.get("name") or ticker or "?"
-            ist_stop = pos.get("stop_loss")
-            ist_stop = float(ist_stop) if ist_stop not in (None, "") else None
+            stop_broker = pos.get("stop_loss")
+            stop_broker = float(stop_broker) if stop_broker not in (None, "") else None
+            stop_ccy_raw = (pos.get("stop_currency") or "").upper() or None
 
             md = (market_data.get("positions") or {}).get(ticker) or {}
             price = md.get("price") or {}
@@ -78,8 +99,10 @@ def compute_stop_overview(portfolio: dict, market_data: dict) -> dict:
                 nicht_bewertbar += 1
                 positionen.append({
                     "ticker": ticker, "name": name, "account": account_name,
-                    "status": "nicht_bewertbar", "ist_stop": ist_stop,
+                    "status": "nicht_bewertbar", "ist_stop": stop_broker,
+                    "ist_stop_broker": stop_broker, "stop_currency": stop_ccy_raw,
                     "soll_stop": None, "current_price": kurs, "currency": None,
+                    "shares": shares,
                     "hinweis": "kein Live-Kurs — Stop nicht berechenbar",
                 })
                 continue
@@ -87,6 +110,10 @@ def compute_stop_overview(portfolio: dict, market_data: dict) -> dict:
             quote_ccy = resolve_quote_currency(price, pos.get("currency", "EUR"))
             in_eur = 1.0 if quote_ccy == "EUR" else 1.0 / eur_usd
             wert_eur = shares * kurs * in_eur
+            # Gerechnet wird in Quote-Währung; der Broker-Wert bleibt für die Anzeige.
+            stop_ccy = stop_ccy_raw or quote_ccy
+            ist_stop = _convert(stop_broker, stop_ccy, quote_ccy, eur_usd)
+            ist_stop = round(ist_stop, 2) if ist_stop is not None else None
 
             # Zu ruhige Papiere (Laufzeitfonds, Geldmarkt) sinnvoll ausklammern,
             # statt einen Stop vorzuschlagen, der sofort auslösen würde.
@@ -101,7 +128,8 @@ def compute_stop_overview(portfolio: dict, market_data: dict) -> dict:
                     "ticker": ticker, "name": name, "account": account_name,
                     "status": "kein_stop_noetig", "ist_stop": None, "soll_stop": None,
                     "current_price": round(kurs, 2), "currency": quote_ccy,
-                    "wert_eur": round(wert_eur, 2),
+                    "current_price_eur": _eur(kurs, quote_ccy, eur_usd),
+                    "shares": shares, "wert_eur": round(wert_eur, 2),
                     "hinweis": f"Tagesschwankung nur {atr_pct:.2f}% — Stop wäre Rauschen, nicht Schutz",
                 })
                 continue
@@ -145,9 +173,18 @@ def compute_stop_overview(portfolio: dict, market_data: dict) -> dict:
                 "account": account_name,
                 "status": status,
                 "ist_stop": ist_stop,
+                # So, wie der Stop beim Broker eingetragen ist (Währung kann von
+                # der Quote abweichen, z.B. EUR-Stop bei Trade Republic auf US-Aktie).
+                "ist_stop_broker": stop_broker,
+                "stop_currency": stop_ccy if stop_broker is not None else None,
+                "stop_set_at": pos.get("stop_set_at"),
                 "soll_stop": soll_stop,
                 "current_price": round(kurs, 2),
                 "currency": quote_ccy,
+                "shares": shares,
+                "current_price_eur": _eur(kurs, quote_ccy, eur_usd),
+                "ist_stop_eur": _eur(ist_stop, quote_ccy, eur_usd),
+                "soll_stop_eur": _eur(soll_stop, quote_ccy, eur_usd),
                 "atr": atr,
                 "abstand_atr": abstand_atr,
                 "abstand_pct": _pct(ist_stop, kurs) if ist_stop else None,
@@ -209,7 +246,12 @@ def format_stop_overview(overview: dict | None) -> str:
         c = p["currency"]
         teile = [f"Kurs {p['current_price']} {c}"]
         if p["ist_stop"] is not None:
-            teile.append(f"Ist-Stop {p['ist_stop']} ({p['abstand_pct']:+.1f}%, {p['abstand_atr']}×ATR)")
+            broker = ""
+            if p.get("stop_currency") and p["stop_currency"] != c:
+                broker = f", beim Broker als {p['ist_stop_broker']} {p['stop_currency']}"
+            abstand = f"{p['abstand_pct']:+.1f}%" if p.get("abstand_pct") is not None else "?"
+            atr = f", {p['abstand_atr']}×ATR" if p.get("abstand_atr") is not None else ""
+            teile.append(f"Ist-Stop {p['ist_stop']} {c} ({abstand}{atr}{broker})")
         else:
             teile.append("Ist-Stop: KEINER GESETZT")
         if p["soll_stop"] is not None:

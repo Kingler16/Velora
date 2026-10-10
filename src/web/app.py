@@ -775,6 +775,7 @@ async def api_place_order(request: Request):
         currency=body.get("currency", "EUR"),
         rec_ticker=body.get("rec_ticker"),
         note=body.get("note"),
+        valid_until=body.get("valid_until"),
     )
     if result.get("ok"):
         return JSONResponse({"status": "ok", "message": result["message"]})
@@ -855,7 +856,8 @@ async def api_edit_position(request: Request):
     ticker = body.get("ticker", "")
     if not account or not ticker:
         return JSONResponse({"error": "account und ticker erforderlich"}, status_code=400)
-    updates = {k: body[k] for k in ("shares", "buy_in", "buy_in_eur", "currency", "name", "isin", "new_account")
+    updates = {k: body[k] for k in ("shares", "buy_in", "buy_in_eur", "currency", "name", "isin", "new_account",
+                                    "stop_currency")
                if k in body and body[k] is not None and body[k] != ""}
     # stop_loss bewusst ohne Leer-Filter: ein leerer Wert bedeutet hier "Stop entfernt"
     # (z.B. beim Broker gelöscht) und muss durchgereicht werden.

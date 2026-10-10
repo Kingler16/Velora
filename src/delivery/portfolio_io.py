@@ -166,7 +166,7 @@ def edit_position(account: str, ticker: str, updates: dict) -> dict:
     """Korrigiert Felder einer bestehenden Position — REINE Korrektur, KEIN Cash-Effekt.
 
     `updates` darf enthalten: shares, buy_in, buy_in_eur, currency, name, isin,
-    new_account, stop_loss.
+    new_account, stop_loss, stop_currency.
     Cash wird bewusst NICHT angefasst (Korrektur ≠ Trade). Returns {"ok": bool, "error": str}.
     """
     from datetime import datetime
@@ -205,20 +205,28 @@ def edit_position(account: str, ticker: str, updates: dict) -> dict:
                 if (target.get("currency") or "EUR").upper() == "EUR":
                     target["buy_in"] = bie
 
-            # Stop-Loss: der beim Broker TATSÄCHLICH gesetzte Stop, in Quote-Währung
-            # des Tickers (USD für US-Titel, EUR für europäische) — gleiche Konvention
-            # wie bei Empfehlungen. Leerer Wert = Stop entfernt.
+            # Stop-Loss: der beim Broker TATSÄCHLICH gesetzte Stop, so wie er dort
+            # steht. stop_currency hält fest, in welcher Währung (Trade Republic führt
+            # Stops auf US-Titel in EUR, die Erste Bank in USD); ohne Angabe gilt die
+            # Quote-Währung des Tickers. Leerer Wert = Stop entfernt.
             if "stop_loss" in updates:
                 raw = updates["stop_loss"]
                 if raw in (None, "", "null"):
                     target.pop("stop_loss", None)
                     target.pop("stop_set_at", None)
+                    target.pop("stop_currency", None)
                 else:
                     stop = float(raw)
                     if stop <= 0:
                         raise _AbortWrite("Stop-Loss muss grösser als 0 sein")
+                    if stop != target.get("stop_loss"):
+                        target["stop_set_at"] = datetime.now().strftime("%Y-%m-%d")
                     target["stop_loss"] = stop
-                    target["stop_set_at"] = datetime.now().strftime("%Y-%m-%d")
+            if updates.get("stop_currency") and target.get("stop_loss") is not None:
+                ccy = str(updates["stop_currency"]).strip().upper()
+                if ccy not in ("EUR", "USD"):
+                    raise _AbortWrite("Stop-Währung muss EUR oder USD sein")
+                target["stop_currency"] = ccy
 
             portfolio["last_updated"] = datetime.now().strftime("%Y-%m-%d")
     except _AbortWrite as e:

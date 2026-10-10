@@ -46,6 +46,16 @@ def get_all_tickers(portfolio: dict) -> list[dict]:
     return tickers
 
 
+def _finite(value):
+    """Zahl oder None — NaN/inf aus pandas-Zeilen dürfen nicht in den Cache,
+    sonst scheitert später jede JSON-Antwort daran."""
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    return f if np.isfinite(f) else None
+
+
 def validate_price(price, ticker: str, field: str) -> float | None:
     """Validiert dass ein Preis plausibel ist."""
     if price is None:
@@ -245,7 +255,7 @@ def aggregate_insiders(insiders: list[dict]) -> dict:
             continue
 
         try:
-            value = float(tx.get("value", 0) or 0)
+            value = _finite(tx.get("value")) or 0.0
         except (ValueError, TypeError):
             value = 0.0
 
@@ -294,7 +304,9 @@ def _build_price_dict(ticker: str, info: dict, hist_1y) -> dict | None:
     # 1m/6m/1y aus 1y-History slicen statt separate Calls
     perf_1m = perf_6m = perf_1y = None
     if hist_1y is not None and not hist_1y.empty:
-        closes = hist_1y["Close"]
+        # yfinance liefert bei europäischen Börsen gern eine leere (NaN-)Schlusszeile
+        # für den laufenden Tag — die würde jede Performance-Zahl zu NaN machen.
+        closes = hist_1y["Close"].dropna()
         n = len(closes)
         if n >= 50:
             perf_1y = (float(closes.iloc[-1]) / float(closes.iloc[0]) - 1) * 100
@@ -421,8 +433,8 @@ def _extract_insiders(stock, ticker: str) -> list[dict]:
                 "insider": str(row.get("Insider", "")),
                 "relation": str(row.get("Relation", "")),
                 "transaction": str(row.get("Transaction", "")),
-                "shares": row.get("Shares", 0),
-                "value": row.get("Value", 0),
+                "shares": _finite(row.get("Shares")),
+                "value": _finite(row.get("Value")),
                 "date": str(row.get("Date", "")),
             })
         return recent
@@ -512,8 +524,8 @@ def fetch_insider_activity(ticker: str) -> list[dict]:
                 "insider": str(row.get("Insider", "")),
                 "relation": str(row.get("Relation", "")),
                 "transaction": str(row.get("Transaction", "")),
-                "shares": row.get("Shares", 0),
-                "value": row.get("Value", 0),
+                "shares": _finite(row.get("Shares")),
+                "value": _finite(row.get("Value")),
                 "date": str(row.get("Date", "")),
             })
         return recent

@@ -212,6 +212,15 @@
     text-align: right;
 }
 .stop-input:focus { outline: none; border-color: var(--accent); }
+.stop-ccy {
+    margin-left: 4px;
+    padding: 5px 4px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    color: var(--text-primary);
+    font-size: 13px;
+}
 .stop-save { margin-left: 6px; }
 .depot-tab-btn.active {
     color: var(--accent);
@@ -520,7 +529,8 @@
                     </td>
                     <td style="text-align:right;">{{ p.current_price if p.current_price else '—' }}<span style="color:var(--text-muted); font-size:11px;"> {{ p.currency or '' }}</span></td>
                     <td style="text-align:right;">
-                        {% if p.ist_stop %}{{ p.ist_stop }}<div style="font-size:11px; color:var(--text-muted);">{{ p.abstand_pct }}%</div>
+                        {% if p.ist_stop_broker %}{{ p.ist_stop_broker }}<span style="color:var(--text-muted); font-size:11px;"> {{ p.stop_currency or p.currency or '' }}</span>
+                        <div style="font-size:11px; color:var(--text-muted);">{% if p.stop_currency and p.currency and p.stop_currency != p.currency %}≈ {{ p.ist_stop }} {{ p.currency }} · {% endif %}{{ p.abstand_pct }}%</div>
                         {% else %}<span style="color: var(--red);">—</span>{% endif %}
                     </td>
                     <td style="text-align:right;">
@@ -535,7 +545,12 @@
                     <td style="text-align:right; white-space:nowrap;">
                         {% if p.status not in ('nicht_bewertbar', 'kein_stop_noetig') %}
                         <input type="number" step="0.01" class="stop-input" placeholder="{{ p.soll_stop or '' }}"
-                               value="{{ p.ist_stop or '' }}" aria-label="Stop für {{ p.name }}">
+                               value="{{ p.ist_stop_broker or '' }}" aria-label="Stop für {{ p.name }}">
+                        {% set stop_ccy = p.stop_currency or p.currency or 'EUR' %}
+                        <select class="stop-ccy" aria-label="Währung des Stops beim Broker">
+                            <option value="EUR" {% if stop_ccy == 'EUR' %}selected{% endif %}>€</option>
+                            <option value="USD" {% if stop_ccy == 'USD' %}selected{% endif %}>$</option>
+                        </select>
                         <button type="button" class="btn btn-sm stop-save">Speichern</button>
                         {% endif %}
                     </td>
@@ -943,6 +958,7 @@ function initPerformanceCharts() {
     // Leeres Feld = Stop entfernt (z.B. beim Broker gelöscht).
     document.querySelectorAll('[data-stop-row]').forEach(row => {
         const input = row.querySelector('.stop-input');
+        const ccy = row.querySelector('.stop-ccy');
         const btn = row.querySelector('.stop-save');
         if (!input || !btn) return;
 
@@ -959,6 +975,7 @@ function initPerformanceCharts() {
                         account: row.dataset.account,
                         ticker: row.dataset.ticker,
                         stop_loss: wert,
+                        stop_currency: ccy ? ccy.value : undefined,
                     }),
                 });
                 const d = await r.json().catch(() => ({}));
