@@ -29,7 +29,7 @@ struct PortfolioView: View {
                     case .positions: PositionsSection(data: data, sheet: $sheet)
                     case .performance: PerformanceSection(data: data)
                     case .tax: TaxSection(data: data)
-                    case .stops: StopsSection(data: data)
+                    case .stops: StopsSection(data: data, sheet: $sheet)
                     case .orders: OrdersSection(data: data, sheet: $sheet)
                     }
                 }
@@ -46,6 +46,13 @@ struct PortfolioView: View {
                             }
                             Button("Order platzieren", systemImage: "list.bullet.clipboard") {
                                 sheet = .order(ticker: "", action: "buy", currency: "EUR", accounts: data.accounts)
+                            }
+                            if let stops = data.stops?.positions.filter(\.isStoppable), !stops.isEmpty {
+                                Menu("Stop eintragen", systemImage: "shield.lefthalf.filled") {
+                                    ForEach(stops) { stop in
+                                        Button(stop.displayName) { sheet = .editStop(StopTarget(stop: stop)) }
+                                    }
+                                }
                             }
                             Button("Bestand nachtragen", systemImage: "plus.square.on.square") {
                                 sheet = .addPosition(accounts: data.accounts)
@@ -87,7 +94,8 @@ enum PortfolioSheet: Identifiable {
     case order(ticker: String, action: String, currency: String, accounts: [String])
     case fill(Order)
     case addPosition(accounts: [String])
-    case editPosition(Position, stop: Double?, accounts: [String])
+    case editPosition(Position, stop: StopPosition?, accounts: [String])
+    case editStop(StopTarget)
     case bankAccount(BankAccount?)
 
     var id: String {
@@ -97,6 +105,7 @@ enum PortfolioSheet: Identifiable {
         case .fill(let o): "fill-\(o.id)"
         case .addPosition: "add"
         case .editPosition(let p, _, _): "edit-\(p.id)"
+        case .editStop(let t): "stop-\(t.id)"
         case .bankAccount(let b): "bank-\(b?.id ?? "")"
         }
     }
@@ -108,6 +117,7 @@ enum PortfolioSheet: Identifiable {
         case .fill(let o): FillOrderSheet(order: o)
         case .addPosition(let accounts): AddPositionSheet(accounts: accounts)
         case .editPosition(let p, let stop, let accounts): EditPositionSheet(position: p, stop: stop, accounts: accounts)
+        case .editStop(let t): EditStopSheet(target: t)
         case .bankAccount(let b): BankAccountSheet(account: b)
         }
     }
@@ -330,6 +340,7 @@ private struct TaxSummarySection: View {
 
 private struct StopsSection: View {
     var data: PortfolioData
+    @Binding var sheet: PortfolioSheet?
 
     var body: some View {
         if let stops = data.stops {
@@ -342,22 +353,19 @@ private struct StopsSection: View {
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
             }
-            Section("Positionen") {
+            Section {
                 ForEach(stops.positions.sorted { ($0.needsAttention ? 0 : 1, -($0.valueEur ?? 0)) < ($1.needsAttention ? 0 : 1, -($1.valueEur ?? 0)) }) { s in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(s.name.isEmpty ? s.ticker : s.name).font(.subheadline.weight(.medium)).lineLimit(1)
-                            Spacer()
-                            Pill(text: data.stopLabel(s.status), color: s.needsAttention ? Theme.amber : Theme.gain)
-                        }
-                        HStack(spacing: 12) {
-                            Text("Kurs \(Format.price(s.currentPrice, currency: s.currency))")
-                            if let stop = s.currentStop { Text("Stop \(Format.price(stop, currency: s.currency))") }
-                            if let target = s.targetStop { Text("Soll \(Format.price(target, currency: s.currency))") }
-                        }
-                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    Button {
+                        if s.isStoppable { sheet = .editStop(StopTarget(stop: s)) }
+                    } label: {
+                        StopRow(stop: s, label: data.stopLabel(s.status), eurUsd: data.eurUsd)
                     }
+                    .tint(.primary)
                 }
+            } header: {
+                Text("Positionen")
+            } footer: {
+                Text("Tippen, um den Stop so einzutragen, wie er beim Broker steht – in € oder $. Soll = Kurs − 2×ATR.")
             }
         } else {
             ContentUnavailableView("Keine Stop-Übersicht", systemImage: "shield.slash")
@@ -365,8 +373,56 @@ private struct StopsSection: View {
     }
 }
 
+private struct StopRow: View {
+    var stop: StopPosition
+    var label: String
+    var eurUsd: Double?
+
+    var body: some View {
+        let s = stop
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(s.displayName).font(.subheadline.weight(.medium)).lineLimit(1)
+                Spacer()
+                Pill(text: label, color: Theme.stopStatus(s))
+            }
+            HStack(alignment: .top, spacing: 0) {
+                column("Kurs", Format.price(s.currentPrice, currency: s.currency),
+                       Format.eurHint(s.currentPrice, currency: s.currency, eurUsd: eurUsd))
+                if let broker = s.brokerStop {
+                    column("Stop", Format.price(broker, currency: s.brokerCurrency),
+                           s.stopInOtherCurrency ? "≈ " + Format.price(s.currentStop, currency: s.currency)
+                                                 : Format.eurHint(broker, currency: s.brokerCurrency, eurUsd: eurUsd),
+                           color: s.status == "ungueltig" ? Theme.loss : .primary)
+                } else {
+                    column("Stop", "–", nil, color: s.needsAttention ? Theme.amber : .secondary)
+                }
+                if let target = s.targetStop {
+                    column("Soll", Format.price(target, currency: s.currency),
+                           Format.eurHint(target, currency: s.currency, eurUsd: eurUsd))
+                }
+            }
+            if let hint = s.hint {
+                Text(hint).font(.caption2).foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func column(_ title: String, _ value: String, _ sub: String?, color: Color = .primary) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title).font(.caption2).foregroundStyle(.secondary)
+            Text(value).font(.footnote.weight(.medium)).foregroundStyle(color)
+            if let sub { Text(sub).font(.caption2).foregroundStyle(.secondary) }
+        }
+        .monospacedDigit()
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 // MARK: - Orders
 
+/// Alles, was beim Broker offen liegt: Stop-Orders (aus den gesetzten Stops) und Limit-Orders.
 private struct OrdersSection: View {
     var data: PortfolioData
     @Binding var sheet: PortfolioSheet?
@@ -374,50 +430,138 @@ private struct OrdersSection: View {
     @State private var error: String?
 
     var body: some View {
-        if data.openOrders.isEmpty {
-            ContentUnavailableView("Keine offenen Orders", systemImage: "list.bullet.clipboard",
-                                   description: Text("Platzierte Limit-Orders erscheinen hier, bis sie ausgeführt oder storniert sind."))
+        if data.openOrderCount == 0 {
+            ContentUnavailableView {
+                Label("Keine offenen Orders", systemImage: "list.bullet.clipboard")
+            } description: {
+                Text("Stop-Orders erscheinen hier, sobald du bei einer Position den Stop einträgst. Limit-Orders über + → „Order platzieren“.")
+            }
         } else {
             Section {
-                ForEach(data.openOrders) { order in
-                    OrderRow(order: order)
-                        .swipeActions {
-                            Button("Storno", systemImage: "xmark", role: .destructive) {
-                                Task {
-                                    do { try await model.send("/api/orders/cancel", ["id": .string(order.id)]) }
-                                    catch { self.error = error.localizedDescription }
+                HStack {
+                    StatTile(title: "Offen", value: "\(data.openOrderCount)",
+                             footnote: "\(data.stopOrders.count) Stop · \(data.openOrders.count) Limit")
+                    StatTile(title: "Abgesichert", value: Format.eur(data.stopOrders.reduce(0) { $0 + ($1.valueEur ?? 0) }, digits: 0),
+                             footnote: "Depotwert mit Stop")
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+
+            if !data.stopOrders.isEmpty {
+                ForEach(groupedStops, id: \.account) { group in
+                    Section {
+                        ForEach(group.stops) { stop in
+                            Button { sheet = .editStop(StopTarget(stop: stop)) } label: {
+                                StopOrderRow(stop: stop, eurUsd: data.eurUsd)
+                            }
+                            .tint(.primary)
+                        }
+                    } header: {
+                        Text("Stop · \(Format.accountName(group.account))")
+                    }
+                }
+            }
+
+            if !data.openOrders.isEmpty {
+                Section {
+                    ForEach(data.openOrders) { order in
+                        OrderRow(order: order, eurUsd: data.eurUsd)
+                            .swipeActions {
+                                Button("Storno", systemImage: "xmark", role: .destructive) {
+                                    Task {
+                                        do { try await model.send("/api/orders/cancel", ["id": .string(order.id)]) }
+                                        catch { self.error = error.localizedDescription }
+                                    }
                                 }
                             }
-                        }
-                        .swipeActions(edge: .leading) {
-                            Button("Ausgeführt", systemImage: "checkmark") { sheet = .fill(order) }
-                                .tint(Theme.gain)
-                        }
+                            .swipeActions(edge: .leading) {
+                                Button("Ausgeführt", systemImage: "checkmark") { sheet = .fill(order) }
+                                    .tint(Theme.accent)
+                            }
+                    }
+                } header: {
+                    Text("Limit")
+                } footer: {
+                    Text("Nach rechts wischen: ausgeführt (bucht ins Depot). Nach links: stornieren.")
                 }
-            } footer: {
-                Text("Nach rechts wischen: ausgeführt (bucht ins Depot). Nach links: stornieren.")
+                .errorAlert($error)
             }
-            .errorAlert($error)
         }
+    }
+
+    private var groupedStops: [(account: String, stops: [StopPosition])] {
+        Dictionary(grouping: data.stopOrders, by: \.account)
+            .map { ($0.key, $0.value) }
+            .sorted { $0.account < $1.account }
+    }
+}
+
+private struct StopOrderRow: View {
+    var stop: StopPosition
+    var eurUsd: Double?
+
+    var body: some View {
+        let s = stop
+        HStack(spacing: 12) {
+            IconBadge(systemImage: "shield.lefthalf.filled", color: Theme.stopStatus(s), size: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(s.displayName).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1).monospacedDigit()
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(Format.price(s.brokerStop, currency: s.brokerCurrency)).font(.subheadline.weight(.semibold))
+                if s.stopInOtherCurrency {
+                    Text("≈ " + Format.price(s.currentStop, currency: s.currency)).font(.caption2).foregroundStyle(.secondary)
+                } else if let hint = Format.eurHint(s.brokerStop, currency: s.brokerCurrency, eurUsd: eurUsd) {
+                    Text(hint).font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            .monospacedDigit()
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var subtitle: String {
+        var parts = ["Verkauf"]
+        if let shares = stop.shares { parts.append("\(Format.shares(shares)) Stk.") }
+        if let price = stop.currentPrice { parts.append("Kurs \(Format.price(price, currency: stop.currency))") }
+        if let pct = stop.distancePct { parts.append(Format.pct(pct)) }
+        return parts.joined(separator: " · ")
     }
 }
 
 struct OrderRow: View {
     var order: Order
+    var eurUsd: Double?
 
     var body: some View {
-        HStack {
-            Pill(text: order.action == "buy" ? "Kauf" : "Verkauf", color: order.action == "buy" ? Theme.gain : Theme.loss)
+        HStack(spacing: 12) {
+            IconBadge(systemImage: order.action == "buy" ? "cart.fill" : "arrow.down.right",
+                      color: order.action == "buy" ? Theme.accent : Theme.loss, size: 34)
             VStack(alignment: .leading, spacing: 2) {
-                Text(order.ticker).font(.subheadline.weight(.medium))
-                Text("\(Format.accountName(order.account)) · \(Format.date(order.placedDate))")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text("\(order.action == "buy" ? "Kauf" : "Verkauf") · \(order.ticker)").font(.subheadline.weight(.semibold))
+                Text(subtitle).font(.caption).foregroundStyle(order.isExpired() ? Theme.amber : .secondary).lineLimit(1)
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("\(Format.shares(order.shares)) Stk.").font(.subheadline).monospacedDigit()
-                Text("Limit \(Format.price(order.limitPrice, currency: order.currency))").font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(Format.price(order.limitPrice, currency: order.currency)).font(.subheadline.weight(.semibold))
+                Text("\(Format.shares(order.shares)) Stk.\(order.volume.map { " · " + Format.price($0, currency: order.currency) } ?? "")")
+                    .font(.caption2).foregroundStyle(.secondary)
             }
+            .monospacedDigit()
         }
+        .padding(.vertical, 2)
+    }
+
+    private var subtitle: String {
+        var parts = [Format.accountName(order.account)]
+        if let until = order.validUntil {
+            parts.append(order.isExpired() ? "abgelaufen \(Format.date(until))" : "gültig bis \(Format.date(until))")
+        } else if let placed = order.placedDate {
+            parts.append("seit \(Format.date(placed))")
+        }
+        return parts.joined(separator: " · ")
     }
 }

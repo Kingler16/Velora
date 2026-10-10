@@ -13,13 +13,15 @@ struct DashboardView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         HeaderCard(overview: data.overview)
+                        if !data.actionable.isEmpty {
+                            ActionableCard(recommendations: data.actionable, eurUsd: data.eurUsd)
+                        }
                         IndexStrip(indices: data.indices)
+                        if let briefing = data.latestBriefing { LatestBriefingCard(briefing: briefing) }
                         if data.snapshots.count > 1 {
                             HistoryCard(snapshots: data.snapshots, current: data.overview.totalValueEur)
                         }
                         AllocationCard(overview: data.overview)
-                        if !data.actionable.isEmpty { ActionableCard(recommendations: data.actionable) }
-                        if let briefing = data.latestBriefing { LatestBriefingCard(briefing: briefing) }
                         if !data.benchmarks.isEmpty { BenchmarkCard(benchmarks: data.benchmarks) }
                         if let status = data.status { DataStatusFooter(status: status) }
                     }
@@ -212,19 +214,50 @@ private struct AllocationCard: View {
     }
 }
 
+/// Offene Empfehlungen gleich unter dem Vermögen – das, was heute zu tun ist.
 private struct ActionableCard: View {
     var recommendations: [Recommendation]
+    var eurUsd: Double?
+
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        Card(title: "Zu erledigen", subtitle: "Offene Empfehlungen mit konkreter Aktion") {
-            ForEach(recommendations) { rec in
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Label {
+                    Text("Zu tun").font(.headline)
+                } icon: {
+                    Image(systemName: "bell.badge.fill").foregroundStyle(Theme.amber)
+                }
+                Text("\(recommendations.count)")
+                    .font(.caption.weight(.bold)).monospacedDigit()
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(Theme.amber.opacity(0.2), in: .capsule)
+                    .foregroundStyle(Theme.amber)
+                Spacer()
+                Button("Alle") {
+                    model.advisorSection = .recommendations
+                    model.selectedTab = .advisor
+                }
+                .font(.subheadline.weight(.medium))
+            }
+            ForEach(recommendations.prefix(3)) { rec in
                 NavigationLink(value: rec) {
-                    RecommendationRow(recommendation: rec)
+                    RecommendationRow(recommendation: rec, eurUsd: eurUsd)
+                        .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                if rec.id != recommendations.last?.id { Divider() }
+                if rec.id != recommendations.prefix(3).last?.id { Divider() }
+            }
+            if recommendations.count > 3 {
+                Text("+ \(recommendations.count - 3) weitere im Berater").font(.footnote).foregroundStyle(.secondary)
             }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.amber.opacity(0.06), in: .rect(cornerRadius: 20))
+        .background(.background.secondary, in: .rect(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Theme.amber.opacity(0.25)))
     }
 }
 
@@ -235,9 +268,10 @@ private struct LatestBriefingCard: View {
         NavigationLink(value: briefing) {
             Card(title: "Letztes Briefing", subtitle: Format.date(briefing.date, time: true)) {
                 Text(briefing.summary).font(.subheadline).foregroundStyle(.primary).multilineTextAlignment(.leading)
+                    .lineLimit(4)
                 HStack {
                     if briefing.recommendationCount > 0 {
-                        Pill(text: "\(briefing.recommendationCount) Empfehlungen", color: Theme.cyan)
+                        Pill(text: briefing.recommendationCount == 1 ? "1 Empfehlung" : "\(briefing.recommendationCount) Empfehlungen", color: Theme.violet)
                     }
                     if briefing.hadActions { Pill(text: "Handlungsbedarf", color: Theme.amber) }
                     Spacer()

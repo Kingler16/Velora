@@ -29,6 +29,7 @@ struct RootView: View {
             Tab("Depot", systemImage: "briefcase.fill", value: AppTab.portfolio) { PortfolioView() }
             Tab("Markt", systemImage: "globe.europe.africa.fill", value: AppTab.market) { MarketView() }
             Tab("Berater", systemImage: "doc.text.magnifyingglass", value: AppTab.advisor) { AdvisorView() }
+                .badge(model.actionableCount)
             Tab("Chat", systemImage: "bubble.left.and.text.bubble.right.fill", value: AppTab.chat) { ChatListView() }
         }
     }

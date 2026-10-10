@@ -74,15 +74,31 @@ public struct Recommendation: Decodable, Sendable, Identifiable, Hashable {
     public var entryPrice: Double?
     public var targetPrice: Double?
     public var stopLoss: Double?
+    public var shares: Double?
     public var reasoning: String
     public var date: String
     public var status: String
     public var outcome: String?
     public var currency: String
+    // Kontext aus dem Depot (nur wenn die Position gehalten wird).
+    public var name: String?
+    public var account: String?
+    /// Ticker der gehaltenen Position (kann vom Empfehlungs-Ticker im Börsenkürzel abweichen).
+    public var positionTicker: String?
+    public var sharesHeld: Double?
+    public var currentPrice: Double?
+    /// Stop, der beim Broker steht – in Notierungswährung umgerechnet.
+    public var currentStop: Double?
+    /// Derselbe Stop so, wie er beim Broker eingetragen ist.
+    public var currentStopBroker: Double?
+    public var currentStopCurrency: String?
 
     enum CodingKeys: String, CodingKey {
-        case ticker, action, reasoning, date, status, outcome, currency
+        case ticker, action, reasoning, date, status, outcome, currency, shares, name, account
         case entryPrice = "entry_price", targetPrice = "target_price", stopLoss = "stop_loss"
+        case positionTicker = "position_ticker"
+        case sharesHeld = "shares_held", currentPrice = "current_price", currentStop = "current_stop"
+        case currentStopBroker = "current_stop_broker", currentStopCurrency = "current_stop_currency"
     }
 
     public init(from decoder: Decoder) throws {
@@ -92,14 +108,26 @@ public struct Recommendation: Decodable, Sendable, Identifiable, Hashable {
         entryPrice = c(.entryPrice)
         targetPrice = c(.targetPrice)
         stopLoss = c(.stopLoss)
+        shares = c(.shares)
         reasoning = c(.reasoning, default: "")
         date = c(.date, default: "")
         status = c(.status, default: "open")
         outcome = (c(.outcome) as JSONValue?).flatMap { $0 == .null ? nil : $0.display }
-        currency = c(.currency, default: "EUR")
+        currency = Format.currencyCode(c(.currency, default: "EUR"))
+        name = c(.name)
+        account = c(.account)
+        positionTicker = c(.positionTicker)
+        sharesHeld = c(.sharesHeld)
+        currentPrice = c(.currentPrice)
+        currentStop = c(.currentStop)
+        currentStopBroker = c(.currentStopBroker)
+        currentStopCurrency = c(.currentStopCurrency)
     }
 
     public var isOpen: Bool { status == "open" }
+
+    /// „hold“ mit Stop heisst: beim Broker den Stop setzen oder nachziehen.
+    public var isStopAction: Bool { action == "hold" && stopLoss != nil }
 
     /// Gleiche Regel wie das Web-Dashboard: buy/sell immer, watch mit Einstiegskurs,
     /// hold nur mit Stop (= Stop beim Broker nachziehen).
@@ -113,19 +141,36 @@ public struct Recommendation: Decodable, Sendable, Identifiable, Hashable {
         }
     }
 
+    public var displayName: String {
+        guard let name, !name.isEmpty, name.uppercased() != ticker.uppercased() else { return ticker }
+        return name
+    }
+
     public var actionLabel: String {
         switch action {
         case "buy": "Kaufen"
         case "sell": "Verkaufen"
         case "watch": "Beobachten"
-        case "hold": "Halten"
+        case "hold" where stopLoss == nil: "Halten"
+        case "hold" where currentStop == nil: "Stop setzen"
+        case "hold": "Stop nachziehen"
         default: action.capitalized
         }
+    }
+
+    /// Der entscheidende Kurs der Empfehlung: Stop bei Stop-Aktionen, sonst der Einstieg.
+    public var keyPrice: Double? { action == "hold" ? stopLoss : entryPrice }
+
+    /// Um wie viel Prozent der neue Stop über dem alten liegt (nur beim Nachziehen).
+    public var stopRaisePct: Double? {
+        guard isStopAction, let new = stopLoss, let old = currentStop, old > 0 else { return nil }
+        return (new / old - 1) * 100
     }
 
     public var statusLabel: String {
         switch status {
         case "open": "offen"
+        case "order_placed": "Order platziert"
         case "executed": "ausgeführt"
         case "target_hit": "Ziel erreicht"
         case "stop_hit": "Stop ausgelöst"

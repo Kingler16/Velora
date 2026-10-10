@@ -32,13 +32,30 @@ enum Theme {
         }
     }
 
+    /// Grün bleibt Gewinnen vorbehalten – Kaufen ist deshalb Blau.
     static func action(_ action: String) -> Color {
         switch action {
-        case "buy": gain
+        case "buy": accent
         case "sell": loss
         case "watch": amber
-        default: cyan
+        default: violet
         }
+    }
+
+    static func actionIcon(_ rec: Recommendation) -> String {
+        switch rec.action {
+        case "buy": "cart.fill"
+        case "sell": "arrow.down.right"
+        case "watch": "eye.fill"
+        case "hold" where rec.stopLoss != nil: rec.currentStop == nil ? "shield.lefthalf.filled" : "arrow.up.to.line"
+        default: "pause.fill"
+        }
+    }
+
+    /// Stop-Status: neutral, wenn alles passt; Gelb, wenn etwas zu tun ist.
+    static func stopStatus(_ s: StopPosition) -> Color {
+        if s.status == "ungueltig" { return loss }
+        return s.needsAttention ? amber : cyan
     }
 }
 
@@ -128,6 +145,40 @@ struct Pill: View {
     }
 }
 
+/// Kurs in Originalwährung, darunter klein der Euro-Gegenwert (nur bei Dollar-Kursen).
+struct PriceStack: View {
+    var value: Double?
+    var currency: String
+    var eurUsd: Double?
+    var alignment: HorizontalAlignment = .trailing
+    var font: Font = .subheadline.weight(.semibold)
+
+    var body: some View {
+        VStack(alignment: alignment, spacing: 1) {
+            Text(Format.price(value, currency: currency)).font(font)
+            if let hint = Format.eurHint(value, currency: currency, eurUsd: eurUsd) {
+                Text(hint).font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+        .monospacedDigit()
+    }
+}
+
+/// Runder Farbpunkt mit Symbol – Erkennungszeichen einer Aktion.
+struct IconBadge: View {
+    var systemImage: String
+    var color: Color
+    var size: CGFloat = 36
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: size * 0.42, weight: .semibold))
+            .foregroundStyle(color)
+            .frame(width: size, height: size)
+            .background(color.opacity(0.16), in: .circle)
+    }
+}
+
 /// Waagrechter Anteilsbalken mit Beschriftung.
 struct ShareBar: View {
     var label: String
@@ -157,6 +208,10 @@ struct ShareBar: View {
 }
 
 /// Lädt eine Ansicht vom Server, zeigt bei Verbindungsproblemen den letzten Stand.
+///
+/// Solange geladen wird, steht der zwischengespeicherte Stand mit „Aktualisiere …“ da –
+/// „Offline“ erscheint erst, wenn der Server wirklich nicht antwortet. Danach versucht die
+/// Ansicht es von selbst wieder (mit wachsendem Abstand), solange sie sichtbar ist.
 struct RemoteView<T: Decodable, Content: View>: View {
     var path: String
     @ViewBuilder var content: (T) -> Content
@@ -164,48 +219,87 @@ struct RemoteView<T: Decodable, Content: View>: View {
     @Environment(AppModel.self) private var model
     @State private var value: T?
     @State private var error: Error?
-    @State private var staleSince: Date?
+    @State private var cachedAt: Date?
+    @State private var loading = false
+    @State private var failures = 0
 
     var body: some View {
         Group {
             if let value {
                 content(value)
                     .safeAreaInset(edge: .top, spacing: 0) {
-                        if let staleSince { StaleBanner(since: staleSince, error: error) }
+                        if let cachedAt, loading || error != nil {
+                            StaleBanner(since: cachedAt, error: error, loading: loading) { Task { await load() } }
+                        }
                     }
             } else if let error {
                 ContentUnavailableView {
-                    Label("Keine Verbindung", systemImage: "wifi.exclamationmark")
+                    Label(LoadError.title(for: error), systemImage: LoadError.icon(for: error))
                 } description: {
                     Text(error.localizedDescription)
                 } actions: {
                     Button("Erneut versuchen") { Task { await load() } }
                         .buttonStyle(.borderedProminent)
+                        .disabled(loading)
                 }
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: model.reloadToken) { await load() }
+        .task(id: model.reloadToken) {
+            await load()
+            // Automatisch erneut versuchen, solange der Server nicht erreichbar ist.
+            while error != nil, !Task.isCancelled {
+                let delay = min(10 * (1 << min(max(failures - 1, 0), 3)), 60)
+                try? await Task.sleep(for: .seconds(delay))
+                if Task.isCancelled { break }
+                await load()
+            }
+        }
         .refreshable { await load() }
     }
 
     private func load() async {
         if value == nil, let cached = model.cached(path, as: T.self) {
             value = cached.value
-            staleSince = cached.date
+            cachedAt = cached.date
         }
+        loading = true
+        defer { loading = false }
         do {
             value = try await model.load(path)
             error = nil
-            staleSince = nil
+            failures = 0
+            cachedAt = .now
         } catch is CancellationError {
         } catch where Task.isCancelled {
             // Tab gewechselt oder neu geladen – der nächste Ladevorgang übernimmt.
         } catch {
             self.error = error
-            if value != nil, staleSince == nil { staleSince = .now }
+            failures += 1
+            if value != nil, cachedAt == nil { cachedAt = .now }
+        }
+    }
+}
+
+/// Überschrift und Symbol je Fehlerart – unterscheidet „offline“ von „Server kaputt“.
+enum LoadError {
+    static func title(for error: Error) -> String {
+        switch error as? VeloraError {
+        case .server: "Serverfehler"
+        case .unauthorized: "Anmeldung nötig"
+        case .decoding: "Unerwartete Antwort"
+        case .notConfigured: "Kein Server eingetragen"
+        default: "Keine Verbindung"
+        }
+    }
+
+    static func icon(for error: Error) -> String {
+        switch error as? VeloraError {
+        case .server, .decoding: "exclamationmark.triangle"
+        case .unauthorized: "lock"
+        default: "wifi.exclamationmark"
         }
     }
 }
@@ -213,19 +307,44 @@ struct RemoteView<T: Decodable, Content: View>: View {
 struct StaleBanner: View {
     var since: Date
     var error: Error?
+    var loading: Bool
+    var retry: () -> Void
+
+    @State private var showDetail = false
 
     var body: some View {
-        Label {
-            Text("Offline – Stand \(since.formatted(.relative(presentation: .named).locale(Format.locale)))")
-        } icon: {
-            Image(systemName: "icloud.slash")
+        Button {
+            if error != nil { showDetail = true }
+        } label: {
+            HStack(spacing: 6) {
+                if loading {
+                    ProgressView().controlSize(.mini)
+                    Text("Aktualisiere …")
+                } else if let error {
+                    Image(systemName: LoadError.icon(for: error))
+                    Text(label(for: error))
+                }
+            }
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(loading ? Color.secondary : Theme.amber)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .background(.ultraThinMaterial, in: .capsule)
         }
-        .font(.footnote.weight(.medium))
-        .foregroundStyle(Theme.amber)
-        .padding(.vertical, 6)
-        .padding(.horizontal, 12)
-        .background(.ultraThinMaterial, in: .capsule)
+        .buttonStyle(.plain)
         .padding(.top, 4)
+        .alert(error.map { LoadError.title(for: $0) } ?? "", isPresented: $showDetail) {
+            Button("Erneut versuchen", action: retry)
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(error?.localizedDescription ?? "")
+        }
+    }
+
+    private func label(for error: Error) -> String {
+        let age = since.formatted(.relative(presentation: .named).locale(Format.locale))
+        if case .server = error as? VeloraError { return "Serverfehler – Stand \(age)" }
+        return "Offline – Stand \(age)"
     }
 }
 

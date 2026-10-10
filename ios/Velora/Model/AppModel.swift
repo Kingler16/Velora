@@ -12,6 +12,12 @@ final class AppModel {
     private(set) var reloadToken = 0
     private(set) var refreshRunning = false
     var selectedTab: AppTab = .dashboard
+    /// Welcher Bereich im Berater-Tab offen ist – Empfehlungen zuerst, weil dort das Handeln liegt.
+    var advisorSection: AdvisorSection = .recommendations
+    /// Offene, umsetzbare Empfehlungen – Badge am Berater-Tab.
+    private(set) var actionableCount = 0
+    /// Letzter bekannter EUR/USD-Kurs (Dollar je Euro) für Euro-Gegenwerte.
+    private(set) var eurUsd: Double?
 
     @ObservationIgnored let client: VeloraClient
     @ObservationIgnored private let monitor = NWPathMonitor()
@@ -69,12 +75,16 @@ final class AppModel {
         route = await client.route
         let value: T = try VeloraClient.decode(data)
         ResponseCache.store(data, for: path)
+        if let counting = value as? ActionableCounting { actionableCount = counting.actionableTotal }
+        if let fx = (value as? EurUsdProviding)?.eurUsdRate, fx > 0 { eurUsd = fx }
         return value
     }
 
     /// Zuletzt geladene Antwort, falls der Server gerade nicht erreichbar ist.
     func cached<T: Decodable>(_ path: String, as type: T.Type = T.self) -> (value: T, date: Date)? {
         guard let entry = ResponseCache.load(path), let value: T = try? VeloraClient.decode(entry.data) else { return nil }
+        if actionableCount == 0, let counting = value as? ActionableCounting { actionableCount = counting.actionableTotal }
+        if eurUsd == nil, let fx = (value as? EurUsdProviding)?.eurUsdRate, fx > 0 { eurUsd = fx }
         return (value, entry.date)
     }
 
@@ -114,6 +124,22 @@ private struct NetworkState: Equatable {
 enum AppTab: Hashable {
     case dashboard, portfolio, market, advisor, chat
 }
+
+enum AdvisorSection: String, CaseIterable, Identifiable {
+    case recommendations = "Empfehlungen", briefings = "Briefings"
+    var id: Self { self }
+}
+
+/// Antworten, die die Zahl offener Empfehlungen kennen (fürs Tab-Badge).
+protocol ActionableCounting { var actionableTotal: Int { get } }
+extension DashboardData: ActionableCounting { var actionableTotal: Int { actionable.count } }
+extension RecommendationsData: ActionableCounting { var actionableTotal: Int { actionableCount } }
+
+/// Antworten mit EUR/USD-Kurs.
+protocol EurUsdProviding { var eurUsdRate: Double? { get } }
+extension DashboardData: EurUsdProviding { var eurUsdRate: Double? { eurUsd } }
+extension PortfolioData: EurUsdProviding { var eurUsdRate: Double? { eurUsd } }
+extension RecommendationsData: EurUsdProviding { var eurUsdRate: Double? { eurUsd } }
 
 /// Letzte Server-Antworten je Pfad im Caches-Ordner – damit die App auch ohne Verbindung etwas zeigt.
 enum ResponseCache {

@@ -21,10 +21,12 @@
 		D2B23E1F60F3D392C667197E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFD8CA827C5D2A0E821177B6 /* SettingsView.swift */; };
 		E72A047F4B7AFE1407F0B654 /* VeloraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95580F1D89BFE71568792FE8 /* VeloraApp.swift */; };
 		F02DEA08059F69A03CEA81F2 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56E3C442518A1D513111DF5A /* Components.swift */; };
+		F0F83C4AFBBF367E9A7421CE /* BriefingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9393BA52F14322E421579E /* BriefingViews.swift */; };
 		F3EFF68F7CE9DF0E830CFF30 /* MarketView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 655168BD710DC4314645AC36 /* MarketView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		4B9393BA52F14322E421579E /* BriefingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefingViews.swift; sourceTree = "<group>"; };
 		56E3C442518A1D513111DF5A /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		5A21D9882CF450C5A3EB34F6 /* VeloraKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = VeloraKit; path = VeloraKit; sourceTree = SOURCE_ROOT; };
 		655168BD710DC4314645AC36 /* MarketView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketView.swift; sourceTree = "<group>"; };
@@ -72,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				9660D45C23E274D9DBAAD07C /* AdvisorView.swift */,
+				4B9393BA52F14322E421579E /* BriefingViews.swift */,
 				E84B4BCFB3539749DFAB0F3F /* ChatView.swift */,
 				56E3C442518A1D513111DF5A /* Components.swift */,
 				97D8CA5AEBA82191FF40B3F4 /* DashboardView.swift */,
@@ -197,6 +200,7 @@
 			files = (
 				46DE35379FDC5BE1B5C9F272 /* AdvisorView.swift in Sources */,
 				89095B7CD44F4CB981F9210D /* AppModel.swift in Sources */,
+				F0F83C4AFBBF367E9A7421CE /* BriefingViews.swift in Sources */,
 				9D9EC1138FC6199B5C1DF312 /* ChatView.swift in Sources */,
 				F02DEA08059F69A03CEA81F2 /* Components.swift in Sources */,
 				A68590EA488144EF9A48C86A /* DashboardView.swift in Sources */,

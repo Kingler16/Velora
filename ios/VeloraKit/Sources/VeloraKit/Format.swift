@@ -28,9 +28,30 @@ public enum Format {
     /// Preis in seiner Notierungswährung.
     public static func price(_ value: Double?, currency: String) -> String {
         guard let value else { return "–" }
-        let code = currency == "GBp" ? "GBP" : currency
+        let code = currency == "GBp" ? "GBP" : currencyCode(currency)
         let digits = value < 10 ? 3 : 2
         return value.formatted(.currency(code: code).locale(locale).precision(.fractionLength(2...digits)))
+    }
+
+    /// Gegenwert in Euro für einen Preis in Fremdwährung; `nil`, wenn er schon in Euro ist
+    /// oder kein Kurs vorliegt. `eurUsd` = Dollar je Euro (wie am Server).
+    public static func eurValue(_ value: Double?, currency: String, eurUsd: Double?) -> Double? {
+        guard let value, currency.uppercased() == "USD", let eurUsd, eurUsd > 0 else { return nil }
+        return value / eurUsd
+    }
+
+    /// „≈ 312,40 €“ als Zusatz unter einem Dollar-Kurs, sonst `nil`.
+    public static func eurHint(_ value: Double?, currency: String, eurUsd: Double?) -> String? {
+        eurValue(value, currency: currency, eurUsd: eurUsd).map { "≈ " + price($0, currency: "EUR") }
+    }
+
+    /// Vereinheitlicht Währungsangaben aus dem Depot („€“, „eur“ → „EUR“).
+    public static func currencyCode(_ raw: String?) -> String {
+        switch (raw ?? "").trimmingCharacters(in: .whitespaces).uppercased() {
+        case "", "€", "EUR": "EUR"
+        case "$", "USD": "USD"
+        case let other: other
+        }
     }
 
     /// Prozentwert (19.5 → „+19,5 %“).

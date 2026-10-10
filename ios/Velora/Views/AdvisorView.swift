@@ -1,26 +1,29 @@
 import SwiftUI
 import VeloraKit
 
-/// Briefings und Empfehlungen des KI-Beraters.
+/// Empfehlungen und Briefings des KI-Beraters.
 struct AdvisorView: View {
-    enum Section: String, CaseIterable, Identifiable {
-        case briefings = "Briefings", recommendations = "Empfehlungen"
-        var id: Self { self }
-    }
-
-    @State private var section = Section.briefings
+    @Environment(AppModel.self) private var model
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        @Bindable var model = model
+        NavigationStack(path: $path) {
             Group {
-                switch section {
-                case .briefings: BriefingsList()
+                switch model.advisorSection {
                 case .recommendations: RecommendationsList()
+                case .briefings: BriefingsList()
                 }
             }
             .safeAreaInset(edge: .top) {
-                Picker("Bereich", selection: $section) {
-                    ForEach(Section.allCases) { Text($0.rawValue).tag($0) }
+                Picker("Bereich", selection: $model.advisorSection) {
+                    ForEach(AdvisorSection.allCases) { section in
+                        if section == .recommendations, model.actionableCount > 0 {
+                            Text("\(section.rawValue) (\(model.actionableCount))").tag(section)
+                        } else {
+                            Text(section.rawValue).tag(section)
+                        }
+                    }
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
@@ -30,84 +33,9 @@ struct AdvisorView: View {
             .navigationDestination(for: Briefing.self) { BriefingDetailView(briefing: $0) }
             .navigationDestination(for: Recommendation.self) { RecommendationDetailView(recommendation: $0) }
         }
-    }
-}
-
-// MARK: - Briefings
-
-private struct BriefingsList: View {
-    var body: some View {
-        RemoteView(path: "/api/app/briefings") { (data: BriefingsData) in
-            List {
-                if let notes = data.notes {
-                    if let regime = notes.marketRegime, !regime.isEmpty {
-                        Section("Marktlage") {
-                            Text(regime).font(.subheadline)
-                        }
-                    }
-                    if !notes.keyInsights.isEmpty {
-                        Section("Erkenntnisse") {
-                            ForEach(Array(notes.keyInsights.suffix(6).reversed().enumerated()), id: \.offset) { _, insight in
-                                Label { Text(insight).font(.subheadline) } icon: {
-                                    Image(systemName: "lightbulb").foregroundStyle(Theme.amber)
-                                }
-                            }
-                        }
-                    }
-                }
-                Section("Verlauf") {
-                    if data.briefings.isEmpty {
-                        Text("Noch keine Briefings.").foregroundStyle(.secondary)
-                    }
-                    ForEach(data.briefings) { briefing in
-                        NavigationLink(value: briefing) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    Text(Format.date(briefing.date, time: true)).font(.subheadline.weight(.semibold))
-                                    Spacer()
-                                    if briefing.hadActions { Pill(text: "Aktion", color: Theme.amber) }
-                                }
-                                Text(briefing.summary).font(.subheadline).foregroundStyle(.secondary).lineLimit(4)
-                            }
-                            .padding(.vertical, 2)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct BriefingDetailView: View {
-    var briefing: Briefing
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    if briefing.recommendationCount > 0 {
-                        Pill(text: "\(briefing.recommendationCount) Empfehlungen", color: Theme.cyan)
-                    }
-                    if briefing.hadActions { Pill(text: "Handlungsbedarf", color: Theme.amber) }
-                }
-                if let regime = briefing.marketRegime, !regime.isEmpty {
-                    Card(title: "Marktlage") { Text(regime).font(.subheadline) }
-                }
-                Card(title: "Zusammenfassung") { Text(briefing.summary).font(.subheadline) }
-                if let text = briefing.fullText, briefing.hasFullText {
-                    MarkdownText(text: text)
-                        .font(.callout)
-                        .padding(.top, 4)
-                }
-            }
-            .padding()
-        }
-        .navigationTitle(Format.date(briefing.date))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if let text = briefing.fullText, briefing.hasFullText {
-                ShareLink(item: text, subject: Text("Velora-Briefing \(Format.date(briefing.date))"))
-            }
+        // Sprung von anderswo (Dashboard, Briefing) landet in der Liste, nicht in einer alten Detailseite.
+        .onChange(of: model.selectedTab) { _, tab in
+            if tab == .advisor, !path.isEmpty { path = NavigationPath() }
         }
     }
 }
@@ -120,34 +48,44 @@ private struct RecommendationsList: View {
             let open = data.recommendations.filter(\.isOpen)
             let actionable = open.filter(\.isActionable)
             let watch = open.filter { !$0.isActionable }
-            let closed = data.recommendations.filter { !$0.isOpen }
+            let pending = data.recommendations.filter { $0.status == "order_placed" }
+            let closed = data.recommendations.filter { !$0.isOpen && $0.status != "order_placed" }
             List {
                 Section {
-                    if actionable.isEmpty { Text("Nichts zu tun.").foregroundStyle(.secondary) }
+                    if actionable.isEmpty {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Gerade nichts zu tun").font(.subheadline.weight(.medium))
+                                Text("Neue Empfehlungen kommen mit dem nächsten Briefing.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "checkmark.seal").foregroundStyle(Theme.accent)
+                        }
+                    }
                     ForEach(actionable) { rec in
-                        NavigationLink(value: rec) { RecommendationRow(recommendation: rec) }
+                        NavigationLink(value: rec) { RecommendationRow(recommendation: rec, eurUsd: data.eurUsd) }
                     }
                 } header: {
-                    Text("Umsetzen")
-                } footer: {
-                    Text("Kaufen/Verkaufen, Beobachten mit Einstiegskurs, Halten mit Stop zum Nachziehen.")
+                    Text(actionable.isEmpty ? "Umsetzen" : "Umsetzen · \(actionable.count)")
                 }
-                if !data.openOrders.isEmpty {
-                    Section("Platzierte Orders") {
-                        ForEach(data.openOrders) { OrderRow(order: $0) }
+
+                if !data.openOrders.isEmpty || !pending.isEmpty {
+                    Section("Order beim Broker platziert") {
+                        ForEach(data.openOrders) { OrderRow(order: $0, eurUsd: data.eurUsd) }
                     }
                 }
                 if !watch.isEmpty {
                     Section("Watchlist") {
                         ForEach(watch) { rec in
-                            NavigationLink(value: rec) { RecommendationRow(recommendation: rec) }
+                            NavigationLink(value: rec) { RecommendationRow(recommendation: rec, eurUsd: data.eurUsd) }
                         }
                     }
                 }
                 if !closed.isEmpty {
                     Section("Abgeschlossen") {
                         ForEach(closed.prefix(30)) { rec in
-                            NavigationLink(value: rec) { RecommendationRow(recommendation: rec) }
+                            NavigationLink(value: rec) { ClosedRecommendationRow(recommendation: rec) }
                         }
                     }
                 }
@@ -156,34 +94,77 @@ private struct RecommendationsList: View {
     }
 }
 
+/// Eine offene Empfehlung: was, welcher Titel, welcher Kurs – auf einen Blick.
 struct RecommendationRow: View {
+    var recommendation: Recommendation
+    var eurUsd: Double?
+
+    var body: some View {
+        let rec = recommendation
+        HStack(alignment: .top, spacing: 12) {
+            IconBadge(systemImage: Theme.actionIcon(rec), color: Theme.action(rec.action))
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(rec.actionLabel)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.action(rec.action))
+                        Text(rec.displayName).font(.headline).lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    if let price = rec.keyPrice {
+                        PriceStack(value: price, currency: rec.currency, eurUsd: eurUsd)
+                    }
+                }
+                detailLine
+                if !rec.reasoning.isEmpty {
+                    Text(rec.reasoning).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder private var detailLine: some View {
+        let rec = recommendation
+        HStack(spacing: 10) {
+            if rec.isStopAction {
+                if let current = rec.currentStopBroker {
+                    Text("bisher \(Format.price(current, currency: rec.currentStopCurrency ?? rec.currency))")
+                    if let raise = rec.stopRaisePct { Text(Format.pct(raise)).foregroundStyle(Theme.accent) }
+                } else {
+                    Text("noch kein Stop gesetzt").foregroundStyle(Theme.amber)
+                }
+            } else {
+                if let target = rec.targetPrice { Text("Ziel \(Format.price(target, currency: rec.currency))") }
+                if let stop = rec.stopLoss { Text("Stop \(Format.price(stop, currency: rec.currency))") }
+            }
+            Spacer(minLength: 0)
+            Text(Format.date(rec.date)).foregroundStyle(.tertiary)
+        }
+        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+        .lineLimit(1)
+    }
+}
+
+private struct ClosedRecommendationRow: View {
     var recommendation: Recommendation
 
     var body: some View {
         let rec = recommendation
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                Pill(text: rec.actionLabel, color: Theme.action(rec.action))
-                Text(rec.ticker).font(.subheadline.weight(.semibold))
-                Spacer()
-                if !rec.isOpen {
-                    Text(rec.statusLabel).font(.caption).foregroundStyle(.secondary)
-                } else if let entry = rec.entryPrice {
-                    Text(Format.price(entry, currency: rec.currency)).font(.subheadline).monospacedDigit()
-                }
+        HStack(spacing: 10) {
+            Image(systemName: Theme.actionIcon(rec)).foregroundStyle(.secondary).frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(rec.actionLabel) · \(rec.displayName)").font(.subheadline).lineLimit(1)
+                Text(Format.date(rec.date)).font(.caption).foregroundStyle(.secondary)
             }
-            Text(rec.reasoning).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-            HStack(spacing: 12) {
-                if let target = rec.targetPrice { Text("Ziel \(Format.price(target, currency: rec.currency))") }
-                if let stop = rec.stopLoss { Text("Stop \(Format.price(stop, currency: rec.currency))") }
-                Spacer()
-                Text(Format.date(rec.date))
-            }
-            .font(.caption2).foregroundStyle(.tertiary).monospacedDigit()
+            Spacer()
+            Text(rec.statusLabel).font(.caption).foregroundStyle(.secondary)
         }
-        .padding(.vertical, 2)
     }
 }
+
+// MARK: - Detail
 
 struct RecommendationDetailView: View {
     var recommendation: Recommendation
@@ -193,30 +174,90 @@ struct RecommendationDetailView: View {
     @State private var accounts: [String] = []
     @State private var showOrder = false
     @State private var showTrade = false
+    @State private var stopTarget: StopTarget?
     @State private var error: String?
 
     var body: some View {
         let rec = recommendation
+        let eurUsd = model.eurUsd
         List {
             Section {
-                HStack {
-                    Pill(text: rec.actionLabel, color: Theme.action(rec.action))
-                    Pill(text: rec.statusLabel, color: rec.isOpen ? Theme.cyan : .secondary)
-                    Spacer()
-                    Text(Format.date(rec.date)).font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 12) {
+                        IconBadge(systemImage: Theme.actionIcon(rec), color: Theme.action(rec.action), size: 48)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(rec.actionLabel).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.action(rec.action))
+                            Text(rec.displayName).font(.title2.weight(.bold)).lineLimit(2)
+                            Text([rec.ticker, rec.account.map(Format.accountName)].compactMap { $0 }.joined(separator: " · "))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    if let price = rec.keyPrice {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(rec.isStopAction ? "Neuer Stop" : rec.action == "watch" ? "Einstieg ab" : "Limit")
+                                .font(.caption).foregroundStyle(.secondary)
+                            PriceStack(value: price, currency: rec.currency, eurUsd: eurUsd, alignment: .leading,
+                                       font: .system(size: 30, weight: .bold, design: .rounded))
+                        }
+                    }
+                    HStack(spacing: 6) {
+                        Pill(text: rec.statusLabel, color: rec.isOpen ? Theme.accent : .secondary)
+                        Text("vom \(Format.date(rec.date))").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
-                Text(rec.reasoning).font(.body)
+                .padding(.vertical, 6)
             }
+
+            if rec.isOpen, let instruction {
+                Section("So setzt du es um") {
+                    Label { Text(instruction).font(.subheadline) } icon: {
+                        Image(systemName: "list.number").foregroundStyle(Theme.accent)
+                    }
+                }
+            }
+
+            Section("Begründung") {
+                Text(rec.reasoning).font(.callout).lineSpacing(2)
+            }
+
             Section("Kursmarken") {
-                LabeledContent("Einstieg", value: Format.price(rec.entryPrice, currency: rec.currency))
-                LabeledContent("Ziel", value: Format.price(rec.targetPrice, currency: rec.currency))
-                LabeledContent("Stop-Loss", value: Format.price(rec.stopLoss, currency: rec.currency))
+                if rec.isStopAction, rec.currentStopBroker != nil || rec.currentStop != nil {
+                    LabeledContent("Stop bisher") {
+                        PriceStack(value: rec.currentStopBroker, currency: rec.currentStopCurrency ?? rec.currency,
+                                   eurUsd: eurUsd, font: .body)
+                    }
+                }
+                if let price = rec.currentPrice {
+                    LabeledContent("Aktueller Kurs") { PriceStack(value: price, currency: rec.currency, eurUsd: eurUsd, font: .body) }
+                }
+                if !rec.isStopAction, let entry = rec.entryPrice {
+                    LabeledContent("Einstieg") { PriceStack(value: entry, currency: rec.currency, eurUsd: eurUsd, font: .body) }
+                }
+                if let target = rec.targetPrice {
+                    LabeledContent("Ziel") { PriceStack(value: target, currency: rec.currency, eurUsd: eurUsd, font: .body) }
+                }
+                if let stop = rec.stopLoss {
+                    LabeledContent(rec.isStopAction ? "Stop neu" : "Stop-Loss") {
+                        PriceStack(value: stop, currency: rec.currency, eurUsd: eurUsd, font: .body)
+                    }
+                }
+                if let held = rec.sharesHeld {
+                    LabeledContent("Im Depot", value: "\(Format.shares(held)) Stk.")
+                }
                 if let outcome = rec.outcome, !outcome.isEmpty { LabeledContent("Ergebnis", value: outcome) }
             }
-            .monospacedDigit()
 
             if rec.isOpen {
                 Section {
+                    if rec.isStopAction {
+                        Button {
+                            stopTarget = StopTarget(recommendation: rec)
+                        } label: {
+                            Label("Stop beim Broker eingetragen", systemImage: "checkmark.shield")
+                                .font(.body.weight(.semibold))
+                        }
+                        .disabled(rec.account == nil)
+                    }
                     if rec.action == "buy" || rec.action == "sell" || rec.action == "watch" {
                         Button("Limit-Order platzieren", systemImage: "list.bullet.clipboard") { showOrder = true }
                         Button("Ausgeführten Trade erfassen", systemImage: "arrow.left.arrow.right") { showTrade = true }
@@ -229,6 +270,10 @@ struct RecommendationDetailView: View {
                     } label: {
                         Label("Als erledigt markieren", systemImage: "checkmark.circle")
                     }
+                } footer: {
+                    if rec.isStopAction {
+                        Text("Speichert den Stop an der Position (in € oder $, wie beim Broker) und schliesst die Empfehlung.")
+                    }
                 }
             }
         }
@@ -237,10 +282,47 @@ struct RecommendationDetailView: View {
         .task { accounts = (try? await model.client.get("/api/accounts", as: [String].self)) ?? [] }
         .sheet(isPresented: $showOrder) {
             OrderSheet(ticker: rec.ticker, action: rec.action == "sell" ? "sell" : "buy", currency: rec.currency,
-                       accounts: accounts, recTicker: rec.ticker)
+                       accounts: accounts, recTicker: rec.ticker, presetAccount: rec.account,
+                       presetShares: rec.shares, presetLimit: rec.entryPrice)
         }
         .sheet(isPresented: $showTrade) { TradeSheet(position: nil, accounts: accounts, presetTicker: rec.ticker, presetCurrency: rec.currency) }
+        .sheet(item: $stopTarget) { target in
+            EditStopSheet(target: target) {
+                // Empfehlung ist damit erledigt – zurück zur Liste, sobald das Formular zu ist.
+                Task {
+                    try? await Task.sleep(for: .milliseconds(450))
+                    dismiss()
+                }
+            }
+        }
         .errorAlert($error)
+    }
+
+    /// Ein Satz, was beim Broker konkret zu tun ist.
+    private var instruction: String? {
+        let rec = recommendation
+        let broker = rec.account.map(Format.accountName) ?? "deinem Broker"
+        func both(_ v: Double?) -> String {
+            guard let v else { return "–" }
+            let main = Format.price(v, currency: rec.currency)
+            return Format.eurHint(v, currency: rec.currency, eurUsd: model.eurUsd).map { "\(main) (\($0))" } ?? main
+        }
+        switch rec.action {
+        case "hold" where rec.stopLoss != nil:
+            if rec.currentStopBroker != nil {
+                return "Bei \(broker) die Stop-Order für \(rec.displayName) von \(Format.price(rec.currentStopBroker, currency: rec.currentStopCurrency ?? rec.currency)) auf \(both(rec.stopLoss)) ändern."
+            }
+            return "Bei \(broker) eine Stop-Order (Verkauf) für \(rec.displayName) bei \(both(rec.stopLoss)) anlegen."
+        case "buy":
+            let qty = rec.shares.map { "\(Format.shares($0)) Stk. " } ?? ""
+            return "Limit-Kauf \(qty)\(rec.displayName) zu \(both(rec.entryPrice)) aufgeben – danach hier als Order eintragen."
+        case "sell":
+            return "Verkauf von \(rec.displayName)\(rec.entryPrice.map { " mit Limit \(both($0))" } ?? "") aufgeben."
+        case "watch" where rec.entryPrice != nil:
+            return "Kaufen, wenn \(rec.displayName) auf \(both(rec.entryPrice)) fällt – am besten gleich als Limit-Order."
+        default:
+            return nil
+        }
     }
 
     private func close(_ status: String) {

@@ -9,11 +9,12 @@ public struct DashboardData: Decodable, Sendable {
     public var benchmarks: [Benchmark]
     public var actionable: [Recommendation]
     public var latestBriefing: Briefing?
+    public var eurUsd: Double?
     public var status: ServerStatus?
 
     enum CodingKeys: String, CodingKey {
         case overview, indices, snapshots, benchmarks, actionable, status
-        case latestBriefing = "latest_briefing"
+        case latestBriefing = "latest_briefing", eurUsd = "eur_usd"
     }
 
     public init(from decoder: Decoder) throws {
@@ -24,6 +25,7 @@ public struct DashboardData: Decodable, Sendable {
         benchmarks = c(.benchmarks, default: [])
         actionable = c(.actionable, default: [])
         latestBriefing = c(.latestBriefing)
+        eurUsd = c(.eurUsd)
         status = c(.status)
     }
 }
@@ -39,12 +41,13 @@ public struct PortfolioData: Decodable, Sendable {
     public var stopLabels: [String: String]
     public var openOrders: [Order]
     public var accounts: [String]
+    public var eurUsd: Double?
     public var status: ServerStatus?
 
     enum CodingKeys: String, CodingKey {
         case overview, snapshots, benchmarks, stops, accounts, status
         case taxLoss = "tax_loss", kestMode = "kest_mode", defaultCurrency = "default_currency"
-        case stopLabels = "stop_labels", openOrders = "open_orders"
+        case stopLabels = "stop_labels", openOrders = "open_orders", eurUsd = "eur_usd"
     }
 
     public init(from decoder: Decoder) throws {
@@ -59,12 +62,21 @@ public struct PortfolioData: Decodable, Sendable {
         stopLabels = c(.stopLabels, default: [:])
         openOrders = c(.openOrders, default: [])
         accounts = c(.accounts, default: [])
+        eurUsd = c(.eurUsd)
         status = c(.status)
     }
 
     public func stop(for position: Position) -> StopPosition? {
         stops?.positions.first { $0.ticker == position.ticker && $0.account == position.account }
     }
+
+    /// Beim Broker liegende Stop-Orders (eine je Position mit gesetztem Stop), grösste zuerst.
+    public var stopOrders: [StopPosition] {
+        (stops?.positions ?? []).filter { $0.brokerStop != nil }.sorted { ($0.valueEur ?? 0) > ($1.valueEur ?? 0) }
+    }
+
+    /// Alles, was beim Broker offen ist: Stop-Orders plus Limit-Orders.
+    public var openOrderCount: Int { stopOrders.count + openOrders.count }
 
     public func stopLabel(_ status: String) -> String { stopLabels[status] ?? status }
 }

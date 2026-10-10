@@ -78,19 +78,39 @@ struct PositionDetailView: View {
 
             Section("Stop-Loss") {
                 if let stop {
-                    LabeledContent("Status") { Pill(text: stopLabel ?? stop.status, color: stop.needsAttention ? Theme.amber : Theme.gain) }
-                    LabeledContent("Gesetzt", value: Format.price(stop.currentStop, currency: stop.currency))
+                    LabeledContent("Status") { Pill(text: stopLabel ?? stop.status, color: Theme.stopStatus(stop)) }
+                    if let broker = stop.brokerStop {
+                        LabeledContent("Beim Broker") {
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text(Format.price(broker, currency: stop.brokerCurrency))
+                                if stop.stopInOtherCurrency {
+                                    Text("≈ " + Format.price(stop.currentStop, currency: stop.currency))
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                }
+                            }
+                            .monospacedDigit()
+                        }
+                    } else {
+                        LabeledContent("Beim Broker", value: "kein Stop")
+                    }
                     if let target = stop.targetStop {
-                        LabeledContent("Empfohlen", value: Format.price(target, currency: stop.currency))
+                        LabeledContent("Soll (2×ATR)") {
+                            PriceStack(value: target, currency: stop.currency, eurUsd: model.eurUsd, font: .body)
+                        }
                     }
                     if let distance = stop.distancePct {
                         LabeledContent("Abstand", value: Format.pct(distance, signed: false))
                     }
+                    if let risk = stop.riskEur {
+                        LabeledContent("Verlust bis Stop", value: Format.eur(risk, digits: 0))
+                    }
                 } else {
                     Text("Keine Stop-Daten").foregroundStyle(.secondary)
                 }
-                Button("Stop ändern", systemImage: "shield.lefthalf.filled") {
-                    sheet = .editPosition(position, stop: stop?.currentStop, accounts: accounts)
+                if let stop, stop.isStoppable {
+                    Button(stop.brokerStop == nil ? "Stop eintragen" : "Stop ändern", systemImage: "shield.lefthalf.filled") {
+                        sheet = .editStop(StopTarget(stop: stop))
+                    }
                 }
             }
 
@@ -102,7 +122,7 @@ struct PositionDetailView: View {
                     sheet = .order(ticker: position.ticker, action: "buy", currency: position.currency, accounts: accounts)
                 }
                 Button("Bestand korrigieren", systemImage: "pencil") {
-                    sheet = .editPosition(position, stop: stop?.currentStop, accounts: accounts)
+                    sheet = .editPosition(position, stop: stop, accounts: accounts)
                 }
                 Button("Position löschen", systemImage: "trash", role: .destructive) { confirmDelete = true }
             } footer: {

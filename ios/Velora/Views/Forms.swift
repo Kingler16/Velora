@@ -145,9 +145,14 @@ struct OrderSheet: View {
     var currency: String
     var accounts: [String]
     var recTicker: String?
+    var presetAccount: String?
+    var presetShares: Double?
+    var presetLimit: Double?
 
     @Environment(AppModel.self) private var model
     @State private var form = (ticker: "", action: "buy", account: "", shares: "", limit: "", currency: "EUR", note: "")
+    @State private var hasExpiry = false
+    @State private var validUntil = Calendar.current.date(byAdding: .day, value: 30, to: .now) ?? .now
 
     var body: some View {
         FormSheet(title: "Limit-Order", saveTitle: "Platzieren", canSave: valid, save: save) {
@@ -166,6 +171,13 @@ struct OrderSheet: View {
                 NumberField(title: "Stück", text: $form.shares, prompt: "0")
                 NumberField(title: "Limit", text: $form.limit, prompt: "0,00")
                 CurrencyPicker(selection: $form.currency)
+                if let s = parseNumber(form.shares), let l = parseNumber(form.limit) {
+                    LabeledContent("Volumen", value: Format.price(s * l, currency: form.currency))
+                }
+                Toggle("Gültig bis", isOn: $hasExpiry.animation())
+                if hasExpiry {
+                    DatePicker("Datum", selection: $validUntil, in: Date.now..., displayedComponents: .date)
+                }
                 TextField("Notiz (optional)", text: $form.note)
             } footer: {
                 Text("Die Order landet in der Order-Liste und ändert das Depot noch nicht. Erst „Ausgeführt“ bucht die Position ein. Beim Broker musst du sie selbst aufgeben.")
@@ -174,8 +186,10 @@ struct OrderSheet: View {
         .onAppear {
             form.ticker = ticker
             form.action = action == "sell" ? "sell" : "buy"
-            form.currency = currency
-            form.account = accounts.first ?? ""
+            form.currency = Format.currencyCode(currency)
+            form.account = presetAccount.flatMap { accounts.contains($0) ? $0 : nil } ?? accounts.first ?? ""
+            if let presetShares { form.shares = Format.plain(presetShares) }
+            if let presetLimit { form.limit = Format.plain(presetLimit, digits: 2) }
         }
     }
 
@@ -189,6 +203,7 @@ struct OrderSheet: View {
             "shares": JSONValue(parseNumber(form.shares)), "limit_price": JSONValue(parseNumber(form.limit)),
             "account": .string(form.account), "currency": .string(form.currency),
             "rec_ticker": JSONValue(recTicker), "note": JSONValue(form.note.isEmpty ? nil : form.note),
+            "valid_until": JSONValue(hasExpiry ? validUntil.formatted(.iso8601.year().month().day()) : nil),
         ])
     }
 }
@@ -269,32 +284,35 @@ struct AddPositionSheet: View {
 
 struct EditPositionSheet: View {
     var position: Position
-    var stop: Double?
+    var stop: StopPosition?
     var accounts: [String]
 
     @Environment(AppModel.self) private var model
-    @State private var form = (shares: "", buyIn: "", stop: "", account: "", name: "")
+    @State private var form = (shares: "", buyIn: "", stop: "", stopCurrency: "EUR", account: "", name: "")
 
     var body: some View {
         FormSheet(title: position.ticker, canSave: (parseNumber(form.shares) ?? 0) > 0, save: save) {
             Section("Bestand") {
                 TextField("Name", text: $form.name)
                 NumberField(title: "Stück", text: $form.shares)
-                NumberField(title: "Kaufkurs (\(position.currency))", text: $form.buyIn)
+                NumberField(title: "Kaufkurs (\(Format.currencyCode(position.currency)))", text: $form.buyIn)
                 AccountPicker(accounts: accounts, selection: $form.account)
             }
             Section {
-                NumberField(title: "Stop-Loss (\(position.currency))", text: $form.stop, prompt: "kein Stop")
+                NumberField(title: "Stop-Loss", text: $form.stop, prompt: "kein Stop")
+                StopCurrencyPicker(selection: $form.stopCurrency)
             } header: {
                 Text("Stop-Loss")
             } footer: {
-                Text("Der beim Broker tatsächlich gesetzte Stop, in der Notierungswährung. Leer lassen = kein Stop.")
+                Text("Der beim Broker tatsächlich gesetzte Stop, in der Währung, in der er dort steht. Leer lassen = kein Stop.")
             }
         }
         .onAppear {
             form.shares = Format.plain(position.shares)
             form.buyIn = position.buyIn.map { Format.plain($0) } ?? ""
-            form.stop = stop.map { Format.plain($0) } ?? ""
+            form.stop = stop?.brokerStop.map { Format.plain($0, digits: 2) } ?? ""
+            form.stopCurrency = stop?.stopCurrency
+                ?? StopDefaults.currency(account: position.account, quote: stop?.currency ?? position.currency)
             form.account = position.account
             form.name = position.name
         }
@@ -305,11 +323,166 @@ struct EditPositionSheet: View {
             "account": .string(position.account), "ticker": .string(position.ticker),
             "shares": JSONValue(parseNumber(form.shares)),
             "stop_loss": JSONValue(parseNumber(form.stop)),
+            "stop_currency": .string(form.stopCurrency),
         ]
         if let buyIn = parseNumber(form.buyIn), buyIn != position.buyIn { body["buy_in"] = .number(buyIn) }
         if form.name != position.name, !form.name.isEmpty { body["name"] = .string(form.name) }
         if form.account != position.account { body["new_account"] = .string(form.account) }
         try await model.send("/api/portfolio/position/edit", body)
+    }
+}
+
+// MARK: - Stops
+
+/// Wo ein Stop gespeichert wird und was vorgeschlagen ist.
+struct StopTarget: Identifiable, Hashable {
+    var id: String { "\(account)|\(ticker)" }
+    var account: String
+    var ticker: String
+    var name: String
+    /// Notierungswährung des Titels.
+    var quoteCurrency: String
+    var currentPrice: Double?
+    var brokerStop: Double?
+    var brokerCurrency: String?
+    /// Vorschlag in Notierungswährung (Soll-Stop oder neuer Stop aus der Empfehlung).
+    var suggestion: Double?
+    var suggestionLabel = "Vorschlag"
+    /// Empfehlung, die mit dem Eintragen erledigt ist.
+    var recommendationTicker: String?
+
+    init(stop: StopPosition) {
+        account = stop.account
+        ticker = stop.ticker
+        name = stop.displayName
+        quoteCurrency = stop.currency
+        currentPrice = stop.currentPrice
+        brokerStop = stop.brokerStop
+        brokerCurrency = stop.stopCurrency
+        suggestion = stop.targetStop
+        suggestionLabel = "Soll-Stop (2×ATR)"
+    }
+
+    init?(recommendation rec: Recommendation) {
+        guard let account = rec.account else { return nil }
+        self.account = account
+        ticker = rec.positionTicker ?? rec.ticker
+        name = rec.displayName
+        quoteCurrency = rec.currency
+        currentPrice = rec.currentPrice
+        brokerStop = rec.currentStopBroker
+        brokerCurrency = rec.currentStopCurrency
+        suggestion = rec.stopLoss
+        suggestionLabel = "Neuer Stop laut Velora"
+        recommendationTicker = rec.ticker
+    }
+}
+
+enum StopDefaults {
+    /// Trade Republic führt Stops auf Auslandsaktien in Euro, die übrigen Broker in der Notierungswährung.
+    static func currency(account: String, quote: String) -> String {
+        let q = Format.currencyCode(quote)
+        if account.lowercased().contains("trade_republic") { return "EUR" }
+        return ["EUR", "USD"].contains(q) ? q : "EUR"
+    }
+}
+
+private struct StopCurrencyPicker: View {
+    @Binding var selection: String
+
+    var body: some View {
+        Picker("Währung beim Broker", selection: $selection) {
+            Text("Euro (€)").tag("EUR")
+            Text("Dollar ($)").tag("USD")
+        }
+    }
+}
+
+/// Stop eintragen oder ändern – so, wie er beim Broker steht.
+struct EditStopSheet: View {
+    var target: StopTarget
+    var onSaved: (() -> Void)?
+
+    @Environment(AppModel.self) private var model
+    @State private var value = ""
+    @State private var currency = "EUR"
+    @State private var eurUsd: Double?
+
+    var body: some View {
+        FormSheet(title: target.brokerStop == nil ? "Stop eintragen" : "Stop ändern",
+                  canSave: parseNumber(value).map { $0 > 0 } ?? (target.brokerStop != nil), save: save) {
+            Section {
+                LabeledContent("Titel", value: target.name)
+                LabeledContent("Depot", value: Format.accountName(target.account))
+                if let price = target.currentPrice {
+                    LabeledContent("Kurs") {
+                        PriceStack(value: price, currency: target.quoteCurrency, eurUsd: eurUsd, font: .body)
+                    }
+                }
+                if let current = target.brokerStop {
+                    LabeledContent("Aktueller Stop",
+                                   value: Format.price(current, currency: target.brokerCurrency ?? target.quoteCurrency))
+                }
+            }
+            Section {
+                NumberField(title: "Stop-Kurs", text: $value, prompt: "kein Stop")
+                StopCurrencyPicker(selection: $currency)
+                if let suggestion = target.suggestion {
+                    Button {
+                        value = Format.plain(converted(suggestion), digits: 2)
+                    } label: {
+                        LabeledContent(target.suggestionLabel) {
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text(Format.price(converted(suggestion), currency: currency))
+                                if currency != target.quoteCurrency {
+                                    Text(Format.price(suggestion, currency: target.quoteCurrency))
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                }
+                            }
+                            .monospacedDigit()
+                        }
+                    }
+                    .tint(.primary)
+                }
+            } footer: {
+                Text("Trag den Wert genau so ein, wie er beim Broker steht – bei Trade Republic meist in Euro, bei der Erste Bank in Dollar. Leer lassen entfernt den Stop.")
+            }
+        }
+        .onAppear {
+            currency = target.brokerCurrency ?? StopDefaults.currency(account: target.account, quote: target.quoteCurrency)
+            if let current = target.brokerStop, target.recommendationTicker == nil {
+                value = Format.plain(current, digits: 2)
+            } else if let suggestion = target.suggestion {
+                value = Format.plain(converted(suggestion), digits: 2)
+            }
+        }
+        .task { eurUsd = model.eurUsd }
+        .onChange(of: currency) { old, new in
+            // Unveränderten Vorschlag mitumrechnen, damit nicht Euro als Dollar gespeichert wird.
+            guard let suggestion = target.suggestion,
+                  value == Format.plain(convert(suggestion, to: old), digits: 2) else { return }
+            value = Format.plain(convert(suggestion, to: new), digits: 2)
+        }
+    }
+
+    private func converted(_ quoteValue: Double) -> Double { convert(quoteValue, to: currency) }
+
+    private func convert(_ quoteValue: Double, to ccy: String) -> Double {
+        guard let eurUsd, eurUsd > 0, ccy != target.quoteCurrency else { return quoteValue }
+        if target.quoteCurrency == "USD", ccy == "EUR" { return (quoteValue / eurUsd * 100).rounded() / 100 }
+        if target.quoteCurrency == "EUR", ccy == "USD" { return (quoteValue * eurUsd * 100).rounded() / 100 }
+        return quoteValue
+    }
+
+    private func save() async throws {
+        try await model.send("/api/portfolio/position/edit", [
+            "account": .string(target.account), "ticker": .string(target.ticker),
+            "stop_loss": JSONValue(parseNumber(value)), "stop_currency": .string(currency),
+        ])
+        if let rec = target.recommendationTicker, parseNumber(value) != nil {
+            try await model.send("/api/recommendations/close", ["ticker": .string(rec), "status": .string("executed")])
+        }
+        onSaved?()
     }
 }
 

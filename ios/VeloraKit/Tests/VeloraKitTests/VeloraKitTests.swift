@@ -183,6 +183,14 @@ private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
         let briefings = try load(BriefingsData.self, "briefings")
         #expect(!briefings.briefings.isEmpty)
         #expect(briefings.briefings.allSatisfy { $0.parsedDate != nil })
+        for briefing in briefings.briefings where briefing.hasFullText {
+            let doc = BriefingDocument.parse(briefing.fullText ?? "")
+            #expect(doc.sections.count >= 5, "\(briefing.date): nur \(doc.sections.count) Abschnitte")
+            let text = doc.sections.flatMap(\.blocks).map { InlineRun.plainText($0.runs) }.joined()
+                + doc.sections.map(\.title).joined()
+            #expect(!text.contains("<b>") && !text.contains("</") && !text.contains("&amp;"), "\(briefing.date): Rest-HTML")
+            #expect(doc.sections.contains { $0.kind == .recommendations }, "\(briefing.date): Empfehlungen fehlen")
+        }
         let recs = try load(RecommendationsData.self, "recommendations")
         #expect(!recs.recommendations.isEmpty)
         let strategy = try load(StrategyData.self, "strategy")
@@ -272,5 +280,133 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {
             #expect(text.contains("100.69.43.83:8080"))
             #expect(text.contains("Port?"))
         }
+    }
+}
+
+@Suite struct BriefingDocumentTests {
+    // Synthetisch, aber in der Form der echten Telegram-HTML-Briefings.
+    static let sample = """
+    <b>📊 BRIEFING — Donnerstag, 08.10.2026</b>
+
+    <b>1. MARKTLAGE</b>
+    Regime <b>Neutral</b> — [Fakt] die <b>US-10Y</b> steigt &amp; Öl <i>auch</i>.
+    Zweite Zeile im selben Absatz.
+
+    <b>2b) STOP-CHECK — offene Flanke</b>
+    <b>17 Positionen ungesichert.</b>
+    • <b>NVDA</b>: Stop <code>226 USD</code> [Einschätzung]
+    • <b>AVGO</b>: hochziehen
+
+    <b>4. EMPFEHLUNGEN</b>
+    1. <b>Gold aufstocken</b>: +2 Stk
+    2. <b>NVDA Stop 226</b> setzen
+
+    <b>7. EMPFEHLUNGS-BILANZ</b>
+    Hit-Rate 57%.
+    """
+
+    @Test func splitsIntoSections() {
+        let doc = BriefingDocument.parse(Self.sample)
+        #expect(doc.title == "📊 BRIEFING — Donnerstag, 08.10.2026")
+        #expect(doc.sections.map(\.number) == ["1", "2b", "4", "7"])
+        #expect(doc.sections.map(\.kind) == [.market, .stops, .recommendations, .track])
+        #expect(doc.sections[0].displayTitle == "Marktlage")
+        #expect(doc.sections[1].displayTitle == "Stop-Check")
+        #expect(doc.sections[1].subtitle == "offene Flanke")
+        #expect(doc.sections[3].displayTitle == "Empfehlungs-Bilanz")
+    }
+
+    @Test func blocksAndInlineFormatting() {
+        let doc = BriefingDocument.parse(Self.sample)
+        let market = doc.sections[0]
+        #expect(market.blocks.count == 1)  // zwei Zeilen, ein Absatz
+        let runs = market.blocks[0].runs
+        #expect(runs.contains { $0.text == "Neutral" && $0.bold })
+        #expect(runs.contains { $0.text == "Fakt" && $0.tag })
+        #expect(runs.contains { $0.text == "auch" && $0.italic })
+        #expect(InlineRun.plainText(runs).contains("steigt & Öl"))
+        #expect(!InlineRun.plainText(runs).contains("<"))
+
+        let stops = doc.sections[1]
+        // Fette Satzzeile mitten im Abschnitt bleibt Text, wird kein neuer Abschnitt.
+        guard case .paragraph(let p) = stops.blocks[0] else { Issue.record("Absatz erwartet"); return }
+        #expect(p.first?.bold == true)
+        guard case .bullet(let b) = stops.blocks[1] else { Issue.record("Aufzählung erwartet"); return }
+        #expect(b.contains { $0.text == "226 USD" && $0.code })
+        #expect(b.contains { $0.text == "Einschätzung" && $0.tag })
+
+        guard case .numbered(let n, let item) = doc.sections[2].blocks[0] else { Issue.record("Nummer erwartet"); return }
+        #expect(n == "1")
+        #expect(item.first?.text == "Gold aufstocken")
+    }
+
+    @Test func markdownAndParenthesisHeadings() {
+        let doc = BriefingDocument.parse("""
+        **1) MARKTLAGE**
+        Ruhig.
+        ## Risiken
+        - **Zinsen** steigen
+        """)
+        #expect(doc.title == nil)
+        #expect(doc.sections.map(\.displayTitle) == ["Marktlage", "Risiken"])
+        #expect(doc.sections[1].kind == .risks)
+        #expect(doc.sections[1].blocks.first?.runs.first == InlineRun(text: "Zinsen", bold: true))
+    }
+
+    @Test func textWithoutHeadingsBecomesOverview() {
+        let doc = BriefingDocument.parse("Nur ein Satz ohne Gliederung.")
+        #expect(doc.sections.count == 1)
+        #expect(doc.sections[0].title == "Überblick")
+        #expect(doc.sections[0].preview == "Nur ein Satz ohne Gliederung.")
+    }
+
+    @Test func lessThanSignIsNotATag() {
+        #expect(InlineRun.plain("RSI <30 und <b>fett</b>") == "RSI <30 und fett")
+    }
+}
+
+@Suite struct StopAndOrderTests {
+    @Test func stopKeepsBrokerCurrency() throws {
+        let s = try decode(StopPosition.self, """
+        {"ticker": "AVGO", "name": "Broadcom", "account": "trade_republic", "status": "ok", "currency": "USD",
+         "ist_stop": 349.44, "ist_stop_broker": 312.0, "stop_currency": "EUR", "shares": 6.7, "wert_eur": 2093}
+        """)
+        #expect(s.brokerStop == 312)
+        #expect(s.brokerCurrency == "EUR")
+        #expect(s.stopInOtherCurrency)
+        let old = try decode(StopPosition.self, #"{"ticker": "NVDA", "currency": "USD", "ist_stop": 226, "status": "ok"}"#)
+        #expect(old.brokerStop == 226)
+        #expect(old.brokerCurrency == "USD")
+        #expect(!old.stopInOtherCurrency)
+    }
+
+    @Test func euroHintOnlyForDollar() {
+        #expect(abs((Format.eurValue(112, currency: "USD", eurUsd: 1.12) ?? 0) - 100) < 1e-9)
+        #expect(Format.eurValue(100, currency: "EUR", eurUsd: 1.12) == nil)
+        #expect(Format.eurValue(100, currency: "USD", eurUsd: nil) == nil)
+        #expect(Format.currencyCode("€") == "EUR")
+        #expect(Format.price(10, currency: "€").contains("€"))
+    }
+
+    @Test func holdBecomesStopAction() throws {
+        let raise = try decode(Recommendation.self, """
+        {"ticker": "AVGO", "action": "hold", "stop_loss": 350, "status": "open", "current_stop": 333, "name": "Broadcom"}
+        """)
+        #expect(raise.actionLabel == "Stop nachziehen")
+        #expect(raise.isStopAction)
+        #expect(raise.displayName == "Broadcom")
+        #expect((raise.stopRaisePct ?? 0) > 5)
+        let fresh = try decode(Recommendation.self, #"{"ticker": "NVDA", "action": "hold", "stop_loss": 226, "status": "open"}"#)
+        #expect(fresh.actionLabel == "Stop setzen")
+        let plain = try decode(Recommendation.self, #"{"ticker": "X", "action": "hold", "status": "open"}"#)
+        #expect(plain.actionLabel == "Halten")
+        #expect(!plain.isActionable)
+    }
+
+    @Test func orderExpiry() throws {
+        let order = try decode(Order.self, #"{"id": "o1", "ticker": "8PSG.DE", "action": "buy", "shares": 2, "limit_price": 353, "valid_until": "2026-10-30"}"#)
+        #expect(order.volume == 706)
+        #expect(!order.isExpired(now: VeloraDate.parse("2026-10-30T18:00:00")!))
+        #expect(order.isExpired(now: VeloraDate.parse("2026-10-31T09:00:00")!))
     }
 }

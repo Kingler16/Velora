@@ -338,20 +338,35 @@ public struct StopPosition: Decodable, Sendable, Identifiable, Hashable {
     public var name: String
     public var account: String
     public var status: String
+    /// Gesetzter Stop in Notierungswährung (dafür rechnet der Server Abstand und Risiko).
     public var currentStop: Double?
+    /// Gesetzter Stop so, wie er beim Broker steht (Währung in `stopCurrency`).
+    public var brokerStop: Double?
+    public var stopCurrency: String?
+    public var stopSetAt: String?
     public var targetStop: Double?
     public var currentPrice: Double?
     public var currency: String
+    public var shares: Double?
     public var distancePct: Double?
     public var targetDistancePct: Double?
     public var valueEur: Double?
     public var riskEur: Double?
+    public var riskTargetEur: Double?
+    public var currentPriceEur: Double?
+    public var currentStopEur: Double?
+    public var targetStopEur: Double?
+    public var hint: String?
 
     enum CodingKeys: String, CodingKey {
-        case ticker, name, account, status, currency
-        case currentStop = "ist_stop", targetStop = "soll_stop", currentPrice = "current_price"
+        case ticker, name, account, status, currency, shares
+        case currentStop = "ist_stop", brokerStop = "ist_stop_broker", stopCurrency = "stop_currency"
+        case stopSetAt = "stop_set_at"
+        case targetStop = "soll_stop", currentPrice = "current_price"
         case distancePct = "abstand_pct", targetDistancePct = "soll_abstand_pct"
-        case valueEur = "wert_eur", riskEur = "risiko_eur"
+        case valueEur = "wert_eur", riskEur = "risiko_eur", riskTargetEur = "risiko_soll_eur"
+        case currentPriceEur = "current_price_eur", currentStopEur = "ist_stop_eur", targetStopEur = "soll_stop_eur"
+        case hint = "hinweis"
     }
 
     public init(from decoder: Decoder) throws {
@@ -361,17 +376,38 @@ public struct StopPosition: Decodable, Sendable, Identifiable, Hashable {
         account = c(.account, default: "")
         status = c(.status, default: "")
         currentStop = c(.currentStop)
+        // Ältere Server kennen nur den Stop in Notierungswährung.
+        brokerStop = c(.brokerStop) ?? currentStop
+        stopCurrency = (c(.stopCurrency) as String?).map(Format.currencyCode)
+        stopSetAt = c(.stopSetAt)
         targetStop = c(.targetStop)
         currentPrice = c(.currentPrice)
-        currency = c(.currency, default: "EUR")
+        currency = Format.currencyCode(c(.currency, default: "EUR"))
+        shares = c(.shares)
         distancePct = c(.distancePct)
         targetDistancePct = c(.targetDistancePct)
         valueEur = c(.valueEur)
         riskEur = c(.riskEur)
+        riskTargetEur = c(.riskTargetEur)
+        currentPriceEur = c(.currentPriceEur)
+        currentStopEur = c(.currentStopEur)
+        targetStopEur = c(.targetStopEur)
+        hint = c(.hint)
     }
+
+    public var displayName: String { name.isEmpty ? ticker : name }
+
+    /// Währung, in der der Stop beim Broker steht.
+    public var brokerCurrency: String { stopCurrency ?? currency }
+
+    /// Weicht die Broker-Währung von der Notierung ab (z. B. EUR-Stop auf US-Aktie)?
+    public var stopInOtherCurrency: Bool { brokerStop != nil && brokerCurrency != currency }
 
     /// Status, bei dem der Nutzer etwas am Stop tun sollte.
     public var needsAttention: Bool { ["kein_stop", "ungueltig", "zu_eng", "zu_weit", "nachziehbar"].contains(status) }
+
+    /// Kann man für diese Position überhaupt einen Stop sinnvoll setzen?
+    public var isStoppable: Bool { !["nicht_bewertbar", "kein_stop_noetig"].contains(status) || brokerStop != nil }
 }
 
 public struct StopOverview: Decodable, Sendable {
@@ -406,11 +442,12 @@ public struct Order: Decodable, Sendable, Identifiable, Hashable {
     public var currency: String
     public var account: String
     public var placedDate: String?
+    public var validUntil: String?
     public var note: String?
 
     enum CodingKeys: String, CodingKey {
         case id, ticker, action, shares, currency, account, note
-        case limitPrice = "limit_price", placedDate = "placed_date"
+        case limitPrice = "limit_price", placedDate = "placed_date", validUntil = "valid_until"
     }
 
     public init(from decoder: Decoder) throws {
@@ -420,9 +457,18 @@ public struct Order: Decodable, Sendable, Identifiable, Hashable {
         action = c(.action, default: "")
         shares = c(.shares, default: 0)
         limitPrice = c(.limitPrice)
-        currency = c(.currency, default: "EUR")
+        currency = Format.currencyCode(c(.currency, default: "EUR"))
         account = c(.account, default: "")
         placedDate = c(.placedDate)
+        validUntil = c(.validUntil)
         note = c(.note)
+    }
+
+    public var volume: Double? { limitPrice.map { $0 * shares } }
+
+    /// Gültigkeit abgelaufen – beim Broker vermutlich schon gestrichen.
+    public func isExpired(now: Date = .now) -> Bool {
+        guard let until = VeloraDate.parse(validUntil) else { return false }
+        return Calendar.current.startOfDay(for: now) > until
     }
 }
