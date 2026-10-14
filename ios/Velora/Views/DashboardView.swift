@@ -19,7 +19,8 @@ struct DashboardView: View {
                         IndexStrip(indices: data.indices)
                         if let briefing = data.latestBriefing { LatestBriefingCard(briefing: briefing) }
                         if data.snapshots.count > 1 {
-                            HistoryCard(snapshots: data.snapshots, current: data.overview.totalValueEur)
+                            HistoryCard(snapshots: data.snapshots, current: data.overview.totalValueEur,
+                                        currentHoldings: data.overview.holdingsValueEur)
                         }
                         AllocationCard(overview: data.overview)
                         if !data.benchmarks.isEmpty { BenchmarkCard(benchmarks: data.benchmarks) }
@@ -124,48 +125,123 @@ struct IndexStrip: View {
 struct HistoryCard: View {
     var snapshots: [Snapshot]
     var current: Double?
+    var currentHoldings: Double?
 
-    private var points: [(date: Date, value: Double)] {
-        var p = snapshots.compactMap { s in s.date.map { ($0, s.totalValue) } }.sorted { $0.0 < $1.0 }
-        if let current { p.append((.now, current)) }
-        return p
-    }
-
-    /// Y-Bereich eng um die tatsächlichen Werte. Eine AreaMark füllt sonst bis 0 und zieht
-    /// die Achse mit – dann sehen 62 → 66 Tsd. € wie eine flache Linie aus.
-    private var yDomain: ClosedRange<Double> {
-        let values = points.map(\.value)
-        guard let lo = values.min(), let hi = values.max() else { return 0...1 }
-        let pad = max((hi - lo) * 0.15, hi * 0.005, 1)
-        return (lo - pad)...(hi + pad)
-    }
+    @State private var mode: ValueHistory.Mode = .total
+    @State private var range: ValueHistory.Range = .max
+    /// Beim Draufhalten gewähltes Datum (wie bei Trade Republic).
+    @State private var selection: Date?
 
     var body: some View {
-        let domain = yDomain
-        Card(title: "Vermögensverlauf", subtitle: "Monatsstände") {
-            Chart(points, id: \.date) { point in
-                AreaMark(x: .value("Monat", point.date), yStart: .value("Basis", domain.lowerBound), yEnd: .value("Wert", point.value))
+        let points = ValueHistory.points(snapshots: snapshots, currentTotal: current, currentHoldings: currentHoldings,
+                                         mode: mode, range: range)
+        let selected = selection.flatMap { ValueHistory.nearest(to: $0, in: points) }
+        Card {
+            HStack {
+                Text("Vermögensverlauf").font(.headline)
+                Spacer()
+                Picker("Wert", selection: $mode) {
+                    ForEach(ValueHistory.Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
+
+            if let first = points.first, let shown = selected ?? points.last {
+                let change = ValueHistory.change(from: first, to: shown)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(Format.eur(shown.value, digits: 0))
+                        .font(.system(size: 28, weight: .bold, design: .rounded)).monospacedDigit()
+                        .contentTransition(.numericText())
+                    HStack(spacing: 6) {
+                        Text("\(Format.signedEur(change.eur, digits: 0)) · \(Format.pct(change.pct))")
+                            .foregroundStyle(Theme.change(change.eur))
+                        Text(caption(first: first, shown: shown, scrubbing: selected != nil))
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.subheadline.weight(.medium)).monospacedDigit()
+                }
+            }
+
+            if points.count > 1 {
+                chart(points, selected: selected)
+            } else {
+                Text("Zu wenige Monatsstände in diesem Zeitraum.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 190)
+            }
+
+            Picker("Zeitraum", selection: $range) {
+                ForEach(ValueHistory.Range.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        }
+        .sensoryFeedback(.selection, trigger: selected?.date)
+        .animation(.snappy, value: mode)
+        .animation(.snappy, value: range)
+    }
+
+    private func chart(_ points: [ValueHistory.Point], selected: ValueHistory.Point?) -> some View {
+        // Y-Bereich eng um die tatsächlichen Werte. Eine AreaMark füllt sonst bis 0 und zieht
+        // die Achse mit – dann sehen 62 → 66 Tsd. € wie eine flache Linie aus.
+        let values = points.map(\.value)
+        let lo = values.min() ?? 0, hi = values.max() ?? 1
+        let pad = max((hi - lo) * 0.15, hi * 0.005, 1)
+        let domain = (lo - pad)...(hi + pad)
+
+        return Chart {
+            ForEach(points, id: \.date) { point in
+                AreaMark(x: .value("Datum", point.date), yStart: .value("Basis", domain.lowerBound), yEnd: .value("Wert", point.value))
                     .foregroundStyle(LinearGradient(colors: [Theme.accent.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom))
                     .interpolationMethod(.monotone)
-                LineMark(x: .value("Monat", point.date), y: .value("Wert", point.value))
+                LineMark(x: .value("Datum", point.date), y: .value("Wert", point.value))
                     .foregroundStyle(Theme.accent)
                     .interpolationMethod(.monotone)
             }
-            .chartYScale(domain: domain)
-            .chartYAxis {
-                AxisMarks(position: .leading) { value in
-                    AxisGridLine()
-                    AxisValueLabel { if let v = value.as(Double.self) { Text(Format.eurShort(v)) } }
-                }
+            if let selected {
+                RuleMark(x: .value("Datum", selected.date))
+                    .foregroundStyle(.secondary.opacity(0.5))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                PointMark(x: .value("Datum", selected.date), y: .value("Wert", selected.value))
+                    .foregroundStyle(Theme.accent)
+                    .symbolSize(80)
             }
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .month, count: 3)) { _ in
-                    AxisGridLine()
-                    AxisValueLabel(format: .dateTime.month(.abbreviated).year(.twoDigits).locale(Format.locale))
-                }
-            }
-            .frame(height: 190)
         }
+        .chartYScale(domain: domain)
+        .chartYAxis {
+            AxisMarks(position: .leading) { value in
+                AxisGridLine()
+                AxisValueLabel { if let v = value.as(Double.self) { Text(Format.eurShort(v)) } }
+            }
+        }
+        .chartXAxis {
+            AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.month(.abbreviated).year(.twoDigits).locale(Format.locale))
+            }
+        }
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                Rectangle().fill(.clear).contentShape(Rectangle())
+                    // Erst kurz draufhalten, dann ziehen – so bleibt das Scrollen der Seite frei.
+                    .gesture(
+                        LongPressGesture(minimumDuration: 0.15)
+                            .sequenced(before: DragGesture(minimumDistance: 0))
+                            .onChanged { value in
+                                guard case .second(true, let drag?) = value, let plot = proxy.plotFrame else { return }
+                                selection = proxy.value(atX: drag.location.x - geo[plot].origin.x, as: Date.self)
+                            }
+                            .onEnded { _ in selection = nil }
+                    )
+            }
+        }
+        .frame(height: 190)
+    }
+
+    private func caption(first: ValueHistory.Point, shown: ValueHistory.Point, scrubbing: Bool) -> String {
+        let fmt = Date.FormatStyle.dateTime.day().month(.abbreviated).year().locale(Format.locale)
+        guard scrubbing else { return "seit \(first.date.formatted(fmt))" }
+        return Calendar.current.isDateInToday(shown.date) ? "heute" : "am \(shown.date.formatted(fmt))"
     }
 }
 

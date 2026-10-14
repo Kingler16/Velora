@@ -419,3 +419,45 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {
         #expect(order.isExpired(now: VeloraDate.parse("2026-10-31T09:00:00")!))
     }
 }
+
+@Suite struct ValueHistoryTests {
+    private let snapshots: [Snapshot] = {
+        let json = """
+        [{"month": "2025-09", "total_value": 50000, "date": "2025-09-02T08:00:00"},
+         {"month": "2026-05", "total_value": 62536.33, "holdings_value_eur": 36482.78, "date": "2026-05-21T17:40:43.286360"},
+         {"month": "2026-10", "total_value": 65978.34, "holdings_value_eur": 41030.55, "date": "2026-10-01T08:19:45.819423"}]
+        """
+        return try! JSONDecoder().decode([Snapshot].self, from: Data(json.utf8))
+    }()
+    private let now = VeloraDate.parse("2026-10-14T12:00:00")!
+
+    @Test func usesRealSnapshotDateAndAppendsCurrent() {
+        let p = ValueHistory.points(snapshots: snapshots, currentTotal: 66000, currentHoldings: 40000,
+                                    mode: .total, range: .max, now: now)
+        #expect(p.count == 4)
+        #expect(p[1].date == VeloraDate.parse("2026-05-21T17:40:43"))
+        #expect(p.last?.value == 66000)
+    }
+
+    @Test func rangeCutsOldPoints() {
+        let p = ValueHistory.points(snapshots: snapshots, currentTotal: 66000, currentHoldings: 40000,
+                                    mode: .total, range: .sixMonths, now: now)
+        #expect(p.map(\.value) == [62536.33, 65978.34, 66000])
+    }
+
+    @Test func holdingsModeSkipsSnapshotsWithoutDepotValue() {
+        let p = ValueHistory.points(snapshots: snapshots, currentTotal: 66000, currentHoldings: 40000,
+                                    mode: .holdings, range: .max, now: now)
+        #expect(p.map(\.value) == [36482.78, 41030.55, 40000])
+    }
+
+    @Test func changeAndNearest() {
+        let p = ValueHistory.points(snapshots: snapshots, currentTotal: 66000, currentHoldings: nil,
+                                    mode: .total, range: .sixMonths, now: now)
+        let c = ValueHistory.change(from: p[0], to: p[2])
+        #expect(abs(c.eur - 3463.67) < 0.001)
+        #expect(abs((c.pct ?? 0) - 5.5387) < 0.001)
+        let near = ValueHistory.nearest(to: VeloraDate.parse("2026-09-25")!, in: p)
+        #expect(near?.value == 65978.34)
+    }
+}

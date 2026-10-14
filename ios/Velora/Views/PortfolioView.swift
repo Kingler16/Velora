@@ -242,7 +242,8 @@ private struct PerformanceSection: View {
     var body: some View {
         if data.snapshots.count > 1 {
             Section {
-                HistoryCard(snapshots: data.snapshots, current: data.overview.totalValueEur)
+                HistoryCard(snapshots: data.snapshots, current: data.overview.totalValueEur,
+                            currentHoldings: data.overview.holdingsValueEur)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
             }

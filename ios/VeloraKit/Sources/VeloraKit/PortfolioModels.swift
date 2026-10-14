@@ -191,26 +191,81 @@ public struct Snapshot: Decodable, Sendable, Identifiable, Hashable {
     public var id: String { month }
     public var month: String
     public var totalValue: Double
+    /// Depotwert ohne Cash (ältere Snapshots haben ihn nicht).
+    public var holdingsValueEur: Double?
     public var totalPnlEur: Double?
     public var totalPnlPct: Double?
     public var note: String?
+    /// Zeitpunkt, an dem der Stand erfasst wurde.
+    public var takenAt: Date?
 
     enum CodingKeys: String, CodingKey {
-        case month, note
+        case month, note, date
         case totalValue = "total_value", totalPnlEur = "total_pnl_eur", totalPnlPct = "total_pnl_pct"
+        case holdingsValueEur = "holdings_value_eur"
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         month = c(.month, default: "")
         totalValue = c(.totalValue, default: 0)
+        holdingsValueEur = c(.holdingsValueEur)
         totalPnlEur = c(.totalPnlEur)
         totalPnlPct = c(.totalPnlPct)
         note = c(.note)
+        takenAt = VeloraDate.parse(c(.date))
     }
 
     /// Erster Tag des Monats (`2024-11` → 1.11.2024).
     public var date: Date? { VeloraDate.parse(month + "-01") }
+}
+
+/// Datenreihe für den Vermögensverlauf: Snapshots plus aktueller Stand, wahlweise
+/// Gesamtvermögen oder nur Depot, auf einen Zeitraum zugeschnitten.
+public enum ValueHistory {
+    public enum Mode: String, CaseIterable, Sendable { case total = "Vermögen", holdings = "Depot" }
+
+    public enum Range: String, CaseIterable, Sendable {
+        case sixMonths = "6M", oneYear = "1J", max = "Max"
+
+        func start(before now: Date) -> Date? {
+            let cal = Calendar(identifier: .gregorian)
+            switch self {
+            case .sixMonths: return cal.date(byAdding: .month, value: -6, to: now)
+            case .oneYear: return cal.date(byAdding: .year, value: -1, to: now)
+            case .max: return nil
+            }
+        }
+    }
+
+    public struct Point: Hashable, Sendable {
+        public var date: Date
+        public var value: Double
+    }
+
+    public static func points(snapshots: [Snapshot], currentTotal: Double?, currentHoldings: Double?,
+                              mode: Mode, range: Range, now: Date = .now) -> [Point] {
+        var points = snapshots.compactMap { s -> Point? in
+            guard let date = s.takenAt ?? s.date else { return nil }
+            let value = mode == .total ? s.totalValue : s.holdingsValueEur
+            return value.map { Point(date: date, value: $0) }
+        }
+        if let current = mode == .total ? currentTotal : currentHoldings { points.append(Point(date: now, value: current)) }
+        points.sort { $0.date < $1.date }
+        guard let start = range.start(before: now) else { return points }
+        return points.filter { $0.date >= start }
+    }
+
+    /// Veränderung vom ersten Punkt bis `point` (€ und %).
+    public static func change(from first: Point, to point: Point) -> (eur: Double, pct: Double?) {
+        let eur = point.value - first.value
+        return (eur, first.value != 0 ? eur / first.value * 100 : nil)
+    }
+
+    /// Punkt, der einem (beim Ziehen gewählten) Datum am nächsten liegt.
+    public static func nearest(to date: Date, in points: [Point]) -> Point? {
+        points.min { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) }
+    }
 }
 
 public struct Benchmark: Decodable, Sendable, Identifiable, Hashable {
