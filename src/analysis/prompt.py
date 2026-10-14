@@ -314,8 +314,13 @@ def build_portfolio_summary(portfolio: dict, market_data: dict) -> str:
     portfolio_value = total_value_eur - cash_total
     cash_pct = (cash_total / total_value_eur * 100) if total_value_eur else 0
 
-    # USD-Exposure berechnen
-    usd_positions = sum(1 for acc in portfolio["accounts"].values() for p in acc["positions"] if p.get("currency") == "USD")
+    # USD-Exposure nach Notierungswährung zählen — pos.currency ist nur die Buy-in-Währung.
+    from src.data.fx import resolve_quote_currency
+    usd_positions = sum(
+        1 for acc in portfolio["accounts"].values() for p in acc["positions"]
+        if resolve_quote_currency(((market_data.get("positions") or {}).get(p.get("ticker")) or {}).get("price"),
+                                  p.get("currency")) == "USD"
+    )
 
     lines.append(f"\n--- GESAMT (alle Werte in EUR, korrekt konvertiert) ---")
     lines.append(f"Portfolio-Wert (Aktien+Fonds): {portfolio_value:.2f}€")

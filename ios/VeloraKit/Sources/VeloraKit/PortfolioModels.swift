@@ -9,7 +9,10 @@ public struct Position: Decodable, Sendable, Identifiable, Hashable {
     public var shares: Double
     public var buyIn: Double?
     public var buyInEur: Double?
+    /// Währung, in der der Buy-in erfasst ist – nicht zwingend die des Kurses.
     public var currency: String
+    /// Währung, in der `currentPrice` und die 52-Wochen-Spanne notieren.
+    public var quoteCurrency: String
     public var currentPrice: Double?
     public var currentPriceEur: Double?
     public var currentValueEur: Double
@@ -31,7 +34,7 @@ public struct Position: Decodable, Sendable, Identifiable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case name, ticker, isin, account, shares, currency, sector, beta
-        case buyIn = "buy_in", buyInEur = "buy_in_eur"
+        case buyIn = "buy_in", buyInEur = "buy_in_eur", quoteCurrency = "quote_currency"
         case currentPrice = "current_price", currentPriceEur = "current_price_eur"
         case currentValueEur = "current_value_eur", investedEur = "invested_eur"
         case pnlEur = "pnl_eur", pnlPct = "pnl_pct", hasLivePrice = "has_live_price"
@@ -49,7 +52,9 @@ public struct Position: Decodable, Sendable, Identifiable, Hashable {
         shares = c(.shares, default: 0)
         buyIn = c(.buyIn)
         buyInEur = c(.buyInEur)
-        currency = c(.currency, default: "EUR")
+        currency = Format.currencyCode(c(.currency, default: "EUR"))
+        // Ältere Server liefern keine Notierungswährung.
+        quoteCurrency = Format.currencyCode(c(.quoteCurrency, default: currency))
         currentPrice = c(.currentPrice)
         currentPriceEur = c(.currentPriceEur)
         currentValueEur = c(.currentValueEur, default: 0)

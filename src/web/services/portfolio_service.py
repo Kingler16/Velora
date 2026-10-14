@@ -220,12 +220,12 @@ def compute_portfolio_overview(portfolio: dict, market_data: dict) -> dict:
                 price_data = market_data["positions"][ticker].get("price", {})
                 current_price = price_data.get("current_price")
 
+            # Live-Kurs in der ECHTEN Quote-Währung (yfinance) umrechnen — nicht
+            # nach pos.currency, das nur die Buy-in-Währung beschreibt.
+            from src.data.fx import resolve_quote_currency
+            quote_ccy = resolve_quote_currency(price_data, currency)
             has_live_price = current_price is not None
             if has_live_price:
-                # Live-Kurs in der ECHTEN Quote-Währung (yfinance) umrechnen — nicht
-                # nach pos.currency, das nur die Buy-in-Währung beschreibt.
-                from src.data.fx import resolve_quote_currency
-                quote_ccy = resolve_quote_currency(price_data, currency)
                 current_price_eur = current_price if quote_ccy == "EUR" else current_price / eur_usd
                 current_value_eur = shares * current_price_eur
                 pnl_eur = current_value_eur - invested_eur
@@ -248,6 +248,7 @@ def compute_portfolio_overview(portfolio: dict, market_data: dict) -> dict:
                 "buy_in": buy_in,
                 "buy_in_eur": round(buy_in_eur, 2),
                 "currency": currency,
+                "quote_currency": quote_ccy,
                 "current_price": current_price,
                 "current_price_eur": round(current_price_eur, 2),
                 "current_value_eur": round(current_value_eur, 2),

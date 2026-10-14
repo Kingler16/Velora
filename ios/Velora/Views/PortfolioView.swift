@@ -93,6 +93,7 @@ enum PortfolioSheet: Identifiable {
     case trade(Position?, accounts: [String])
     case order(ticker: String, action: String, currency: String, accounts: [String])
     case fill(Order)
+    case fillStop(StopPosition)
     case addPosition(accounts: [String])
     case editPosition(Position, stop: StopPosition?, accounts: [String])
     case editStop(StopTarget)
@@ -103,6 +104,7 @@ enum PortfolioSheet: Identifiable {
         case .trade(let p, _): "trade-\(p?.id ?? "")"
         case .order(let t, _, _, _): "order-\(t)"
         case .fill(let o): "fill-\(o.id)"
+        case .fillStop(let s): "fillstop-\(s.id)"
         case .addPosition: "add"
         case .editPosition(let p, _, _): "edit-\(p.id)"
         case .editStop(let t): "stop-\(t.id)"
@@ -115,6 +117,7 @@ enum PortfolioSheet: Identifiable {
         case .trade(let p, let accounts): TradeSheet(position: p, accounts: accounts)
         case .order(let t, let a, let c, let accounts): OrderSheet(ticker: t, action: a, currency: c, accounts: accounts)
         case .fill(let o): FillOrderSheet(order: o)
+        case .fillStop(let s): FillStopSheet(stop: s)
         case .addPosition(let accounts): AddPositionSheet(accounts: accounts)
         case .editPosition(let p, let stop, let accounts): EditPositionSheet(position: p, stop: stop, accounts: accounts)
         case .editStop(let t): EditStopSheet(target: t)
@@ -456,9 +459,17 @@ private struct OrdersSection: View {
                                 StopOrderRow(stop: stop, eurUsd: data.eurUsd)
                             }
                             .tint(.primary)
+                            .swipeActions(edge: .leading) {
+                                Button("Ausgelöst", systemImage: "checkmark") { sheet = .fillStop(stop) }
+                                    .tint(Theme.accent)
+                            }
                         }
                     } header: {
                         Text("Stop · \(Format.accountName(group.account))")
+                    } footer: {
+                        if group.account == groupedStops.last?.account {
+                            Text("Tippen: Stop ändern. Nach rechts wischen: ausgelöst (bucht den Verkauf ins Depot).")
+                        }
                     }
                 }
             }

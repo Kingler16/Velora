@@ -104,7 +104,7 @@ def _execute_log_trade(params: dict) -> dict:
     shares = params.get("shares")
     price = params.get("price")
 
-    updated = update_portfolio_position(action, ticker, shares, price)
+    updated = update_portfolio_position(action, ticker, shares, price, account=params.get("account"))
     if not updated:
         # Fall: neue Position bei Kauf → manuell hinzufügen
         if action == "buy":

@@ -15,8 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 def book_trade(action, ticker, account, shares, price, trade_currency="EUR",
-               *, close_rec=True, push=True) -> dict:
+               *, close_rec=True, push=True, trade_date=None) -> dict:
     """Bucht einen Kauf/Verkauf ins Portfolio. `price` = Preis pro Stück in `trade_currency`.
+
+    trade_date: Ausführungstag (ISO) für die Trade-History, z. B. bei nachträglich
+                erfassten Stop-Auslösungen. Default: jetzt.
 
     close_rec: offene Empfehlung zum Ticker automatisch auf 'executed' setzen.
     push:      Push-Benachrichtigung senden.
@@ -61,7 +64,8 @@ def book_trade(action, ticker, account, shares, price, trade_currency="EUR",
     currency_sym = '€' if trade_currency == 'EUR' else '$'
 
     # 1) Bestehende Position aktualisieren (macht Cash + Trade-Gedächtnis + Region intern)
-    success = update_portfolio_position(action, ticker, shares, price_eur)
+    success = update_portfolio_position(action, ticker, shares, price_eur,
+                                        account=account, trade_date=trade_date)
     if success:
         if close_rec:
             close_recommendation_on_trade(ticker, action)
@@ -81,13 +85,15 @@ def book_trade(action, ticker, account, shares, price, trade_currency="EUR",
             return {"ok": False,
                     "error": f"Ticker '{ticker}' nicht gefunden — Tippfehler? Keine Position angelegt",
                     "status_code": 404}
-        pos_currency = price_data.get("currency") or trade_currency
-        created = add_new_position(ticker, shares, price_eur, account, trade_currency=pos_currency)
+        # buy_in wird in EUR gespeichert (price_eur) → currency muss dazu passen,
+        # sonst zeigt jede Oberfläche den Euro-Kaufkurs mit Dollarzeichen an.
+        created = add_new_position(ticker, shares, price_eur, account, trade_currency="EUR")
         if created:
             # Trade-Gedächtnis auch für neue Positionen (add_new_position macht das nicht selbst)
             try:
                 from src.analysis.memory import record_trade
-                record_trade(action, ticker, shares, price_eur, account, shares_before=0, shares_after=shares)
+                record_trade(action, ticker, shares, price_eur, account, shares_before=0, shares_after=shares,
+                             date=trade_date)
             except Exception as e:
                 logger.warning("record_trade (neue Position) fehlgeschlagen: %s", e)
             if close_rec:

@@ -178,8 +178,13 @@ def parse_trade_message(text: str) -> dict | None:
     }
 
 
-def update_portfolio_position(action: str, ticker: str, shares: float, price: float = None) -> bool:
+def update_portfolio_position(action: str, ticker: str, shares: float, price: float = None,
+                              account: str | None = None, trade_date: str | None = None) -> bool:
     """Aktualisiert eine Position im Portfolio + Cash-Konto.
+
+    account:    nur in diesem Depot suchen — sonst trifft ein Verkauf bei Tickern,
+                die in mehreren Depots liegen (z. B. AMZN), das erstbeste Depot.
+    trade_date: Ausführungstag für die Trade-History (Default: jetzt).
 
     Transaktional: Lock → Load → Mutate → Backup → Atomic-Write → Unlock.
     Verhindert Race-Conditions bei parallelen Trades (Web-Modal + Chat).
@@ -201,8 +206,10 @@ def update_portfolio_position(action: str, ticker: str, shares: float, price: fl
     post_state = None
 
     with portfolio_write_lock() as portfolio:
-        for account_name, account in portfolio["accounts"].items():
-            for pos in list(account["positions"]):  # Kopie, damit remove während iteration safe ist
+        for account_name, acc in portfolio["accounts"].items():
+            if account and account_name != account:
+                continue
+            for pos in list(acc["positions"]):  # Kopie, damit remove während iteration safe ist
                 pos_ticker = pos.get("ticker", "") or ""
                 pos_name = (pos.get("name") or "").upper()
                 t = ticker.upper() if ticker else ""
@@ -221,6 +228,8 @@ def update_portfolio_position(action: str, ticker: str, shares: float, price: fl
                     pos["shares"] += shares
                     pos["buy_in_eur"] = round(new_total_eur / pos["shares"], 4)
                     pos["buy_in"] = round(new_total_eur / pos["shares"], 4)
+                    # buy_in ist jetzt ein Euro-Wert — currency beschreibt die Buy-in-Währung.
+                    pos["currency"] = "EUR"
                     actual_shares_sold = None  # Irrelevant für buy
                     post_state = {"shares": pos["shares"], "buy_in_eur": pos["buy_in_eur"]}
                     updated = True
@@ -238,7 +247,7 @@ def update_portfolio_position(action: str, ticker: str, shares: float, price: fl
                     pos["shares"] = round(pos["shares"] - sell_qty, 8)
                     actual_shares_sold = sell_qty
                     if pos["shares"] <= 0.001:
-                        account["positions"].remove(pos)
+                        acc["positions"].remove(pos)
                         position_removed_flag = True
                         post_state = {"shares": 0, "removed": True}
                     else:
@@ -266,7 +275,7 @@ def update_portfolio_position(action: str, ticker: str, shares: float, price: fl
             from src.analysis.memory import record_trade
             record_trade(action, (pre_state or {}).get("ticker", ticker), shares, price,
                          matched_account, shares_before=(pre_state or {}).get("shares"),
-                         shares_after=(post_state or {}).get("shares"))
+                         shares_after=(post_state or {}).get("shares"), date=trade_date)
         except Exception as e:
             logger.warning("record_trade Fehler: %s", e)
         # Region-Exposure aktualisieren (nach dem Write, portfolio neu laden)

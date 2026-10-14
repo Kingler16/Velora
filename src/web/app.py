@@ -742,6 +742,7 @@ async def api_log_trade(request: Request):
         body.get("shares", 0),
         body.get("price", 0),
         trade_currency=body.get("trade_currency", "EUR"),
+        trade_date=body.get("trade_date"),
     )
     if result.get("ok"):
         return JSONResponse({"status": "ok", "message": result["message"]})

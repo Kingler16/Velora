@@ -112,3 +112,17 @@ def test_portfolio_fallback_no_live_price():
     assert ov["total_value_eur"] == 4450.0
     assert ov["total_invested_eur"] == 2950.0
     assert ov["total_pnl_eur"] == 500.0
+
+
+def test_quote_currency_follows_market_data():
+    """Buy-in in EUR erfasst, Kurs notiert in USD → quote_currency = USD."""
+    portfolio = {"accounts": {"tr": {"positions": [
+        {"ticker": "MSFT", "name": "Microsoft", "shares": 1, "buy_in": 400.0, "buy_in_eur": 400.0, "currency": "EUR"},
+    ]}}, "bank_accounts": {}}
+    md = {"indices": {"EUR/USD": {"value": EUR_USD}},
+          "positions": {"MSFT": {"price": {"current_price": 600.0, "currency": "USD"}}}}
+    pos = compute_portfolio_overview(portfolio, md)["positions"][0]
+    assert pos["currency"] == "EUR"
+    assert pos["quote_currency"] == "USD"
+    assert pos["current_price"] == 600.0
+    assert pos["current_price_eur"] == 500.0

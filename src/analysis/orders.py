@@ -162,7 +162,8 @@ def fill_order(order_id: str, fill_price=None, fill_date: str | None = None,
 
     # Portfolio über den regulären Trade-Pfad schreiben (Cash + Trade-Gedächtnis inklusive).
     from src.delivery.trade_exec import book_trade
-    result = book_trade(action, ticker, acct, shares, price, trade_currency=currency, close_rec=False)
+    result = book_trade(action, ticker, acct, shares, price, trade_currency=currency, close_rec=False,
+                        trade_date=fill_date)
     if not result.get("ok"):
         # Depot nicht verändert → Order bleibt pending, damit nichts verloren geht.
         return result

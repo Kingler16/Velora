@@ -322,7 +322,7 @@ TRADE_HISTORY_MAX = 40
 
 
 def record_trade(action: str, ticker: str, shares: float, price=None, account=None,
-                 shares_before=None, shares_after=None):
+                 shares_before=None, shares_after=None, date: str | None = None):
     """Hängt einen AUSGEFÜHRTEN Trade an die Trade-History (memory/trade_history.json).
 
     Diese fliesst ins nächste Briefing (get_context_for_prompt), damit die Analyse
@@ -333,7 +333,7 @@ def record_trade(action: str, ticker: str, shares: float, price=None, account=No
     try:
         history = _load_json("trade_history.json", [])
         history.append({
-            "date": datetime.now().isoformat(),
+            "date": date or datetime.now().isoformat(),
             "action": action,
             "ticker": ticker,
             "shares": shares,

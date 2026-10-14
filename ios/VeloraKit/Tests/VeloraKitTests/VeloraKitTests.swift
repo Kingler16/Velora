@@ -38,6 +38,15 @@ private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
         #expect(p.displayName == "X")
         #expect(p.pnlPct == nil)
         #expect(p.currency == "EUR")
+        #expect(p.quoteCurrency == "EUR")
+    }
+
+    @Test func quoteCurrencyIsSeparateFromBuyInCurrency() throws {
+        let p = try decode(Position.self, """
+        {"ticker": "MSFT", "currency": "€", "quote_currency": "USD", "buy_in": 373.78, "current_price": 543.45}
+        """)
+        #expect(p.currency == "EUR")
+        #expect(p.quoteCurrency == "USD")
     }
 
     @Test func taxLossTopLevelAndPerAccount() throws {

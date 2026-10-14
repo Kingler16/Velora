@@ -131,17 +131,27 @@ struct HistoryCard: View {
         return p
     }
 
+    /// Y-Bereich eng um die tatsächlichen Werte. Eine AreaMark füllt sonst bis 0 und zieht
+    /// die Achse mit – dann sehen 62 → 66 Tsd. € wie eine flache Linie aus.
+    private var yDomain: ClosedRange<Double> {
+        let values = points.map(\.value)
+        guard let lo = values.min(), let hi = values.max() else { return 0...1 }
+        let pad = max((hi - lo) * 0.15, hi * 0.005, 1)
+        return (lo - pad)...(hi + pad)
+    }
+
     var body: some View {
+        let domain = yDomain
         Card(title: "Vermögensverlauf", subtitle: "Monatsstände") {
             Chart(points, id: \.date) { point in
-                AreaMark(x: .value("Monat", point.date), y: .value("Wert", point.value))
+                AreaMark(x: .value("Monat", point.date), yStart: .value("Basis", domain.lowerBound), yEnd: .value("Wert", point.value))
                     .foregroundStyle(LinearGradient(colors: [Theme.accent.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom))
                     .interpolationMethod(.monotone)
                 LineMark(x: .value("Monat", point.date), y: .value("Wert", point.value))
                     .foregroundStyle(Theme.accent)
                     .interpolationMethod(.monotone)
             }
-            .chartYScale(domain: .automatic(includesZero: false))
+            .chartYScale(domain: domain)
             .chartYAxis {
                 AxisMarks(position: .leading) { value in
                     AxisGridLine()

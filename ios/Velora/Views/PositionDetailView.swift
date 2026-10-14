@@ -34,11 +34,18 @@ struct PositionDetailView: View {
 
             Section("Bestand") {
                 LabeledContent("Stück", value: Format.shares(position.shares))
-                LabeledContent("Kaufkurs", value: Format.price(position.buyIn, currency: position.currency))
-                if position.currency != "EUR", let eur = position.buyInEur {
-                    LabeledContent("Kaufkurs in EUR", value: Format.eur(eur))
+                // buy_in_eur ist der Einstand, mit dem der Server rechnet – die Währungsangabe
+                // der Position ist dafür nicht verlässlich.
+                LabeledContent("Kaufkurs", value: position.buyInEur.map { Format.eur($0) }
+                               ?? Format.price(position.buyIn, currency: position.currency))
+                LabeledContent("Aktueller Kurs") {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(Format.price(position.currentPrice, currency: position.quoteCurrency))
+                        if position.quoteCurrency != "EUR", position.currentPrice != nil, let eur = position.currentPriceEur {
+                            Text("≈ " + Format.eur(eur)).font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
                 }
-                LabeledContent("Aktueller Kurs", value: Format.price(position.currentPrice, currency: position.currency))
                 LabeledContent("Investiert", value: Format.eur(position.investedEur))
                 if let allocation = position.allocationPct {
                     LabeledContent("Anteil am Depot", value: Format.pct(allocation, signed: false))
@@ -57,9 +64,9 @@ struct PositionDetailView: View {
                         Text("52-Wochen-Spanne").font(.subheadline)
                         RangeBar(low: low, high: high, value: position.currentPrice)
                         HStack {
-                            Text(Format.price(low, currency: position.currency))
+                            Text(Format.price(low, currency: position.quoteCurrency))
                             Spacer()
-                            Text(Format.price(high, currency: position.currency))
+                            Text(Format.price(high, currency: position.quoteCurrency))
                         }
                         .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                     }
@@ -110,6 +117,11 @@ struct PositionDetailView: View {
                 if let stop, stop.isStoppable {
                     Button(stop.brokerStop == nil ? "Stop eintragen" : "Stop ändern", systemImage: "shield.lefthalf.filled") {
                         sheet = .editStop(StopTarget(stop: stop))
+                    }
+                }
+                if let stop, stop.brokerStop != nil {
+                    Button("Stop ausgelöst – Verkauf buchen", systemImage: "checkmark.shield") {
+                        sheet = .fillStop(stop)
                     }
                 }
             }

@@ -200,11 +200,12 @@ def _position_value_eur(pos: dict, market_data: dict, eur_usd: float) -> float:
     shares = pos.get("shares", 0) or 0
     ticker = pos.get("ticker")
     currency = pos.get("currency", "EUR")
-    price = None
-    if ticker:
-        price = (market_data.get("positions", {}).get(ticker, {}).get("price", {}) or {}).get("current_price")
+    price_data = (market_data.get("positions", {}).get(ticker, {}).get("price", {}) or {}) if ticker else {}
+    price = price_data.get("current_price")
     if price:
-        price_eur = price if currency == "EUR" else price / (eur_usd or 1.0)
+        # Quote-Währung aus den Marktdaten — pos.currency ist nur die Buy-in-Währung.
+        from src.data.fx import resolve_quote_currency
+        price_eur = price if resolve_quote_currency(price_data, currency) == "EUR" else price / (eur_usd or 1.0)
         return shares * price_eur
     # Fallback: Einstandswert
     buy_in_eur = pos.get("buy_in_eur") or pos.get("buy_in", 0)

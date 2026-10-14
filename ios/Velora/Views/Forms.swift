@@ -238,6 +238,57 @@ struct FillOrderSheet: View {
     }
 }
 
+/// Stop beim Broker ausgelöst → Verkauf nachbuchen (inkl. Cash), wie „Ausgeführt“ bei Limit-Orders.
+struct FillStopSheet: View {
+    var stop: StopPosition
+
+    @Environment(AppModel.self) private var model
+    @State private var price = ""
+    @State private var currency = "EUR"
+    @State private var shares = ""
+    @State private var date = Date.now
+
+    var body: some View {
+        FormSheet(title: "Stop ausgelöst", saveTitle: "Buchen", canSave: valid, save: save) {
+            Section {
+                LabeledContent(stop.displayName, value: Format.accountName(stop.account))
+                if let broker = stop.brokerStop {
+                    LabeledContent("Stop beim Broker", value: Format.price(broker, currency: stop.brokerCurrency))
+                }
+            }
+            Section {
+                NumberField(title: "Ausführungskurs", text: $price)
+                CurrencyPicker(selection: $currency)
+                NumberField(title: "Stück", text: $shares)
+                DatePicker("Datum", selection: $date, in: ...Date.now, displayedComponents: .date)
+                if let s = parseNumber(shares), let p = parseNumber(price) {
+                    LabeledContent("Erlös", value: Format.price(s * p, currency: currency))
+                }
+            } footer: {
+                Text("Trag den Kurs so ein, wie er in der Abrechnung steht (Slippage möglich). Bucht den Verkauf inkl. Cash ins Depot \(Format.accountName(stop.account)). Bei vollem Verkauf verschwindet die Position samt Stop.")
+            }
+        }
+        .onAppear {
+            price = stop.brokerStop.map { Format.plain($0, digits: 2) } ?? ""
+            currency = stop.brokerCurrency
+            shares = stop.shares.map { Format.plain($0) } ?? ""
+        }
+    }
+
+    private var valid: Bool {
+        (parseNumber(price) ?? 0) > 0 && (parseNumber(shares) ?? 0) > 0
+    }
+
+    private func save() async throws {
+        try await model.send("/api/trade", [
+            "action": .string("sell"), "ticker": .string(stop.ticker), "account": .string(stop.account),
+            "shares": JSONValue(parseNumber(shares)), "price": JSONValue(parseNumber(price)),
+            "trade_currency": .string(currency),
+            "trade_date": .string(date.formatted(.iso8601.year().month().day())),
+        ])
+    }
+}
+
 // MARK: - Bestandskorrekturen
 
 struct AddPositionSheet: View {
