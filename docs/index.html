@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Velora — AI-Powered Wealth Advisor</title>
-    <meta name="description" content="Self-hosted AI wealth advisor with web dashboard, chat, and Telegram bot. Portfolio tracking, market analysis, and interactive charts powered by Claude.">
+    <meta name="description" content="Self-hosted AI wealth advisor with web dashboard, chat, iOS app, and optional Telegram bot. Portfolio tracking, market analysis, and interactive charts powered by Claude.">
     <meta name="theme-color" content="#050814">
     <meta property="og:title" content="Velora — AI-Powered Wealth Advisor">
     <meta property="og:description" content="Self-hosted portfolio tracker with AI briefings, glass-themed dashboard, web chat, and Telegram bot. Runs on a Raspberry Pi.">
@@ -798,7 +798,7 @@
             <div class="step-num">1</div>
             <div class="step-content">
                 <h3>Clone &amp; Setup</h3>
-                <p>Interactive wizard handles language, tax regime, Telegram bot, API keys, and portfolio import.</p>
+                <p>Interactive wizard handles language, tax regime, notification channels (Telegram, browser push, iOS), API keys, and portfolio import.</p>
                 <div class="step-code">git clone https://github.com/Kingler16/Velora.git && cd Velora && python3 setup.py</div>
             </div>
         </div>
@@ -806,7 +806,7 @@
             <div class="step-num">2</div>
             <div class="step-content">
                 <h3>Run Your First Briefing</h3>
-                <p>Collects market data, runs AI analysis, delivers the result to your Telegram.</p>
+                <p>Collects market data, runs AI analysis, delivers the result to your dashboard — and, if you like, to your phone or Telegram.</p>
                 <div class="step-code">python -m src.main briefing</div>
             </div>
         </div>

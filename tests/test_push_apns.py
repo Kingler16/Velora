@@ -28,7 +28,7 @@ def apns_cfg(tmp_path, monkeypatch):
     key_path = tmp_path / "AuthKey_TEST.p8"
     key_path.write_bytes(pem)
     settings = {"apns": {"key_path": str(key_path), "key_id": "TESTKEY123",
-                         "team_id": "TEAM123456", "bundle_id": "dev.max.velora"}}
+                         "team_id": "TEAM123456", "bundle_id": "com.example.velora"}}
     monkeypatch.setattr(apns, "load_settings", lambda: settings)
     apns._token_cache.clear()
     return settings["apns"]
@@ -106,7 +106,7 @@ def test_sends_to_right_host_and_drops_dead_tokens(chat_db, apns_cfg, fake_httpx
     hosts = {url.split("/3/")[0] for url, _, _ in fake_httpx.calls}
     assert hosts == {apns.APNS_HOSTS["production"], apns.APNS_HOSTS["sandbox"]}
     _, payload, headers = fake_httpx.calls[0]
-    assert headers["apns-topic"] == "dev.max.velora"
+    assert headers["apns-topic"] == "com.example.velora"
     assert headers["apns-collapse-id"] == "chat-1"
     assert headers["authorization"].startswith("bearer ")
     assert payload["url"] == "/chat?thread=1"
@@ -203,7 +203,7 @@ def _fake_stream(texts):
 
 def test_chat_reply_saved_without_push_when_client_stays(client, chat_db, monkeypatch):
     from src.chat import routes
-    monkeypatch.setattr(routes, "stream_chat", _fake_stream(["Hallo ", "Max"]))
+    monkeypatch.setattr(routes, "stream_chat", _fake_stream(["Hallo ", "Welt"]))
     monkeypatch.setattr(routes, "build_full_system_prompt", lambda *a: "")
     monkeypatch.setattr(routes, "build_user_message_with_history", lambda *a: "")
     pushes = []
@@ -215,7 +215,7 @@ def test_chat_reply_saved_without_push_when_client_stays(client, chat_db, monkey
 
     detail = client.get(f"/api/chat/threads/{thread['id']}").json()
     assert detail["running"] is False
-    assert [m["content"] for m in detail["messages"] if m["role"] == "assistant"] == ["Hallo Max"]
+    assert [m["content"] for m in detail["messages"] if m["role"] == "assistant"] == ["Hallo Welt"]
     assert pushes == []
 
 

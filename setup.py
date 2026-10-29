@@ -29,12 +29,12 @@ COUNTRIES = {
 
 BANNER = """
 \033[1;36m
-     ██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗███████╗ ██████╗ ██╗     ██╗ ██████╗
-    ██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝██╔════╝██╔═══██╗██║     ██║██╔═══██╗
-    ██║     ██║     ███████║██║   ██║██║  ██║█████╗  █████╗  ██║   ██║██║     ██║██║   ██║
-    ██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  ██╔══╝  ██║   ██║██║     ██║██║   ██║
-    ╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗██║     ╚██████╔╝███████╗██║╚██████╔╝
-     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝      ╚═════╝ ╚══════╝╚═╝ ╚═════╝
+    ██╗   ██╗███████╗██╗      ██████╗ ██████╗  █████╗
+    ██║   ██║██╔════╝██║     ██╔═══██╗██╔══██╗██╔══██╗
+    ██║   ██║█████╗  ██║     ██║   ██║██████╔╝███████║
+    ╚██╗ ██╔╝██╔══╝  ██║     ██║   ██║██╔══██╗██╔══██║
+     ╚████╔╝ ███████╗███████╗╚██████╔╝██║  ██║██║  ██║
+      ╚═══╝  ╚══════╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝
 \033[0m
     \033[90mYour AI-powered personal wealth advisor\033[0m
 """
@@ -133,6 +133,51 @@ def setup_country() -> dict:
     header("Country & Tax Regime")
     country = ask_choice("Select your country:", {k: v["name"] for k, v in COUNTRIES.items()})
     return {"code": country, **COUNTRIES[country]}
+
+
+def setup_channels() -> dict:
+    """Welche Wege Velora nutzt. Das Web-Dashboard läuft immer; alles andere ist optional
+    und lässt sich später in config/settings.json nachtragen."""
+    header("Apps & Notifications")
+    print("  The \033[1mweb dashboard\033[0m is always on (browser; installable as an app on your phone).")
+    print("  Everything below is optional and can be added later in config/settings.json.\n")
+
+    channels: dict = {"telegram": {}, "web_push": {}, "apns": {}}
+
+    print("  \033[1mTelegram\033[0m – briefings as messages + chat with Velora from Telegram.")
+    if ask_yn("Use Telegram?", False):
+        channels["telegram"] = setup_telegram()
+
+    print("\n  \033[1mBrowser push\033[0m – notifications from the web dashboard (needs HTTPS or localhost).")
+    if ask_yn("Enable browser push notifications?", False):
+        channels["web_push"] = {"contact": ask("Contact e-mail for the push services", "you@example.com")}
+
+    print("\n  \033[1miOS app\033[0m – build it yourself from ios/ (see ios/README.md). Works with a free")
+    print("  Apple account; push notifications need a paid Apple Developer account + an APNs key.")
+    if ask_yn("Set up iOS push notifications now (paid Apple Developer account)?", False):
+        channels["apns"] = {
+            "key_path": ask("Path to the APNs key (.p8)", "config/keys/AuthKey_XXXXXXXXXX.p8"),
+            "key_id": ask("Key ID (10 characters)"),
+            "team_id": ask("Team ID (10 characters)"),
+            "bundle_id": ask("Bundle ID of your app build", "com.example.velora"),
+        }
+    return channels
+
+
+def setup_vapid(contact: str) -> dict:
+    """Erzeugt VAPID-Schlüssel für Browser-Push mit dem frisch installierten venv."""
+    venv_python = Path(__file__).parent / "venv" / "bin" / "python"
+    result = subprocess.run([str(venv_python), "scripts/generate_vapid.py", contact],
+                            capture_output=True, text=True, check=True)
+    keys = {}
+    for line in result.stdout.splitlines():
+        name, _, value = line.partition("=")
+        keys[name] = value.strip('"').replace("\\n", "\n")
+    return {
+        "vapid_public_key": keys.get("VAPID_PUBLIC_KEY", ""),
+        "vapid_private_key": keys.get("VAPID_PRIVATE_KEY", ""),
+        "vapid_subject": keys.get("VAPID_SUBJECT", f"mailto:{contact}"),
+    }
 
 
 def setup_telegram() -> dict:
@@ -472,9 +517,11 @@ def install_dependencies():
     print(f"\n  \033[32m✓\033[0m Dependencies installed")
 
 
-def save_settings(telegram: dict, apis: dict, schedule: dict, country: dict, lang: str):
+def save_settings(channels: dict, apis: dict, schedule: dict, country: dict, lang: str):
     settings = {
-        "telegram": telegram,
+        "telegram": channels["telegram"],
+        "web_push": channels["web_push"],
+        "apns": channels["apns"],
         "brave_search": {"api_key": apis.get("brave", "")},
         "fred": {"api_key": apis.get("fred", "")},
         "finnhub": {"api_key": apis.get("finnhub", "")},
@@ -505,11 +552,15 @@ def save_settings(telegram: dict, apis: dict, schedule: dict, country: dict, lan
         json.dump(settings, f, indent=2, ensure_ascii=False)
 
 
-def show_summary(telegram: dict, apis: dict, schedule: dict, country: dict, lang: str):
+def show_summary(channels: dict, apis: dict, schedule: dict, country: dict, lang: str):
+    telegram = channels["telegram"]
     header("Setup Complete!")
     print(f"  \033[32m✓\033[0m Language: {LANGUAGES[lang]['name']}")
     print(f"  \033[32m✓\033[0m Country: {country['name']} ({country['tax']})")
-    print(f"  \033[32m✓\033[0m Telegram: {'configured' if telegram.get('bot_token') else 'not configured'}")
+    print(f"  \033[32m✓\033[0m Web dashboard: on")
+    print(f"  \033[32m✓\033[0m Telegram: {'configured' if telegram.get('bot_token') else 'off'}")
+    print(f"  \033[32m✓\033[0m Browser push: {'configured' if channels['web_push'].get('vapid_public_key') else 'off'}")
+    print(f"  \033[32m✓\033[0m iOS push: {'configured' if channels['apns'].get('key_id') else 'off'}")
     print(f"  \033[32m✓\033[0m Brave Search: {'configured' if apis.get('brave') else 'not configured'}")
     print(f"  \033[32m✓\033[0m FRED API: {'configured' if apis.get('fred') else 'not configured'}")
     print(f"  \033[32m✓\033[0m Briefings: {', '.join(schedule['briefing_days'])} at {schedule['briefing_time']}")
@@ -518,9 +569,11 @@ def show_summary(telegram: dict, apis: dict, schedule: dict, country: dict, lang
     print("  1. Edit \033[1mconfig/portfolio.json\033[0m with your positions (if not done)")
     print("  2. Make sure Claude Code CLI is authenticated: \033[1mclaude --print 'test'\033[0m")
     print("  3. Test a briefing: \033[1m./venv/bin/python -m src.main briefing\033[0m")
-    print("  4. Start the Telegram bot: \033[1m./venv/bin/python -m src.main bot\033[0m")
-    print("  5. Start the Web Dashboard: \033[1m./venv/bin/python -m src.main web\033[0m")
+    print("  4. Start the Web Dashboard: \033[1m./venv/bin/python -m src.main web\033[0m")
     print(f"     → Open \033[1mhttp://localhost:8080\033[0m in your browser")
+    if telegram.get("bot_token"):
+        print("  5. Start the Telegram bot: \033[1m./venv/bin/python -m src.main bot\033[0m")
+    print("  On a server (Raspberry Pi etc.): \033[1mbash scripts/setup_server.sh\033[0m sets up services + cron.")
     print()
     print("  \033[90mFull documentation: README.md\033[0m")
     print()
@@ -535,7 +588,7 @@ def main():
     check_prerequisites()
     lang = setup_language()
     country = setup_country()
-    telegram = setup_telegram()
+    channels = setup_channels()
     apis = setup_apis()
     schedule = setup_schedule()
 
@@ -544,10 +597,14 @@ def main():
     (Path(__file__).parent / "memory" / "cache").mkdir(exist_ok=True)
     (Path(__file__).parent / "logs").mkdir(exist_ok=True)
 
-    save_settings(telegram, apis, schedule, country, lang)
+    web_push_contact = channels["web_push"].pop("contact", None)
+    save_settings(channels, apis, schedule, country, lang)
     setup_portfolio(country, lang)
     install_dependencies()
-    show_summary(telegram, apis, schedule, country, lang)
+    if web_push_contact:
+        channels["web_push"] = setup_vapid(web_push_contact)
+        save_settings(channels, apis, schedule, country, lang)
+    show_summary(channels, apis, schedule, country, lang)
 
 
 if __name__ == "__main__":

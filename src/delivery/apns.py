@@ -7,8 +7,8 @@ kurzlebiges JWT, das für alle Geräte gilt.  Konfiguration in settings.json:
     "apns": {
       "key_path":  "config/keys/apns_AuthKey_XXXXXXXXXX.p8",
       "key_id":    "XXXXXXXXXX",
-      "team_id":   "564XMJKP3J",
-      "bundle_id": "dev.max.velora"
+      "team_id":   "ABCDE12345",
+      "bundle_id": "com.example.velora"
     }
 
 Fehlt etwas davon, wird still übersprungen (wie beim Web-Push ohne VAPID).

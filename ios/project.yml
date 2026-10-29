@@ -1,7 +1,7 @@
 name: Velora
 
 options:
-  bundleIdPrefix: dev.max
+  bundleIdPrefix: com.example
   developmentLanguage: de
   createIntermediateGroups: true
   deploymentTarget:
@@ -13,9 +13,7 @@ packages:
 
 settings:
   base:
-    # Hier anpassen, falls die Bundle-ID beim Signieren schon vergeben ist.
-    BUNDLE_ID_BASE: dev.max.velora
-    DEVELOPMENT_TEAM: 564XMJKP3J
+    # Team, Bundle-ID und Push kommen aus Config/Base.xcconfig + Config/Local.xcconfig.
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "1.0"
@@ -31,11 +29,11 @@ targets:
       - Velora
     dependencies:
       - package: VeloraKit
-    # Push-Mitteilungen (APNs). Beim Export für TestFlight setzt Xcode „production“.
-    entitlements:
-      path: Velora/Velora.entitlements
-      properties:
-        aps-environment: development
+    # Signierung/Push je Nutzer: Velora/Velora.entitlements (APNs) wird nur über
+    # CODE_SIGN_ENTITLEMENTS in Config/Local.xcconfig eingebunden.
+    configFiles:
+      Debug: Config/Base.xcconfig
+      Release: Config/Base.xcconfig
     info:
       path: Velora/Info.plist
       properties:
@@ -43,6 +41,7 @@ targets:
         # Build-Nummer kommt aus CURRENT_PROJECT_VERSION – TestFlight verlangt bei jedem Upload eine höhere.
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        VeloraDefaultServer: $(VELORA_DEFAULT_SERVER)
         ITSAppUsesNonExemptEncryption: false
         # Der Pi spricht nur HTTP (Heimnetz bzw. Tailscale, das selbst verschlüsselt).
         # Bewusst ohne NSAllowsLocalNetworking: ist das gesetzt, ignoriert iOS

@@ -5,7 +5,7 @@ import Security
 enum Keychain {
     private static let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: "dev.max.velora",
+        kSecAttrService as String: Bundle.main.bundleIdentifier ?? "velora",
         kSecAttrAccount as String: "server-password",
     ]
 

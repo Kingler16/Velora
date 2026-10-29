@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # Baut Velora als Release und lädt den Build zu TestFlight hoch.
+# Nur mit bezahltem Apple-Developer-Account und angelegter App in App Store Connect.
 #
 #   ios/testflight.sh
+#
+# Team und Bundle-ID kommen aus Config/Local.xcconfig (Vorlage: Config/Local.xcconfig.example).
 #
 # Danach verarbeitet Apple den Build (5–15 min); er erscheint dann von selbst in der
 # TestFlight-App am iPhone. Builds laufen nach 90 Tagen ab – rechtzeitig neu hochladen.
 #
 # Signieren und Hochladen laufen über die Apple-ID, die in Xcode angemeldet ist
 # (Account Holder – der App-Store-Connect-API-Schlüssel mit Rolle „App Manager“ darf
-# keine Distributionszertifikate verwenden). Den API-Schlüssel aus config/settings.json
-# → app_store_connect nutzt das Skript nur, um auf die Verarbeitung durch Apple zu warten.
+# keine Distributionszertifikate verwenden). Optional: Ist in config/settings.json
+# → app_store_connect ein API-Schlüssel eingetragen, wartet das Skript auf die
+# Verarbeitung durch Apple.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -41,7 +45,6 @@ cat > build/ExportOptions.plist <<EOF
   <key>method</key><string>app-store-connect</string>
   <key>destination</key><string>upload</string>
   <key>signingStyle</key><string>automatic</string>
-  <key>teamID</key><string>564XMJKP3J</string>
   <key>uploadSymbols</key><true/>
   <key>manageAppVersionAndBuildNumber</key><false/>
 </dict>
@@ -52,15 +55,21 @@ echo "▸ Signieren und zu App Store Connect hochladen …"
 xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist build/ExportOptions.plist \
   -exportPath "$EXPORT" -allowProvisioningUpdates -quiet
 
-echo "✓ Build $BUILD hochgeladen. Warte auf die Verarbeitung durch Apple …"
+echo "✓ Build $BUILD hochgeladen."
 "$REPO/venv/bin/python" - "$REPO" "$BUILD" <<'EOF'
 import json, sys, time
 from pathlib import Path
-import httpx, jwt
 
 repo, build = Path(sys.argv[1]), sys.argv[2]
-asc = json.loads((repo / "config/settings.json").read_text()).get("app_store_connect", {})
-key_path = Path(asc.get("key_path", ""))
+settings = repo / "config/settings.json"
+asc = (json.loads(settings.read_text()) if settings.exists() else {}).get("app_store_connect", {})
+if not all(asc.get(k) for k in ("key_path", "key_id", "issuer_id", "app_id")):
+    print("Apple verarbeitet ihn jetzt (5–15 min); danach erscheint er in TestFlight.")
+    sys.exit(0)
+
+import httpx, jwt
+print("Warte auf die Verarbeitung durch Apple …")
+key_path = Path(asc["key_path"])
 key = (key_path if key_path.is_absolute() else repo / key_path).read_text()
 
 def token():

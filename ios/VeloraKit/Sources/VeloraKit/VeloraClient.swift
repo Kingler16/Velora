@@ -10,12 +10,15 @@ public struct ServerEndpoints: Codable, Sendable, Equatable {
         self.remote = remote
     }
 
-    public static let standard = ServerEndpoints(lan: "http://192.168.1.27:8080", remote: "")
+    /// Erster Start: Adresse aus dem Build (`VELORA_DEFAULT_SERVER` in Config/Local.xcconfig), sonst leer.
+    public static func initial(defaultServer: String?) -> ServerEndpoints {
+        ServerEndpoints(lan: defaultServer?.trimmingCharacters(in: .whitespaces) ?? "", remote: "")
+    }
 
     /// Standard-Port des Velora-Webservers (`web.port` in settings.json).
     public static let defaultPort = 8080
 
-    /// Normalisiert Eingaben wie `100.69.43.83` → `http://100.69.43.83:8080`.
+    /// Normalisiert Eingaben wie `100.64.0.5` → `http://100.64.0.5:8080`.
     public static func url(from string: String) -> URL? {
         var s = string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !s.isEmpty else { return nil }

@@ -1,0 +1,18 @@
+// Signierung und persönliche Vorgaben. Eigene Werte NICHT hier eintragen, sondern in
+// Config/Local.xcconfig (gitignoriert) – Vorlage: Config/Local.xcconfig.example.
+
+// Apple-Team (Xcode → Settings → Accounts). Leer = in Xcode unter Signing & Capabilities wählen.
+DEVELOPMENT_TEAM =
+
+// Muss weltweit eindeutig sein, z. B. com.deinname.velora
+BUNDLE_ID_BASE = com.example.velora
+
+// Push-Mitteilungen brauchen einen bezahlten Apple-Developer-Account. Mit kostenlosem
+// Account leer lassen – sonst schlägt das Signieren fehl.
+CODE_SIGN_ENTITLEMENTS =
+
+// Server-Adresse, die beim ersten Start vorbelegt ist (in der App jederzeit änderbar).
+// Achtung: in .xcconfig beginnt mit // ein Kommentar → http:/$()/… schreiben.
+VELORA_DEFAULT_SERVER =
+
+#include? "Local.xcconfig"

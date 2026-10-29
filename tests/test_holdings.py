@@ -4,8 +4,8 @@ from src.data.holdings import needs_lookthrough, compute_lookthrough
 
 def test_needs_lookthrough_detects_funds():
     assert needs_lookthrough("iShares Core MSCI World UCITS ETF", "EUNL.DE", "IE00B4L5Y983")
-    assert needs_lookthrough("ERSTE RESPONSIBLE STOCK GLOBAL", "AT0000646799", "AT0000646799")  # ticker==isin
-    assert needs_lookthrough("ERSTE LAUFZEITFONDS 2028 IV", "AT0000A36795", "AT0000A36795")
+    assert needs_lookthrough("MUSTER AKTIENFONDS A", "AT0000A00001", "AT0000A00001")  # ticker==isin
+    assert needs_lookthrough("MUSTER LAUFZEITFONDS 2030", "AT0000A00002", "AT0000A00002")
     assert needs_lookthrough("Invesco Physical Gold ETC", "8PSG.DE", "IE00B579F325")
 
 

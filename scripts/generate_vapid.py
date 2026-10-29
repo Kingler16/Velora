@@ -2,12 +2,13 @@
 
 Ausgabe ist direkt als ENV-Block formatiert — einfach in .env umleiten:
 
-    python scripts/generate_vapid.py >> .env
+    python scripts/generate_vapid.py you@example.com >> .env
 
 Keys werden nirgends persistiert — nur stdout.
 """
 
 import base64
+import sys
 
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from py_vapid import Vapid01
@@ -29,7 +30,9 @@ def main() -> None:
 
     print(f'VAPID_PRIVATE_KEY="{priv_escaped}"')
     print(f"VAPID_PUBLIC_KEY={pub}")
-    print("VAPID_SUBJECT=mailto:max.lechner06@gmail.com")
+    # Kontaktadresse für die Push-Dienste der Browser – eigene E-Mail eintragen.
+    contact = sys.argv[1] if len(sys.argv) > 1 else "you@example.com"
+    print(f"VAPID_SUBJECT=mailto:{contact}")
 
 
 if __name__ == "__main__":

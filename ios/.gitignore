@@ -4,3 +4,6 @@ DerivedData/
 .swiftpm/
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Persönliche Signierung (Team, Bundle-ID, Push) – Vorlage: Config/Local.xcconfig.example
+Config/Local.xcconfig

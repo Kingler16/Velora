@@ -46,14 +46,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 }
 
 enum PushEnvironment {
-    /// Xcode-Builds tragen ein Entwicklungsprofil mit `aps-environment = development`
-    /// und bekommen Tokens vom Sandbox-Server. TestFlight und App Store haben kein
-    /// eingebettetes Profil → Produktion.
-    static let current: String = {
+    /// APNs-Umgebung dieses Builds, `nil` wenn er keine Mitteilungen empfangen kann.
+    /// Xcode-Builds tragen ein Profil: mit `aps-environment = development` → Sandbox,
+    /// ganz ohne (kostenloser Apple-Account, kein Push-Entitlement) → nil.
+    /// TestFlight und App Store haben kein eingebettetes Profil → Produktion.
+    static let current: String? = {
         guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
               let data = try? Data(contentsOf: url),
-              let text = String(data: data, encoding: .isoLatin1),
-              let key = text.range(of: "<key>aps-environment</key>") else { return "production" }
+              let text = String(data: data, encoding: .isoLatin1) else { return "production" }
+        guard let key = text.range(of: "<key>aps-environment</key>") else { return nil }
         return text[key.upperBound...].prefix(80).contains("development") ? "sandbox" : "production"
     }()
 }

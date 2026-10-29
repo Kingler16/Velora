@@ -40,3 +40,9 @@ Thumbs.db
 # Apple-Schlüssel (APNs, App Store Connect API) – niemals committen
 config/keys/
 *.p8
+
+# Persönlich – nie veröffentlichen
+CLAUDE.local.md
+APPLE_DEV_SETUP.md
+Velora_Ultrareview_Zusammenfassung.pdf
+bilder/

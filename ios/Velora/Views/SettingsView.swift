@@ -27,7 +27,7 @@ struct SettingsView: View {
             Form {
                 Section {
                     LabeledContent("Heim-WLAN") {
-                        TextField("http://192.168.1.27:8080", text: $lan)
+                        TextField("http://192.168.1.10:8080", text: $lan)
                             .multilineTextAlignment(.trailing)
                     }
                     LabeledContent("Tailscale") {
@@ -79,7 +79,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Briefings")
                     } footer: {
-                        Text("Neue Briefings kommen als Mitteilung aufs iPhone und stehen im Berater-Tab.")
+                        Text("Neue Briefings stehen im Berater-Tab – mit Mitteilungen bekommst du sie zusätzlich aufs iPhone.")
                     }
                     Section("Konto") {
                         if let tax = server.taxRegime { LabeledContent("Steuer", value: tax) }
@@ -128,7 +128,10 @@ struct SettingsView: View {
 
     @ViewBuilder private var notificationsSection: some View {
         Section {
-            if model.notificationsAllowed == false {
+            if PushEnvironment.current == nil {
+                Text("Dieser Build kann keine Mitteilungen empfangen. Dafür braucht es einen bezahlten Apple-Developer-Account (siehe ios/README.md). Briefings findest du im Berater-Tab.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            } else if model.notificationsAllowed == false {
                 Button("In den iOS-Einstellungen erlauben", systemImage: "bell.slash") {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
                         UIApplication.shared.open(url)

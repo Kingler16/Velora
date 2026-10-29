@@ -40,6 +40,7 @@
 		9660D45C23E274D9DBAAD07C /* AdvisorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvisorView.swift; sourceTree = "<group>"; };
 		97D8CA5AEBA82191FF40B3F4 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		BAE76722D6CE381C508F09FD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		CBBE989E2A6A07E62E2CEF47 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		D081719E0FE04038B74768A8 /* Velora.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Velora.entitlements; sourceTree = "<group>"; };
 		D1592F022B2661A98BCC8A3D /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		DE06A0CFCF780815A84D7F57 /* PositionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PositionDetailView.swift; sourceTree = "<group>"; };
@@ -116,10 +117,19 @@
 		DEAA67EECE57A24E863D9D7F = {
 			isa = PBXGroup;
 			children = (
+				FA719B4AC6CD3F6FFA83FFF2 /* Config */,
 				BB83C7F7FDF7C3AF0DB7CAB0 /* Packages */,
 				4715832DA220A5B5D550F323 /* Velora */,
 				FE1F5FB4C3F385EC5088964F /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		FA719B4AC6CD3F6FFA83FFF2 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				CBBE989E2A6A07E62E2CEF47 /* Base.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 		FE1F5FB4C3F385EC5088964F /* Products */ = {
@@ -163,7 +173,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					0E794155DCF258CE021A32E8 = {
-						DevelopmentTeam = 564XMJKP3J;
+						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -233,7 +243,6 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				BUNDLE_ID_BASE = dev.max.velora;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -267,7 +276,6 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = 564XMJKP3J;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -296,7 +304,6 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				BUNDLE_ID_BASE = dev.max.velora;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -330,7 +337,6 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = 564XMJKP3J;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -363,10 +369,10 @@
 		};
 		8EE9D5607E0F80288283009E /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = CBBE989E2A6A07E62E2CEF47 /* Base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Velora/Velora.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Velora/Info.plist;
@@ -384,10 +390,10 @@
 		};
 		C20AB208797AB21BB89954D4 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = CBBE989E2A6A07E62E2CEF47 /* Base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Velora/Velora.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Velora/Info.plist;

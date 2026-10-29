@@ -378,7 +378,7 @@ def log_trade(action: str, ticker: str, shares: float, price: float, account: st
       ticker: z.B. 'NVDA' oder 'ASML.AS'
       shares: Stückzahl
       price: Preis pro Stück (in der Währung der Position, typisch EUR oder USD)
-      account: Konto-Key aus config/portfolio.json (z.B. 'trade_republic', 'erste_bank')
+      account: Konto-Key aus config/portfolio.json (z.B. 'main_broker')
     """
     from src.chat import db as chat_db
     if action not in ("buy", "sell"):

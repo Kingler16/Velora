@@ -1,0 +1,10 @@
+// Kopieren nach Config/Local.xcconfig und anpassen, danach `xcodegen generate`.
+
+DEVELOPMENT_TEAM = ABCDE12345
+BUNDLE_ID_BASE = com.yourname.velora
+
+// Nur mit bezahltem Apple-Developer-Account (Push-Mitteilungen über APNs):
+// CODE_SIGN_ENTITLEMENTS = Velora/Velora.entitlements
+
+// Optional: Server im Heimnetz vorbelegen
+// VELORA_DEFAULT_SERVER = http:/$()/192.168.1.10:8080

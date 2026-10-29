@@ -362,7 +362,7 @@ def delete_bank_account(key: str) -> dict:
     """Entfernt ein Cash-/Bank-Konto (z.B. aufgelöstes Tagesgeld).
 
     Achtung: Depot-Cash-Konten (is_depot_cash) sind Ziel des automatischen
-    Cash-Trackings bei Trades (ACCOUNT_CASH_MAP) — Löschen deaktiviert dieses
+    Cash-Trackings bei Trades (accounts.<depot>.cash_account) — Löschen deaktiviert dieses
     Tracking still. Der Aufrufer (UI) soll davor warnen.
     """
     from datetime import datetime

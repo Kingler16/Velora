@@ -45,7 +45,7 @@ def needs_lookthrough(name: str, ticker: str, isin: str) -> bool:
     n = (name or "").lower()
     if any(h in n for h in _FUND_HINTS):
         return True
-    # Österreichische Fonds nutzen die ISIN als "Ticker" (z.B. AT0000646799).
+    # Österreichische Fonds nutzen die ISIN als "Ticker" (Ticker == ISIN).
     if ticker and isin and ticker.strip().upper() == isin.strip().upper():
         return True
     return False

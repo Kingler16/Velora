@@ -2,6 +2,7 @@
   "last_updated": "2026-01-01",
   "accounts": {
     "main_broker": {
+      "cash_account": "broker_cash",
       "positions": [
         {"name": "Apple", "isin": "US0378331005", "ticker": "AAPL", "shares": 10.0, "buy_in": 178.50, "currency": "USD"},
         {"name": "Tesla", "isin": "US88160R1014", "ticker": "TSLA", "shares": 5.0, "buy_in": 242.00, "currency": "USD"},

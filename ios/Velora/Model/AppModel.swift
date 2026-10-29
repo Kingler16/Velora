@@ -36,7 +36,7 @@ final class AppModel {
     init() {
         let stored = UserDefaults.standard.data(forKey: Self.endpointsKey)
             .flatMap { try? JSONDecoder().decode(ServerEndpoints.self, from: $0) }
-        let endpoints = stored ?? .standard
+        let endpoints = stored ?? .initial(defaultServer: Bundle.main.object(forInfoDictionaryKey: "VeloraDefaultServer") as? String)
         self.endpoints = endpoints
         client = VeloraClient(endpoints: endpoints, password: Keychain.password)
         watchNetwork()
@@ -111,7 +111,9 @@ final class AppModel {
     // MARK: - Mitteilungen
 
     /// Fragt beim ersten Start nach der Erlaubnis und holt danach das Gerätetoken.
+    /// Builds ohne Push-Berechtigung (kostenloser Apple-Account) fragen gar nicht erst.
     func setUpNotifications() async {
+        guard PushEnvironment.current != nil else { return }
         let center = UNUserNotificationCenter.current()
         var settings = await center.notificationSettings()
         if settings.authorizationStatus == .notDetermined {
@@ -136,13 +138,13 @@ final class AppModel {
     /// Meldet das Gerät beim Server an. Bei jedem Start und Serverwechsel – Tokens können sich ändern,
     /// und ohne Verbindung klappt es eben beim nächsten Mal.
     func registerPushToken() async {
-        guard let deviceToken else { return }
+        guard let deviceToken, let environment = PushEnvironment.current else { return }
         let info = Bundle.main.infoDictionary
         let version = "\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
         do {
             try await client.send("/api/push/apns/register", body: [
                 "token": .string(deviceToken),
-                "environment": .string(PushEnvironment.current),
+                "environment": .string(environment),
                 "device_name": .string(UIDevice.current.name),
                 "app_version": .string(version),
             ])

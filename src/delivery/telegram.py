@@ -21,16 +21,14 @@ _pending_trades = {}
 
 MEMORY_DIR = Path(__file__).parent.parent.parent / "memory"
 
-# Mapping: Depot-Account → zugehöriges Cash-Konto
-ACCOUNT_CASH_MAP = {
-    "trade_republic": "tr_cash",
-    "erste_bank": "erste_abrechnungskonto",
-}
-
-
 def update_cash_on_trade(portfolio: dict, account: str, action: str, shares: float, price_eur: float):
-    """Aktualisiert das Depot-Cash-Konto nach einem Trade. price_eur = Preis pro Stück in EUR."""
-    cash_account = ACCOUNT_CASH_MAP.get(account)
+    """Aktualisiert das Depot-Cash-Konto nach einem Trade. price_eur = Preis pro Stück in EUR.
+
+    Welches Cash-Konto zum Depot gehört, steht im Depot selbst:
+    portfolio.json → accounts.<depot>.cash_account (Schlüssel aus bank_accounts).
+    Ohne Angabe wird kein Cash mitgebucht.
+    """
+    cash_account = (portfolio.get("accounts", {}).get(account) or {}).get("cash_account")
     if not cash_account or cash_account not in portfolio.get("bank_accounts", {}):
         return
     amount = shares * price_eur

@@ -6,7 +6,7 @@
 
 set -e
 
-REPO_DIR="${VELORA_REPO_DIR:-/home/admin/velora}"
+REPO_DIR="${VELORA_REPO_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$REPO_DIR" 2>/dev/null || { echo '{"error":"repo_dir_missing"}'; exit 1; }
 
 if ! command -v git >/dev/null 2>&1; then

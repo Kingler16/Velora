@@ -7,8 +7,8 @@ Liest den Token via getpass — er erscheint NICHT in der Shell-History, NICHT i
 Prozessliste (argv) und NICHT als Terminal-Echo. Schreibt atomar, damit ein
 Abbruch settings.json nie halb beschreibt.
 
-Nutzung am RockPi:
-    cd /home/admin/velora
+Nutzung auf dem Server:
+    cd ~/velora                                   # bzw. das Velora-Verzeichnis
     claude setup-token                            # Token erzeugen + kopieren
     ./venv/bin/python scripts/set_oauth_token.py  # Token einfügen, Enter
     sudo systemctl restart velora-web velora-bot

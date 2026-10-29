@@ -40,5 +40,7 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>VeloraDefaultServer</key>
+	<string>$(VELORA_DEFAULT_SERVER)</string>
 </dict>
 </plist>

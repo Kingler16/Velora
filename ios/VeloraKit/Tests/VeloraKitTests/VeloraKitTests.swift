@@ -156,12 +156,12 @@ private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
     }
 
     @Test func endpointNormalisation() {
-        #expect(ServerEndpoints.url(from: "rockpi:8080/")?.absoluteString == "http://rockpi:8080")
-        #expect(ServerEndpoints.url(from: "100.69.43.83")?.absoluteString == "http://100.69.43.83:8080")
-        #expect(ServerEndpoints.url(from: "http://rockpi-4c.tail7cebc3.ts.net")?.absoluteString == "http://rockpi-4c.tail7cebc3.ts.net:8080")
+        #expect(ServerEndpoints.url(from: "velora-server:8080/")?.absoluteString == "http://velora-server:8080")
+        #expect(ServerEndpoints.url(from: "100.64.0.5")?.absoluteString == "http://100.64.0.5:8080")
+        #expect(ServerEndpoints.url(from: "http://velora.example-tailnet.ts.net")?.absoluteString == "http://velora.example-tailnet.ts.net:8080")
         #expect(ServerEndpoints.url(from: "https://velora.example.org")?.absoluteString == "https://velora.example.org")
         #expect(ServerEndpoints.url(from: "  ") == nil)
-        let e = ServerEndpoints(lan: "192.168.1.27:8080", remote: "")
+        let e = ServerEndpoints(lan: "192.168.1.10:8080", remote: "")
         #expect(e.candidates.count == 1)
     }
 
@@ -251,8 +251,8 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [StubProtocol.self]
         StubProtocol.probes = 0
-        StubProtocol.reachableHosts = ["100.69.43.83"]
-        return VeloraClient(endpoints: ServerEndpoints(lan: "192.168.1.27", remote: "100.69.43.83"),
+        StubProtocol.reachableHosts = ["100.64.0.5"]
+        return VeloraClient(endpoints: ServerEndpoints(lan: "192.168.1.10", remote: "100.64.0.5"),
                             session: URLSession(configuration: config))
     }
 
@@ -285,8 +285,8 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {
             Issue.record("hätte scheitern müssen")
         } catch {
             let text = error.localizedDescription
-            #expect(text.contains("192.168.1.27:8080"))
-            #expect(text.contains("100.69.43.83:8080"))
+            #expect(text.contains("192.168.1.10:8080"))
+            #expect(text.contains("100.64.0.5:8080"))
             #expect(text.contains("Port?"))
         }
     }

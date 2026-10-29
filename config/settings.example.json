@@ -48,7 +48,7 @@
     "key_path": "config/keys/apns_AuthKey_XXXXXXXXXX.p8",
     "key_id": "",
     "team_id": "",
-    "bundle_id": "dev.max.velora"
+    "bundle_id": "com.example.velora"
   },
   "notifications": {
     "telegram_enabled": true,

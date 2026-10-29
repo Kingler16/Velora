@@ -311,6 +311,6 @@ def test_build_block_shows_frozen():
     block = build_mandate_block({
         "version": 5,
         "hard_rules": _mandate()["hard_rules"],
-        "frozen_tickers": {"AT0000646799": "Alt-Fonds, halten"},
+        "frozen_tickers": {"AT0000A00001": "Alt-Fonds, halten"},
     })
-    assert "EINGEFROREN" in block and "AT0000646799" in block
+    assert "EINGEFROREN" in block and "AT0000A00001" in block
