@@ -612,12 +612,16 @@ selectLang('{{ settings.get("user", {}).get("language", "de") }}');
         pending_action:        { t: 'Pending confirmation',    s: 'Velora prepared a write action and needs your OK' },
         recommendation_closed: { t: 'Recommendation closed',   s: 'Auto-close after matching trade or manual close' },
         market_alert:          { t: 'Market alert',            s: 'VIX spike, strong index moves, watchlist trigger' },
+        chat_reply:            { t: 'Chat reply',              s: 'Velora finished answering while the app was closed' },
+        system_error:          { t: 'System error',            s: 'Briefing/report failed, Claude login broken' },
     } : {
         briefings:             { t: 'Briefings',               s: 'Mo/Do-Morgen-Briefing + Monatsreport' },
         trade_confirmed:       { t: 'Trade bestätigt',         s: 'Wenn ein Trade erfolgreich geloggt wurde' },
         pending_action:        { t: 'Bestätigung erforderlich', s: 'Velora hat eine Write-Action vorbereitet und braucht dein OK' },
         recommendation_closed: { t: 'Empfehlung geschlossen',  s: 'Auto-Close nach passendem Trade oder manueller Close' },
         market_alert:          { t: 'Markt-Alert',             s: 'VIX-Spike, starke Index-Moves, Watchlist-Trigger' },
+        chat_reply:            { t: 'Chat-Antwort',            s: 'Velora hat geantwortet, während die App zu war' },
+        system_error:          { t: 'Systemfehler',            s: 'Briefing/Report fehlgeschlagen, Claude-Login defekt' },
     };
 
     const statusDot  = document.getElementById('push-dot');

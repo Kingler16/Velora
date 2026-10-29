@@ -18,6 +18,10 @@ struct SettingsView: View {
     @State private var savingSchedule = false
     @State private var error: String?
 
+    @State private var preferences: [String: NotificationPreference] = [:]
+    @State private var testingPush = false
+    @State private var pushTestResult: String?
+
     var body: some View {
         NavigationStack {
             Form {
@@ -75,7 +79,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Briefings")
                     } footer: {
-                        Text("Die Briefings selbst bekommst du weiterhin per Telegram bzw. als Mitteilung der Web-App.")
+                        Text("Neue Briefings kommen als Mitteilung aufs iPhone und stehen im Berater-Tab.")
                     }
                     Section("Konto") {
                         if let tax = server.taxRegime { LabeledContent("Steuer", value: tax) }
@@ -83,6 +87,8 @@ struct SettingsView: View {
                         if let ccy = server.defaultCurrency { LabeledContent("Standardwährung", value: ccy) }
                     }
                 }
+
+                notificationsSection
 
                 Section("Server-Software") {
                     if let version, version.available {
@@ -120,6 +126,69 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder private var notificationsSection: some View {
+        Section {
+            if model.notificationsAllowed == false {
+                Button("In den iOS-Einstellungen erlauben", systemImage: "bell.slash") {
+                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            } else {
+                ForEach(NotificationCategory.allCases) { category in
+                    if let pref = preferences[category.rawValue] {
+                        Toggle(category.title, isOn: Binding(
+                            get: { pref.pushEnabled },
+                            set: { on in Task { await setPush(category, on) } }
+                        ))
+                    }
+                }
+                Button {
+                    Task { await sendTestPush() }
+                } label: {
+                    HStack {
+                        Text("Test-Mitteilung senden")
+                        Spacer()
+                        if testingPush { ProgressView() } else if let pushTestResult { Text(pushTestResult).foregroundStyle(.secondary) }
+                    }
+                }
+            }
+        } header: {
+            Text("Mitteilungen")
+        } footer: {
+            if let pushError = model.pushError {
+                Text("iPhone nicht angemeldet: \(pushError)")
+            } else {
+                Text("Die Schalter gelten auch für die Web-App. Systemfehler kommen zusätzlich per Telegram, falls keine Mitteilung zugestellt werden konnte.")
+            }
+        }
+    }
+
+    private func setPush(_ category: NotificationCategory, _ on: Bool) async {
+        let previous = preferences[category.rawValue]
+        preferences[category.rawValue]?.pushEnabled = on
+        do {
+            try await model.client.send("/api/push/preferences", body: [category.rawValue: .object(["push_enabled": .bool(on)])])
+        } catch {
+            preferences[category.rawValue] = previous
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func sendTestPush() async {
+        testingPush = true
+        defer { testingPush = false }
+        await model.registerPushToken()
+        nonisolated struct TestResult: Decodable { var sent: Int }
+        do {
+            let result: TestResult = try await model.client.post("/api/push/test", body: [String: String]())
+            pushTestResult = result.sent > 0 ? "✓ an \(result.sent) Gerät\(result.sent == 1 ? "" : "e")" : "✕ nicht zugestellt"
+        } catch {
+            pushTestResult = "✕ fehlgeschlagen"
+            self.error = error.localizedDescription
+        }
+    }
+
     private var currentWebURL: URL? {
         let endpoints = model.endpoints
         return model.route == .remote ? ServerEndpoints.url(from: endpoints.remote) : ServerEndpoints.url(from: endpoints.lan)
@@ -144,6 +213,7 @@ struct SettingsView: View {
     private func loadServerInfo() async {
         server = try? await model.client.get("/api/settings")
         version = try? await model.client.get("/api/system/version")
+        preferences = (try? await model.client.get("/api/push/preferences")) ?? preferences
         if let server {
             days = Set(server.briefingDays)
             let parts = (server.briefingTime ?? "07:00").split(separator: ":").compactMap { Int($0) }

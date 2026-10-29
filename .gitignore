@@ -36,3 +36,7 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Apple-Schlüssel (APNs, App Store Connect API) – niemals committen
+config/keys/
+*.p8

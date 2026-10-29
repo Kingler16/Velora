@@ -61,7 +61,9 @@ from src.analysis.performance import (
     compute_correlation_data,
 )
 from src.data.cache import save_cache
-from src.delivery.telegram import send_briefing, send_document, send_error_alert, create_bot_app
+from src.delivery.telegram import send_briefing, send_document, create_bot_app
+from src.delivery.alerts import send_system_alert
+from src.delivery.push_sender import send_push_safe
 
 try:
     from src.delivery.pdf_report import generate_pdf
@@ -76,6 +78,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 CONFIG_DIR = Path(__file__).parent.parent / "config"
+
+# strftime('%B') hängt am System-Locale – am Pi wäre das Englisch.
+_MONTHS_DE = ["Jänner", "Februar", "März", "April", "Mai", "Juni", "Juli",
+              "August", "September", "Oktober", "November", "Dezember"]
 
 from src.config_loader import load_settings  # noqa: E402  ENV-Override + settings.json
 
@@ -246,7 +252,6 @@ async def run_briefing():
         # 7. Push-Notification (Kategorie: briefings)
         try:
             from datetime import date
-            from src.delivery.push_sender import send_push_safe
             summary_text = ""
             if structured and structured.get("summary"):
                 summary_text = str(structured["summary"])[:120]
@@ -263,8 +268,7 @@ async def run_briefing():
     except Exception as e:
         error_msg = f"Briefing fehlgeschlagen: {e}\n{traceback.format_exc()}"
         logger.error(error_msg)
-        if tg.get("bot_token") and tg.get("chat_id"):
-            await send_error_alert(tg["bot_token"], tg["chat_id"], str(e))
+        await send_system_alert("Briefing fehlgeschlagen", str(e))
 
     logger.info("=== BRIEFING ENDE ===")
 
@@ -320,8 +324,19 @@ INDIZES:
             save_monthly_snapshot(structured)
 
         briefing_text = strip_json_block(result["text"])
+        month_label = f"{_MONTHS_DE[datetime.now().month - 1]} {datetime.now().year}"
 
-        if tg.get("bot_token") and tg.get("chat_id"):
+        # In der Briefing-Liste ablegen, damit App und Web den Report zeigen
+        # (bisher gab es ihn nur per Telegram).
+        save_briefing_summary(f"Monatsreport {month_label}", [], None, full_text=briefing_text)
+
+        try:
+            from src.chat.db import is_channel_enabled
+            telegram_on = is_channel_enabled("briefings", "telegram")
+        except Exception:
+            telegram_on = True
+
+        if tg.get("bot_token") and tg.get("chat_id") and telegram_on:
             # PDF generieren und senden (wenn verfügbar)
             if HAS_PDF:
                 try:
@@ -339,13 +354,20 @@ INDIZES:
             await send_briefing(tg["bot_token"], tg["chat_id"], f"\U0001f4ca <b>MONATSREPORT</b>\n\n{briefing_text}")
         else:
             print(briefing_text)
-            print(f"\nPDF gespeichert: {pdf_path}")
+
+        await asyncio.to_thread(
+            send_push_safe,
+            category="briefings",
+            title=f"Monatsreport · {month_label}",
+            body="Dein Monatsreport ist da.",
+            url="/briefings",
+            tag="monthly-report",
+        )
 
     except Exception as e:
         error_msg = f"Monatsreport fehlgeschlagen: {e}"
         logger.error(error_msg)
-        if tg.get("bot_token") and tg.get("chat_id"):
-            await send_error_alert(tg["bot_token"], tg["chat_id"], str(e))
+        await send_system_alert("Monatsreport fehlgeschlagen", str(e))
 
     logger.info("=== MONATSREPORT ENDE ===")
 
@@ -381,8 +403,8 @@ async def run_ticker_analysis(ticker: str, update=None, context=None):
         tg = settings.get("telegram", {})
         if update:
             await update.message.reply_text(f"⚠️ Analyse fehlgeschlagen: {e}")
-        elif tg.get("bot_token") and tg.get("chat_id"):
-            await send_error_alert(tg["bot_token"], tg["chat_id"], f"Ticker-Analyse {ticker}: {e}")
+        else:
+            await send_system_alert(f"Ticker-Analyse {ticker} fehlgeschlagen", str(e))
         return
     analysis_text = strip_json_block(result["text"])
 

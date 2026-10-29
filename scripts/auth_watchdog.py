@@ -4,7 +4,7 @@ Auth-Wächter für die Claude-CLI hinter Velora.
 
 Macht einen billigen Test-Aufruf (Haiku) und prüft, ob die CLI-Authentifizierung
 noch lebt. Schlägt er fehl — typisch: abgelaufener/invalidierter OAuth-Token → 401 —
-geht eine Telegram-Warnung an den Nutzer. Und zwar PROAKTIV, bevor das nächste
+geht eine Mitteilung an iPhone/Web-App (Telegram nur als Notnagel). Und zwar PROAKTIV, bevor das nächste
 Briefing oder ein Chat daran scheitert und Velora scheinbar "still stirbt".
 
 Ersetzt den früheren Keep-Alive: Ein langlebiger setup-token (1 Jahr) braucht
@@ -26,7 +26,6 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
 from src.analysis.claude import _LOCK_PATH, _resolve_claude_bin, build_claude_env  # noqa: E402
-from src.config_loader import load_settings  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("auth_watchdog")
@@ -75,20 +74,14 @@ def _run_test_call() -> tuple[bool, str]:
 
 
 async def _alert(detail: str) -> None:
-    tg = load_settings().get("telegram", {})
-    bot_token = (tg.get("bot_token") or "").strip()
-    chat_id = (tg.get("chat_id") or "").strip()
-    if not bot_token or not chat_id:
-        logger.error("Kein Telegram-Token/Chat konfiguriert — kann nicht alarmieren.")
-        return
-    from src.delivery.telegram import send_error_alert
-    msg = (
-        "Claude-Login defekt — Velora kann gerade keine Briefings/Analysen erzeugen. "
+    from src.delivery.alerts import send_system_alert
+    await send_system_alert(
+        "Claude-Login defekt",
+        "Velora kann gerade keine Briefings/Analysen erzeugen. "
         f"Detail: {detail} "
         "Beheben: am RockPi `claude setup-token` ausführen, dann "
-        "`./venv/bin/python scripts/set_oauth_token.py` und Services neustarten."
+        "`./venv/bin/python scripts/set_oauth_token.py` und Services neustarten.",
     )
-    await send_error_alert(bot_token, chat_id, msg)
 
 
 def main() -> int:
@@ -99,9 +92,9 @@ def main() -> int:
     logger.error("Claude-Auth DEFEKT: %s", detail)
     try:
         asyncio.run(_alert(detail))
-        logger.info("Telegram-Warnung verschickt.")
+        logger.info("Warnung verschickt.")
     except Exception:
-        logger.exception("Telegram-Warnung fehlgeschlagen")
+        logger.exception("Warnung fehlgeschlagen")
     return 1
 
 

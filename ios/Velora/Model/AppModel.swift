@@ -1,6 +1,8 @@
 import Foundation
 import Network
 import Observation
+import UIKit
+import UserNotifications
 import VeloraKit
 
 /// Zentraler Zustand: Server-Verbindung, Zwischenspeicher der letzten Antworten, Daten-Refresh.
@@ -18,10 +20,16 @@ final class AppModel {
     private(set) var actionableCount = 0
     /// Letzter bekannter EUR/USD-Kurs (Dollar je Euro) für Euro-Gegenwerte.
     private(set) var eurUsd: Double?
+    /// Chat, den ein Tipp auf eine Mitteilung öffnen soll – die Chat-Liste holt ihn ab.
+    var pendingChatThreadID: String?
+    /// Ob iOS Mitteilungen erlaubt; `nil` solange unbekannt.
+    private(set) var notificationsAllowed: Bool?
+    private(set) var pushError: String?
 
     @ObservationIgnored let client: VeloraClient
     @ObservationIgnored private let monitor = NWPathMonitor()
     @ObservationIgnored private var network: NetworkState?
+    @ObservationIgnored private var deviceToken: String?
 
     private static let endpointsKey = "serverEndpoints"
 
@@ -43,6 +51,7 @@ final class AppModel {
         await client.configure(endpoints: endpoints, password: password)
         route = nil
         reloadToken += 1
+        await registerPushToken()
     }
 
     /// Wechsel zwischen WLAN und Mobilfunk: Route neu bestimmen, damit nicht die Heim-IP ins Leere läuft.
@@ -98,6 +107,68 @@ final class AppModel {
     }
 
     func reloadAll() { reloadToken += 1 }
+
+    // MARK: - Mitteilungen
+
+    /// Fragt beim ersten Start nach der Erlaubnis und holt danach das Gerätetoken.
+    func setUpNotifications() async {
+        let center = UNUserNotificationCenter.current()
+        var settings = await center.notificationSettings()
+        if settings.authorizationStatus == .notDetermined {
+            _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+            settings = await center.notificationSettings()
+        }
+        let allowed = [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
+        notificationsAllowed = allowed
+        if allowed { UIApplication.shared.registerForRemoteNotifications() }
+    }
+
+    func pushTokenReceived(_ token: String) {
+        deviceToken = token
+        pushError = nil
+        Task { await registerPushToken() }
+    }
+
+    func pushRegistrationFailed(_ message: String) {
+        pushError = message
+    }
+
+    /// Meldet das Gerät beim Server an. Bei jedem Start und Serverwechsel – Tokens können sich ändern,
+    /// und ohne Verbindung klappt es eben beim nächsten Mal.
+    func registerPushToken() async {
+        guard let deviceToken else { return }
+        let info = Bundle.main.infoDictionary
+        let version = "\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
+        do {
+            try await client.send("/api/push/apns/register", body: [
+                "token": .string(deviceToken),
+                "environment": .string(PushEnvironment.current),
+                "device_name": .string(UIDevice.current.name),
+                "app_version": .string(version),
+            ])
+            pushError = nil
+        } catch {
+            pushError = error.localizedDescription
+        }
+    }
+
+    /// Tipp auf eine Mitteilung: passenden Tab bzw. Chat öffnen.
+    func open(_ target: PushTarget) {
+        switch target {
+        case .dashboard: selectedTab = .dashboard
+        case .portfolio: selectedTab = .portfolio
+        case .briefings:
+            advisorSection = .briefings
+            selectedTab = .advisor
+        case .recommendations:
+            advisorSection = .recommendations
+            selectedTab = .advisor
+        case .chat(let id):
+            pendingChatThreadID = id
+            selectedTab = .chat
+        }
+        reloadToken += 1
+    }
 
     // MARK: - Daten-Refresh am Server
 

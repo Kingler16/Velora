@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0933776D5080ADFD743909B2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = EA9DB028CB6F576324DE7C00 /* PrivacyInfo.xcprivacy */; };
 		26DF5C13C0DB8074099C0454 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 728BFE54008226CFFD17E709 /* Keychain.swift */; };
 		35A76089092F0B76645B2041 /* Forms.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7469AD41D10D203C48320B9 /* Forms.swift */; };
 		46DE35379FDC5BE1B5C9F272 /* AdvisorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9660D45C23E274D9DBAAD07C /* AdvisorView.swift */; };
@@ -17,6 +18,7 @@
 		8D7E1771AB2B9FB5E0A19AFA /* PortfolioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FC34B294FE5B82BBDFAE018 /* PortfolioView.swift */; };
 		9D9EC1138FC6199B5C1DF312 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E84B4BCFB3539749DFAB0F3F /* ChatView.swift */; };
 		A68590EA488144EF9A48C86A /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D8CA5AEBA82191FF40B3F4 /* DashboardView.swift */; };
+		C1A5A4DB081216683AD9CEE2 /* PushNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37C94DE1145B50465CDC91B0 /* PushNotifications.swift */; };
 		C26699E1809C70CD2FE19C99 /* StrategyHoldingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF22370FFF6AF8B4C66286FF /* StrategyHoldingsView.swift */; };
 		D2B23E1F60F3D392C667197E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFD8CA827C5D2A0E821177B6 /* SettingsView.swift */; };
 		E72A047F4B7AFE1407F0B654 /* VeloraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95580F1D89BFE71568792FE8 /* VeloraApp.swift */; };
@@ -26,6 +28,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		37C94DE1145B50465CDC91B0 /* PushNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotifications.swift; sourceTree = "<group>"; };
 		4B9393BA52F14322E421579E /* BriefingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefingViews.swift; sourceTree = "<group>"; };
 		56E3C442518A1D513111DF5A /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		5A21D9882CF450C5A3EB34F6 /* VeloraKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = VeloraKit; path = VeloraKit; sourceTree = SOURCE_ROOT; };
@@ -37,10 +40,12 @@
 		9660D45C23E274D9DBAAD07C /* AdvisorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvisorView.swift; sourceTree = "<group>"; };
 		97D8CA5AEBA82191FF40B3F4 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		BAE76722D6CE381C508F09FD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D081719E0FE04038B74768A8 /* Velora.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Velora.entitlements; sourceTree = "<group>"; };
 		D1592F022B2661A98BCC8A3D /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		DE06A0CFCF780815A84D7F57 /* PositionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PositionDetailView.swift; sourceTree = "<group>"; };
 		E7469AD41D10D203C48320B9 /* Forms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Forms.swift; sourceTree = "<group>"; };
 		E84B4BCFB3539749DFAB0F3F /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		EA9DB028CB6F576324DE7C00 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		F60E1B18A1B024372789B25E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FF22370FFF6AF8B4C66286FF /* StrategyHoldingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrategyHoldingsView.swift; sourceTree = "<group>"; };
 		FFD8CA827C5D2A0E821177B6 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -63,6 +68,8 @@
 			children = (
 				F60E1B18A1B024372789B25E /* Assets.xcassets */,
 				BAE76722D6CE381C508F09FD /* Info.plist */,
+				EA9DB028CB6F576324DE7C00 /* PrivacyInfo.xcprivacy */,
+				D081719E0FE04038B74768A8 /* Velora.entitlements */,
 				95580F1D89BFE71568792FE8 /* VeloraApp.swift */,
 				8A48DD517150D7BCDBC8BDCA /* Model */,
 				622512B83BD04883DF8F2DC6 /* Views */,
@@ -93,6 +100,7 @@
 			children = (
 				D1592F022B2661A98BCC8A3D /* AppModel.swift */,
 				728BFE54008226CFFD17E709 /* Keychain.swift */,
+				37C94DE1145B50465CDC91B0 /* PushNotifications.swift */,
 			);
 			path = Model;
 			sourceTree = "<group>";
@@ -188,6 +196,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				79704E2A638956D4E09D12C3 /* Assets.xcassets in Resources */,
+				0933776D5080ADFD743909B2 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -209,6 +218,7 @@
 				F3EFF68F7CE9DF0E830CFF30 /* MarketView.swift in Sources */,
 				8D7E1771AB2B9FB5E0A19AFA /* PortfolioView.swift in Sources */,
 				868950805C4D47C69A0346A4 /* PositionDetailView.swift in Sources */,
+				C1A5A4DB081216683AD9CEE2 /* PushNotifications.swift in Sources */,
 				D2B23E1F60F3D392C667197E /* SettingsView.swift in Sources */,
 				C26699E1809C70CD2FE19C99 /* StrategyHoldingsView.swift in Sources */,
 				E72A047F4B7AFE1407F0B654 /* VeloraApp.swift in Sources */,
@@ -356,6 +366,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Velora/Velora.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Velora/Info.plist;
@@ -376,6 +387,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Velora/Velora.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Velora/Info.plist;

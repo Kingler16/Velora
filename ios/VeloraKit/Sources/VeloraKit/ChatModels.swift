@@ -77,6 +77,17 @@ public struct ChatMessage: Decodable, Sendable, Identifiable, Hashable {
 public struct ThreadDetail: Decodable, Sendable {
     public var thread: ChatThread
     public var messages: [ChatMessage]
+    /// Velora schreibt noch an einer Antwort (z. B. nachdem die App im Hintergrund war).
+    public var running: Bool
+
+    enum CodingKeys: String, CodingKey { case thread, messages, running }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        thread = try c.decode(ChatThread.self, forKey: .thread)
+        messages = c(.messages, default: [])
+        running = c.flag(.running)
+    }
 }
 
 /// Antwort auf `POST /api/chat/confirm`.

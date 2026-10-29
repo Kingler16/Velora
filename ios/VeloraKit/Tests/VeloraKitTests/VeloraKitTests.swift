@@ -461,3 +461,39 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {
         #expect(near?.value == 65978.34)
     }
 }
+
+@Suite struct NotificationTests {
+    @Test func targetsFromServerURLs() {
+        #expect(PushTarget(url: "/briefings") == .briefings)
+        #expect(PushTarget(url: "/recommendations") == .recommendations)
+        #expect(PushTarget(url: "/portfolio") == .portfolio)
+        #expect(PushTarget(url: "/strategy") == .portfolio)
+        #expect(PushTarget(url: "/chat?thread=abc-123") == .chat(threadID: "abc-123"))
+        #expect(PushTarget(url: "/chat") == .chat(threadID: nil))
+        #expect(PushTarget(url: "/") == .dashboard)
+        #expect(PushTarget(url: nil) == .dashboard)
+    }
+
+    @Test func infoFromUserInfo() {
+        let info = PushInfo(userInfo: ["aps": ["alert": "x"], "category": "chat_reply", "url": "/chat?thread=t1"])
+        #expect(info.category == "chat_reply")
+        #expect(info.chatThreadID == "t1")
+        #expect(PushInfo(userInfo: [:]).target == .dashboard)
+    }
+
+    @Test func preferencesFromSQLiteFlags() throws {
+        let prefs = try decode([String: NotificationPreference].self, """
+        {"briefings": {"telegram_enabled": false, "push_enabled": true}, "chat_reply": {"telegram_enabled": 0, "push_enabled": 1}}
+        """)
+        #expect(prefs["briefings"]?.pushEnabled == true)
+        #expect(prefs["chat_reply"]?.telegramEnabled == false)
+    }
+
+    @Test func threadDetailRunningIsOptional() throws {
+        let thread = #"{"id": "t1", "title": "Test", "message_count": 0, "is_pinned": 0}"#
+        let old = try decode(ThreadDetail.self, #"{"thread": \#(thread), "messages": []}"#)
+        #expect(old.running == false)
+        let running = try decode(ThreadDetail.self, #"{"thread": \#(thread), "messages": [], "running": true}"#)
+        #expect(running.running == true)
+    }
+}

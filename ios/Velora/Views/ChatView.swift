@@ -41,6 +41,7 @@ struct ChatListView: View {
             }
             .navigationTitle("Chat")
             .navigationDestination(for: ChatThread.self) { ChatThreadView(thread: $0) }
+            .task(id: model.pendingChatThreadID) { await openPendingThread() }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Neuer Chat", systemImage: "square.and.pencil") {
@@ -60,6 +61,19 @@ struct ChatListView: View {
             do { try await work() } catch { self.error = error.localizedDescription }
         }
     }
+
+    /// Tipp auf eine Chat-Mitteilung: genau diesen Verlauf zeigen.
+    private func openPendingThread() async {
+        guard let id = model.pendingChatThreadID else { return }
+        model.pendingChatThreadID = nil
+        if path.last?.id == id { return }
+        do {
+            let detail: ThreadDetail = try await model.client.get("/api/chat/threads/\(id)")
+            path = [detail.thread]
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
 }
 
 /// Ein Chat-Verlauf mit Live-Antwort.
@@ -74,6 +88,9 @@ struct ChatThreadView: View {
     @State private var loaded = false
     @State private var error: String?
     @State private var streamTask: Task<Void, Never>?
+    /// Antwort läuft am Server weiter, ohne dass diese Ansicht mitliest (App war im Hintergrund).
+    @State private var runningInBackground = false
+    @Environment(\.scenePhase) private var scenePhase
     @FocusState private var inputFocused: Bool
 
     private static let suggestions = [
@@ -109,6 +126,12 @@ struct ChatThreadView: View {
                             ProgressView()
                             Text("Velora denkt nach …").font(.subheadline).foregroundStyle(.secondary)
                         }
+                    } else if runningInBackground && !streaming {
+                        HStack(alignment: .top, spacing: 8) {
+                            ProgressView()
+                            Text("Velora schreibt noch an der Antwort. Du bekommst eine Mitteilung, sobald sie da ist.")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
@@ -123,7 +146,29 @@ struct ChatThreadView: View {
         .navigationTitle(thread.title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
-        .onDisappear { streamTask?.cancel() }
+        // Solange die Antwort am Server weiterläuft, regelmäßig nachsehen.
+        .task(id: runningInBackground) {
+            while runningInBackground, !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3))
+                await load(quiet: true)
+            }
+        }
+        .onAppear { openChatThread.withLock { $0 = thread.id } }
+        // Weggehen bricht die Antwort nicht ab: der Server schreibt fertig und schickt eine Mitteilung.
+        .onDisappear {
+            streamTask?.cancel()
+            openChatThread.withLock { if $0 == thread.id { $0 = nil } }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Im Hintergrund die Verbindung lösen, damit der Server weiß, dass niemand mitliest.
+            if phase == .background {
+                streamTask?.cancel()
+                openChatThread.withLock { if $0 == thread.id { $0 = nil } }
+            } else if phase == .active {
+                openChatThread.withLock { $0 = thread.id }
+                Task { await load(quiet: true) }
+            }
+        }
         .errorAlert($error)
     }
 
@@ -136,7 +181,7 @@ struct ChatThreadView: View {
                 .padding(.vertical, 10)
                 .glassEffect(.regular, in: .rect(cornerRadius: 22))
             if streaming {
-                Button { streamTask?.cancel() } label: {
+                Button(action: stop) {
                     Image(systemName: "stop.fill").font(.body.weight(.semibold)).frame(width: 40, height: 40)
                 }
                 .buttonStyle(.glass)
@@ -154,15 +199,19 @@ struct ChatThreadView: View {
         .padding(.vertical, 8)
     }
 
-    private func load() async {
+    /// `quiet`: beim Nachsehen im Hintergrund keine Fehlermeldung (Funkloch), nur beim Öffnen.
+    private func load(quiet: Bool = false) async {
         do {
             let detail: ThreadDetail = try await model.client.get("/api/chat/threads/\(thread.id)")
+            // Während live gestreamt wird, nicht die halbe Antwort mit dem Serverstand überschreiben.
+            guard !streaming else { return }
             messages = detail.messages.filter { $0.role != .other }
+            runningInBackground = detail.running
             nonisolated struct Pending: Decodable { var pending: [PendingConfirmation] }
             let pending: Pending? = try? await model.client.get("/api/chat/pending?thread_id=\(thread.id)")
             confirmations = pending?.pending ?? []
         } catch {
-            self.error = error.localizedDescription
+            if !quiet { self.error = error.localizedDescription }
         }
         loaded = true
     }
@@ -202,6 +251,13 @@ struct ChatThreadView: View {
                 self.error = error.localizedDescription
             }
         }
+    }
+
+    /// Stopp-Taste: anders als Weggehen soll der Server die Antwort wirklich abbrechen.
+    private func stop() {
+        streamTask?.cancel()
+        runningInBackground = false
+        Task { try? await model.client.send("/api/chat/threads/\(thread.id)/stop") }
     }
 
     private func confirm(_ c: PendingConfirmation, approved: Bool) {

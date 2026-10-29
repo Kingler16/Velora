@@ -21,7 +21,7 @@ import logging
 import uuid
 from typing import AsyncIterator, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -35,6 +35,23 @@ from src.chat.slash_commands import is_slash_command, handle_slash
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+# Laufende Antworten je Thread: (Task, Stop-Signal).  Hält zugleich die starke
+# Referenz, damit asyncio den Hintergrund-Task nicht wegräumt.
+_RUNNING: dict[str, tuple[asyncio.Task, asyncio.Event]] = {}
+
+
+def _push_chat_reply(thread_id: str, title: str, text: str) -> None:
+    from src.delivery.push_sender import send_push_safe
+    preview = " ".join(text.split())
+    send_push_safe(
+        category="chat_reply",
+        title=f"Velora · {title[:60]}",
+        body=preview[:180] + ("…" if len(preview) > 180 else ""),
+        url=f"/chat?thread={thread_id}",
+        tag=f"chat-{thread_id}"[:64],
+        data={"thread_id": thread_id},
+    )
 
 
 # ── Models ────────────────────────────────────────────────────
@@ -80,7 +97,16 @@ def get_thread(thread_id: str):
     if not thread:
         raise HTTPException(404, "Thread nicht gefunden")
     messages = db.get_messages(thread_id)
-    return {"thread": thread, "messages": messages}
+    return {"thread": thread, "messages": messages, "running": thread_id in _RUNNING}
+
+
+@router.post("/threads/{thread_id}/stop")
+def stop_reply(thread_id: str):
+    """Bricht eine laufende Antwort ab (Stopp-Taste) – anders als bloßes Verlassen des Chats."""
+    running = _RUNNING.get(thread_id)
+    if running:
+        running[1].set()
+    return {"stopped": bool(running)}
 
 
 @router.patch("/threads/{thread_id}")
@@ -181,7 +207,7 @@ def _extract_action_confirmation(content) -> Optional[dict]:
 
 
 @router.post("/threads/{thread_id}/message")
-async def send_message(thread_id: str, body: MessageSend, request: Request):
+async def send_message(thread_id: str, body: MessageSend):
     thread = db.get_thread(thread_id)
     if not thread:
         raise HTTPException(404, "Thread nicht gefunden")
@@ -203,7 +229,7 @@ async def send_message(thread_id: str, body: MessageSend, request: Request):
     except Exception as e:
         logger.warning("Auto-Summary skipped: %s", e)
 
-    async def event_stream() -> AsyncIterator[bytes]:
+    async def produce(emit, stop: asyncio.Event) -> str:
         system_prompt = build_full_system_prompt(thread_id, body.page_context)
         resume_id = thread.get("session_id")
 
@@ -223,7 +249,7 @@ async def send_message(thread_id: str, body: MessageSend, request: Request):
         final_session_id: Optional[str] = None
         had_error = False
 
-        yield _sse("start", {"thread_id": thread_id})
+        await emit(_sse("start", {"thread_id": thread_id}))
 
         if is_slash_command(body.message):
             stream = handle_slash(body.message)
@@ -241,19 +267,19 @@ async def send_message(thread_id: str, body: MessageSend, request: Request):
 
         try:
             async for ev in stream:
-                if await request.is_disconnected():
-                    logger.info("Client disconnected, cancelling stream")
+                if stop.is_set():
+                    logger.info("Antwort auf Wunsch abgebrochen (%s)", thread_id)
                     break
 
                 if ev.type == "system":
-                    yield _sse("system", ev.data)
+                    await emit(_sse("system", ev.data))
                 elif ev.type == "text_delta":
                     assistant_text_parts.append(ev.data.get("text", ""))
-                    yield _sse("token", ev.data)
+                    await emit(_sse("token", ev.data))
                 elif ev.type == "assistant_message":
                     # nur wenn keine deltas kamen
                     assistant_text_parts.append(ev.data.get("text", ""))
-                    yield _sse("token", ev.data)
+                    await emit(_sse("token", ev.data))
                 elif ev.type == "tool_use":
                     name = ev.data.get("name", "")
                     if not _is_user_facing_tool(name):
@@ -264,12 +290,12 @@ async def send_message(thread_id: str, body: MessageSend, request: Request):
                         json.dumps(ev.data, ensure_ascii=False),
                         tool_name=name,
                     )
-                    yield _sse("tool_use", ev.data)
+                    await emit(_sse("tool_use", ev.data))
                 elif ev.type == "tool_result":
                     tid = ev.data.get("tool_use_id")
                     matched_tool = next((t for t in tool_use_log if t.get("id") == tid), None)
                     if matched_tool:
-                        yield _sse("tool_result", ev.data)
+                        await emit(_sse("tool_result", ev.data))
                         # Wenn ein Write-Tool ein pending_confirmation zurückgegeben hat,
                         # emittiere ein confirmation_required-Event fürs Frontend.
                         if matched_tool.get("name") in CONFIRMATION_REQUIRED_TOOLS:
@@ -284,11 +310,11 @@ async def send_message(thread_id: str, body: MessageSend, request: Request):
                                         )
                                 except Exception:
                                     pass
-                                yield _sse("confirmation_required", {
+                                await emit(_sse("confirmation_required", {
                                     **action_info,
                                     "tool_name": matched_tool.get("name"),
                                     "params": (pa or {}).get("params") if pa else matched_tool.get("input"),
-                                })
+                                }))
                                 # Push: wenn User grade nicht im Chat ist (App zu / anderer Tab),
                                 # soll er Bescheid bekommen dass eine Bestätigung wartet.
                                 try:
@@ -307,17 +333,17 @@ async def send_message(thread_id: str, body: MessageSend, request: Request):
                                     logger.exception("Push für pending_action fehlgeschlagen")
                 elif ev.type == "done":
                     final_session_id = ev.data.get("session_id")
-                    yield _sse("done", ev.data)
+                    await emit(_sse("done", ev.data))
                 elif ev.type == "error":
                     had_error = True
-                    yield _sse("error", ev.data)
+                    await emit(_sse("error", ev.data))
                 elif ev.type == "raw":
                     logger.debug("raw stream event: %s", str(ev.data)[:300])
 
         except Exception as e:
             logger.exception("Fehler im Chat-Stream")
             had_error = True
-            yield _sse("error", {"message": str(e)})
+            await emit(_sse("error", {"message": str(e)}))
 
         # Assistant-Message persistieren
         full_text = "".join(assistant_text_parts).strip()
@@ -329,7 +355,58 @@ async def send_message(thread_id: str, body: MessageSend, request: Request):
             db.set_thread_session(thread_id, final_session_id)
 
         if had_error and not full_text:
-            yield _sse("fatal", {"message": "Chat fehlgeschlagen — siehe Logs"})
+            await emit(_sse("fatal", {"message": "Chat fehlgeschlagen — siehe Logs"}))
+
+        return full_text
+
+    async def event_stream() -> AsyncIterator[bytes]:
+        # Die Antwort läuft als eigener Task: Verlässt der Client die Seite oder geht
+        # die App in den Hintergrund, schreibt Velora trotzdem fertig, speichert die
+        # Antwort und schickt eine Mitteilung.  Nur /stop bricht wirklich ab.
+        queue: asyncio.Queue[Optional[bytes]] = asyncio.Queue()
+        detached = asyncio.Event()
+        stop = asyncio.Event()
+
+        async def emit(chunk: bytes) -> None:
+            if not detached.is_set():
+                await queue.put(chunk)
+
+        async def run() -> None:
+            full_text = ""
+            try:
+                full_text = await produce(emit, stop)
+            except Exception:
+                logger.exception("Chat-Antwort im Hintergrund fehlgeschlagen")
+            finally:
+                await queue.put(None)
+            # Bricht die Verbindung ohne sauberes Disconnect weg, liest niemand mehr –
+            # dann bleibt die Queue voll.
+            for _ in range(30):
+                if detached.is_set() or queue.empty():
+                    break
+                await asyncio.sleep(0.1)
+            client_gone = detached.is_set() or not queue.empty()
+            if client_gone and full_text and not stop.is_set():
+                title = (db.get_thread(thread_id) or {}).get("title") or "Chat"
+                await asyncio.to_thread(_push_chat_reply, thread_id, title, full_text)
+
+        task = asyncio.create_task(run())
+        _RUNNING[thread_id] = (task, stop)
+
+        def _forget(t: asyncio.Task) -> None:
+            if _RUNNING.get(thread_id, (None,))[0] is t:
+                del _RUNNING[thread_id]
+
+        task.add_done_callback(_forget)
+        received_all = False
+        try:
+            while (chunk := await queue.get()) is not None:
+                yield chunk
+            received_all = True
+        finally:
+            if not received_all:
+                detached.set()
+                logger.info("Client weg — Antwort für %s läuft im Hintergrund weiter", thread_id)
 
     return StreamingResponse(
         event_stream(),

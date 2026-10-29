@@ -38,6 +38,18 @@
     "vapid_private_key": "",
     "vapid_subject": "mailto:change-me@example.com"
   },
+  "app_store_connect": {
+    "key_path": "config/keys/asc_AuthKey_XXXXXXXXXX.p8",
+    "key_id": "",
+    "issuer_id": "",
+    "app_id": ""
+  },
+  "apns": {
+    "key_path": "config/keys/apns_AuthKey_XXXXXXXXXX.p8",
+    "key_id": "",
+    "team_id": "",
+    "bundle_id": "dev.max.velora"
+  },
   "notifications": {
     "telegram_enabled": true,
     "push_enabled": true

@@ -3,17 +3,22 @@ import VeloraKit
 
 @main
 struct VeloraApp: App {
-    @State private var model = AppModel()
+    @UIApplicationDelegateAdaptor private var delegate: AppDelegate
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             RootView()
-                .environment(model)
+                .environment(delegate.model)
                 .preferredColorScheme(.dark)
+                .task { await delegate.model.setUpNotifications() }
                 .onChange(of: scenePhase) { old, phase in
-                    // Nach längerer Pause im Hintergrund aktuelle Daten holen.
-                    if old == .background, phase == .active { model.reloadAll() }
+                    // Nach längerer Pause im Hintergrund aktuelle Daten holen – und nachsehen,
+                    // ob Mitteilungen in den iOS-Einstellungen inzwischen erlaubt wurden.
+                    if old == .background, phase == .active {
+                        delegate.model.reloadAll()
+                        Task { await delegate.model.setUpNotifications() }
+                    }
                 }
         }
     }

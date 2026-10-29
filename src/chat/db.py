@@ -65,6 +65,17 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
     active INTEGER DEFAULT 1
 );
 
+-- iOS-App: APNs-Gerätetokens (environment: production = TestFlight/App Store, sandbox = Xcode-Build)
+CREATE TABLE IF NOT EXISTS apns_devices (
+    token TEXT PRIMARY KEY,
+    environment TEXT NOT NULL DEFAULT 'production',
+    device_name TEXT,
+    app_version TEXT,
+    created_at TEXT NOT NULL,
+    last_used TEXT,
+    active INTEGER DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS notification_preferences (
     category TEXT PRIMARY KEY,
     telegram_enabled INTEGER DEFAULT 1,
@@ -85,7 +96,13 @@ DEFAULT_NOTIFICATION_CATEGORIES = [
     "pending_action",    # Velora hat Write-Action vorbereitet und braucht OK
     "recommendation_closed",  # Empfehlung wurde automatisch/manuell geschlossen
     "market_alert",      # starke Marktbewegung, VIX-Spike etc.
+    "chat_reply",        # Velora-Antwort fertig, während die App nicht offen war
+    "system_error",      # Briefing/Report fehlgeschlagen, Claude-Login defekt
 ]
+
+# Kategorien, die beim ersten Anlegen NICHT per Telegram gehen: Chat-Antworten
+# gab es dort nie, Systemfehler gehen nur als Notnagel hin, wenn kein Push ankam.
+_TELEGRAM_OFF_BY_DEFAULT = {"chat_reply", "system_error"}
 
 
 def _connect() -> sqlite3.Connection:
@@ -104,8 +121,8 @@ def init_db() -> None:
         for cat in DEFAULT_NOTIFICATION_CATEGORIES:
             conn.execute(
                 """INSERT OR IGNORE INTO notification_preferences
-                   (category, telegram_enabled, push_enabled, updated_at) VALUES (?, 1, 1, ?)""",
-                (cat, now),
+                   (category, telegram_enabled, push_enabled, updated_at) VALUES (?, ?, 1, ?)""",
+                (cat, 0 if cat in _TELEGRAM_OFF_BY_DEFAULT else 1, now),
             )
 
 
@@ -337,6 +354,43 @@ def touch_push_subscription(endpoint: str) -> None:
             "UPDATE push_subscriptions SET last_used = ? WHERE endpoint = ?",
             (_now(), endpoint),
         )
+
+
+# ── APNs-Geräte (iOS-App) ────────────────────────────────────
+
+def upsert_apns_device(token: str, environment: str, device_name: Optional[str] = None,
+                       app_version: Optional[str] = None) -> None:
+    now = _now()
+    with _connect() as conn:
+        conn.execute(
+            """INSERT INTO apns_devices (token, environment, device_name, app_version, created_at, last_used, active)
+               VALUES (?, ?, ?, ?, ?, ?, 1)
+               ON CONFLICT(token) DO UPDATE SET
+                 environment = excluded.environment,
+                 device_name = excluded.device_name,
+                 app_version = excluded.app_version,
+                 last_used = excluded.last_used,
+                 active = 1""",
+            (token, environment, device_name, app_version, now, now),
+        )
+
+
+def deactivate_apns_device(token: str) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE apns_devices SET active = 0 WHERE token = ?", (token,))
+
+
+def get_active_apns_devices() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT token, environment, device_name FROM apns_devices WHERE active = 1"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def touch_apns_device(token: str) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE apns_devices SET last_used = ? WHERE token = ?", (_now(), token))
 
 
 # ── Notification Preferences ─────────────────────────────────

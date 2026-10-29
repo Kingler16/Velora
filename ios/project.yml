@@ -31,10 +31,18 @@ targets:
       - Velora
     dependencies:
       - package: VeloraKit
+    # Push-Mitteilungen (APNs). Beim Export für TestFlight setzt Xcode „production“.
+    entitlements:
+      path: Velora/Velora.entitlements
+      properties:
+        aps-environment: development
     info:
       path: Velora/Info.plist
       properties:
         CFBundleDisplayName: Velora
+        # Build-Nummer kommt aus CURRENT_PROJECT_VERSION – TestFlight verlangt bei jedem Upload eine höhere.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ITSAppUsesNonExemptEncryption: false
         # Der Pi spricht nur HTTP (Heimnetz bzw. Tailscale, das selbst verschlüsselt).
         # Bewusst ohne NSAllowsLocalNetworking: ist das gesetzt, ignoriert iOS

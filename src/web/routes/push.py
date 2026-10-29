@@ -1,16 +1,23 @@
-"""Push-Notification-API: Subscribe/Unsubscribe/Preferences/Test."""
+"""Push-Notification-API: Subscribe/Unsubscribe/Preferences/Test.
+
+Web-App: VAPID-Subscriptions (/subscribe).  iOS-App: APNs-Gerätetoken (/apns/…).
+Preferences gelten für beide Wege.
+"""
 
 from __future__ import annotations
 
 import logging
+import re
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from src.chat.db import (
+    deactivate_apns_device,
     deactivate_push_subscription,
     get_notification_preferences,
     set_notification_preference,
+    upsert_apns_device,
     upsert_push_subscription,
 )
 from src.config_loader import load_settings
@@ -57,6 +64,39 @@ async def unsubscribe(req: Request):
     return {"status": "ok"}
 
 
+_APNS_TOKEN = re.compile(r"^[0-9a-fA-F]{64,200}$")
+
+
+@router.post("/apns/register")
+async def apns_register(req: Request):
+    """iOS-App meldet ihr Gerätetoken – bei jedem Start, weil es sich ändern kann."""
+    data = await req.json()
+    token = str(data.get("token") or "").strip()
+    environment = data.get("environment") or "production"
+    if not _APNS_TOKEN.match(token):
+        raise HTTPException(status_code=400, detail="Ungültiges Gerätetoken")
+    if environment not in ("production", "sandbox"):
+        raise HTTPException(status_code=400, detail="environment muss production oder sandbox sein")
+    upsert_apns_device(
+        token=token.lower(),
+        environment=environment,
+        device_name=str(data.get("device_name") or "")[:100] or None,
+        app_version=str(data.get("app_version") or "")[:40] or None,
+    )
+    logger.info("iOS-Gerät registriert (%s): %s…", environment, token[:12])
+    return {"status": "ok"}
+
+
+@router.post("/apns/unregister")
+async def apns_unregister(req: Request):
+    data = await req.json()
+    token = str(data.get("token") or "").strip().lower()
+    if not token:
+        raise HTTPException(status_code=400, detail="token required")
+    deactivate_apns_device(token)
+    return {"status": "ok"}
+
+
 @router.get("/preferences")
 async def get_preferences():
     return get_notification_preferences()
@@ -68,14 +108,17 @@ async def set_preferences(req: Request):
     body = await req.json()
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="expected object")
+    # Fehlende Felder behalten ihren Wert – die iOS-App schickt nur push_enabled.
+    current = get_notification_preferences()
     updated = 0
     for category, prefs in body.items():
         if not isinstance(prefs, dict):
             continue
+        cur = current.get(category, {})
         set_notification_preference(
             category=category,
-            telegram_enabled=bool(prefs.get("telegram_enabled", True)),
-            push_enabled=bool(prefs.get("push_enabled", True)),
+            telegram_enabled=bool(prefs.get("telegram_enabled", cur.get("telegram_enabled", True))),
+            push_enabled=bool(prefs.get("push_enabled", cur.get("push_enabled", True))),
         )
         updated += 1
     return {"status": "ok", "updated": updated}

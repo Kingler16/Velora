@@ -1,10 +1,11 @@
 """
-Web Push Sender mit VAPID.
+Push-Versand: Web Push (VAPID) für die Web-App + APNs für die iOS-App.
 
 Liest VAPID-Keys aus config_loader (ENV > settings.json), iteriert alle
 aktiven Subscriptions und sendet per pywebpush.  Respektiert die
-notification_preferences-Tabelle pro Kategorie.  404/410 vom Push-Service
-deaktiviert die Subscription automatisch (Cleanup von stale endpoints).
+notification_preferences-Tabelle pro Kategorie (push_enabled gilt für beide
+Wege).  404/410 vom Push-Service deaktiviert die Subscription automatisch
+(Cleanup von stale endpoints).  APNs-Details: src/delivery/apns.py.
 """
 
 from __future__ import annotations
@@ -41,15 +42,32 @@ def send_push(
     tag: str | None = None,
     data: dict[str, Any] | None = None,
 ) -> int:
-    """Sendet eine Push-Notification an alle aktiven Subscriptions.
+    """Sendet eine Push-Notification an alle aktiven Subscriptions und iPhones.
 
     Returns Anzahl erfolgreicher Sendungen.  Gibt 0 zurück wenn Kategorie
-    deaktiviert, VAPID nicht konfiguriert oder keine Subscriber.
+    deaktiviert, nichts konfiguriert oder keine Empfänger.
     """
     if not is_channel_enabled(category, "push"):
         logger.debug("Push für Kategorie %s deaktiviert — überspringe", category)
         return 0
 
+    sent = _send_webpush(category, title, body, url, tag, data)
+    try:
+        from src.delivery.apns import send_apns
+        sent += send_apns(category, title, body, url=url, tag=tag, data=data)
+    except Exception:
+        logger.exception("iOS-Push für %s fehlgeschlagen", category)
+    return sent
+
+
+def _send_webpush(
+    category: str,
+    title: str,
+    body: str,
+    url: str,
+    tag: str | None,
+    data: dict[str, Any] | None,
+) -> int:
     vapid = _vapid_config()
     if vapid is None:
         logger.info("Web Push nicht konfiguriert (VAPID-Key fehlt) — überspringe %s", category)

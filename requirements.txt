@@ -14,6 +14,9 @@ pydantic>=2
 pywebpush>=1.14.0
 py-vapid>=1.9.0
 cryptography>=41.0.0
+# iOS-App: APNs (HTTP/2 + JWT-Provider-Token)
+httpx[http2]>=0.27
+PyJWT>=2.8
 # Share-Target: Bild-Verarbeitung (optional, für OCR-Preprocessing)
 Pillow>=10.0.0
 python-multipart>=0.0.9
