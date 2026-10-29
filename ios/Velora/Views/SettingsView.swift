@@ -16,6 +16,7 @@ struct SettingsView: View {
     @State private var days: Set<String> = []
     @State private var time = Date.now
     @State private var savingSchedule = false
+    @State private var scheduleMessage: String?
     @State private var error: String?
 
     @State private var preferences: [String: NotificationPreference] = [:]
@@ -79,7 +80,11 @@ struct SettingsView: View {
                     } header: {
                         Text("Briefings")
                     } footer: {
-                        Text("Neue Briefings stehen im Berater-Tab – mit Mitteilungen bekommst du sie zusätzlich aufs iPhone.")
+                        if let scheduleMessage {
+                            Text(scheduleMessage)
+                        } else {
+                            Text("Neue Briefings stehen im Berater-Tab – mit Mitteilungen bekommst du sie zusätzlich aufs iPhone.")
+                        }
                     }
                     Section("Konto") {
                         if let tax = server.taxRegime { LabeledContent("Steuer", value: tax) }
@@ -248,9 +253,11 @@ struct SettingsView: View {
         let hhmm = String(format: "%02d:%02d", c.hour ?? 7, c.minute ?? 0)
         let ordered = Format.weekdays.map(\.key).filter(days.contains)
         do {
-            try await model.client.send("/api/settings", body: [
+            let result = try await model.client.send("/api/settings", body: [
                 "schedule": .object(["briefing_days": .array(ordered.map(JSONValue.string)), "briefing_time": .string(hhmm)]),
             ])
+            // Der Server meldet, ob der Zeitplan auch in der Crontab angekommen ist.
+            scheduleMessage = result.message
         } catch {
             self.error = error.localizedDescription
         }

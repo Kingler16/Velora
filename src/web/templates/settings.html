@@ -762,11 +762,14 @@ function saveSettings(e) {
     .then(({ ok, data: resp }) => {
         msg.style.display = 'block';
         if (ok) {
-            msg.style.background = 'var(--gain-bg)';
-            msg.style.color = 'var(--gain)';
-            msg.textContent = 'Einstellungen gespeichert. Seite wird neu geladen…';
-            if (window.toast && window.toast.success) window.toast.success('Einstellungen gespeichert');
-            setTimeout(() => location.reload(), 900);
+            // Zeitplan nicht in der Crontab angekommen → Hinweis länger stehen lassen.
+            const cronFailed = resp.cron && !resp.cron.applied;
+            msg.style.background = cronFailed ? 'var(--loss-bg)' : 'var(--gain-bg)';
+            msg.style.color = cronFailed ? 'var(--loss)' : 'var(--gain)';
+            msg.textContent = (resp.message || 'Einstellungen gespeichert.') + ' Seite wird neu geladen…';
+            if (cronFailed && window.toast && window.toast.error) window.toast.error(resp.cron.message);
+            else if (window.toast && window.toast.success) window.toast.success('Einstellungen gespeichert');
+            setTimeout(() => location.reload(), cronFailed ? 6000 : 900);
         } else {
             msg.style.background = 'var(--loss-bg)';
             msg.style.color = 'var(--loss)';

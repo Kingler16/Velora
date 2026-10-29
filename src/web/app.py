@@ -1055,13 +1055,20 @@ async def api_save_settings(request: Request):
             settings["user"]["kest_mode"] = user["kest_mode"]
         if "default_currency" in user:
             settings["user"]["default_currency"] = user["default_currency"]
+    schedule = None
     if "schedule" in body:
+        from src.briefing_cron import ScheduleError, normalize
         sched = body["schedule"]
         settings.setdefault("schedule", {})
-        if "briefing_days" in sched:
-            settings["schedule"]["briefing_days"] = sched["briefing_days"]
-        if "briefing_time" in sched:
-            settings["schedule"]["briefing_time"] = sched["briefing_time"]
+        days = sched.get("briefing_days", settings["schedule"].get("briefing_days", ["monday", "thursday"]))
+        time_ = sched.get("briefing_time", settings["schedule"].get("briefing_time", "07:00"))
+        try:
+            ordered, hour, minute = normalize(days, time_)
+        except ScheduleError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        settings["schedule"]["briefing_days"] = ordered
+        settings["schedule"]["briefing_time"] = f"{hour:02d}:{minute:02d}"
+        schedule = (ordered, settings["schedule"]["briefing_time"])
     if "web" in body:
         web = body["web"]
         settings.setdefault("web", {})
@@ -1071,7 +1078,18 @@ async def api_save_settings(request: Request):
     with open(settings_path, "w") as f:
         _json.dump(settings, f, indent=2, ensure_ascii=False)
 
-    return JSONResponse({"status": "ok", "message": "Einstellungen gespeichert"})
+    # Zeitplan wirkt erst, wenn er in der Crontab steht.
+    cron = None
+    if schedule:
+        from src.briefing_cron import apply_briefing_schedule
+        try:
+            cron = await asyncio.to_thread(apply_briefing_schedule, *schedule)
+        except Exception as e:
+            logger.exception("Briefing-Zeitplan nicht in Crontab übernommen")
+            cron = {"applied": False, "message": f"Zeitplan gespeichert, Crontab nicht geändert: {e}"}
+
+    message = "Einstellungen gespeichert." + (f" {cron['message']}" if cron else "")
+    return JSONResponse({"status": "ok", "message": message, "cron": cron})
 
 
 @app.get("/api/settings")

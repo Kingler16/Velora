@@ -9,7 +9,8 @@
 #   - velora-web            Web-Dashboard + API für die iOS-App (immer)
 #   - velora-bot            Telegram-Bot (nur wenn telegram.bot_token gesetzt ist)
 #   - velora-auth-watchdog  täglicher Test, ob der Claude-Login noch gilt (Timer)
-#   - Cron-Jobs für Briefings (Zeitplan aus settings.json) und Monatsreport
+#   - Cron-Jobs für Briefings (Zeitplan aus settings.json, später in App/Web änderbar)
+#     und Monatsreport
 set -e
 
 INSTALL_DIR="$(cd "${1:-$(dirname "$0")/..}" && pwd)"
@@ -41,19 +42,14 @@ setting() {  # setting <abschnitt> <schlüssel> → Wert aus settings.json (leer
     "$PY" -c "import json,sys; s=json.load(open('config/settings.json')); v=s.get(sys.argv[1],{}).get(sys.argv[2],''); print(','.join(v) if isinstance(v,list) else v)" "$1" "$2"
 }
 
-# 3. Cron: Briefings nach Zeitplan, Monatsreport am 1. um 9:00
-DAYS="$(setting schedule briefing_days)"; DAYS="${DAYS:-monday,thursday}"
-TIME="$(setting schedule briefing_time)"; TIME="${TIME:-07:00}"
-DOW="$(echo "$DAYS" | sed 's/monday/1/g;s/tuesday/2/g;s/wednesday/3/g;s/thursday/4/g;s/friday/5/g;s/saturday/6/g;s/sunday/0/g')"
-HOUR="$((10#${TIME%%:*}))"; MIN="$((10#${TIME##*:}))"
-( crontab -l 2>/dev/null | grep -v "src.main briefing\|src.main monthly\|# Velora" ; cat <<CRON
-# Velora — Briefing ($DAYS $TIME)
-$MIN $HOUR * * $DOW cd $INSTALL_DIR && ./venv/bin/python -m src.main briefing >> $INSTALL_DIR/logs/briefing.log 2>&1
+# 3. Cron: Briefings nach Zeitplan aus settings.json (src/briefing_cron.py – dieselbe Logik,
+#    mit der App und Web den Zeitplan später ändern), Monatsreport am 1. um 9:00
+( crontab -l 2>/dev/null | grep -v "src.main monthly\|# Velora — Monatsreport" ; cat <<CRON
 # Velora — Monatsreport am 1. um 9:00
 0 9 1 * * cd $INSTALL_DIR && ./venv/bin/python -m src.main monthly >> $INSTALL_DIR/logs/monthly.log 2>&1
 CRON
 ) | crontab -
-echo "✓ Cron: Briefing $DAYS $TIME, Monatsreport am 1."
+"$PY" -m src.briefing_cron
 
 # 4. systemd-Dienste. HOME zeigt auf den Benutzer, weil die Claude-CLI ihren Login
 #    unter \$HOME/.claude sucht.
