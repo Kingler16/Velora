@@ -14,32 +14,91 @@ logger = logging.getLogger(__name__)
 
 # ── Börsen-Kalender ──────────────────────────────────────────────
 
-# Wichtige Feiertage (US + EU), manuell gepflegt für 2026
-# Format: (Monat, Tag, Name, betroffene Börsen)
-HOLIDAYS_2026 = [
-    (1, 1, "Neujahr", "NYSE, XETRA, Wien"),
-    (1, 6, "Heilige Drei Könige", "Wien"),
-    (1, 19, "MLK Day", "NYSE"),
-    (2, 16, "Presidents' Day", "NYSE"),
-    (4, 3, "Karfreitag", "NYSE, XETRA, Wien"),
-    (4, 6, "Ostermontag", "XETRA, Wien"),
-    (5, 1, "Tag der Arbeit", "XETRA, Wien"),
-    (5, 25, "Memorial Day", "NYSE"),
-    (5, 25, "Pfingstmontag", "XETRA, Wien"),
-    (6, 4, "Fronleichnam", "Wien"),
-    (6, 19, "Juneteenth", "NYSE"),
-    (7, 3, "Independence Day (beobachtet)", "NYSE"),
-    (8, 15, "Mariä Himmelfahrt", "Wien"),
-    (9, 7, "Labor Day", "NYSE"),
-    (10, 26, "Nationalfeiertag", "Wien"),
-    (11, 1, "Allerheiligen", "Wien"),
-    (11, 26, "Thanksgiving", "NYSE"),
-    (12, 8, "Mariä Empfängnis", "Wien"),
-    (12, 24, "Heiligabend", "XETRA, Wien"),
-    (12, 25, "Weihnachten", "NYSE, XETRA, Wien"),
-    (12, 26, "Stefanitag", "XETRA, Wien"),
-    (12, 31, "Silvester", "XETRA, Wien"),
-]
+# Feiertage werden pro Jahr aus Regeln berechnet (fest, Ostern-abhängig, US-Wochentagsregeln).
+# Vorher stand hier eine Liste nur für 2026 — ab 2027 wäre jeder Tag als „offen“ gelaufen.
+
+
+def _easter_sunday(year: int) -> date:
+    """Ostersonntag (gregorianisch, Algorithmus nach Gauß/Meeus)."""
+    a = year % 19
+    b, c = divmod(year, 100)
+    d, e = divmod(b, 4)
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month, day = divmod(h + l - 7 * m + 114, 31)
+    return date(year, month, day + 1)
+
+
+def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
+    """n-ter Wochentag im Monat (weekday 0=Mo); n=-1 = letzter."""
+    if n > 0:
+        first = date(year, month, 1)
+        return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (n - 1))
+    nxt = date(year + (month == 12), month % 12 + 1, 1)
+    last = nxt - timedelta(days=1)
+    return last - timedelta(days=(last.weekday() - weekday) % 7)
+
+
+def _us_observed(d: date) -> date:
+    """NYSE-Regel: Samstag → Freitag davor, Sonntag → Montag danach."""
+    if d.weekday() == 5:
+        return d - timedelta(days=1)
+    if d.weekday() == 6:
+        return d + timedelta(days=1)
+    return d
+
+
+def holidays_for_year(year: int) -> list[tuple[date, str, str]]:
+    """Börsenfeiertage (NYSE, XETRA, Wien) eines Jahres als (Datum, Name, Börsen)."""
+    easter = _easter_sunday(year)
+    out = [
+        (date(year, 1, 1), "Neujahr", "XETRA, Wien"),
+        (date(year, 1, 6), "Heilige Drei Könige", "Wien"),
+        (easter - timedelta(days=2), "Karfreitag", "NYSE, XETRA, Wien"),
+        (easter + timedelta(days=1), "Ostermontag", "XETRA, Wien"),
+        (date(year, 5, 1), "Tag der Arbeit", "XETRA, Wien"),
+        (easter + timedelta(days=50), "Pfingstmontag", "XETRA, Wien"),
+        (easter + timedelta(days=60), "Fronleichnam", "Wien"),
+        (date(year, 8, 15), "Mariä Himmelfahrt", "Wien"),
+        (date(year, 10, 26), "Nationalfeiertag", "Wien"),
+        (date(year, 11, 1), "Allerheiligen", "Wien"),
+        (date(year, 12, 8), "Mariä Empfängnis", "Wien"),
+        (date(year, 12, 24), "Heiligabend", "XETRA, Wien"),
+        (date(year, 12, 25), "Weihnachten", "XETRA, Wien"),
+        (date(year, 12, 26), "Stefanitag", "XETRA, Wien"),
+        (date(year, 12, 31), "Silvester", "XETRA, Wien"),
+        # NYSE
+        (_nth_weekday(year, 1, 0, 3), "MLK Day", "NYSE"),
+        (_nth_weekday(year, 2, 0, 3), "Presidents' Day", "NYSE"),
+        (_nth_weekday(year, 5, 0, -1), "Memorial Day", "NYSE"),
+        (_nth_weekday(year, 9, 0, 1), "Labor Day", "NYSE"),
+        (_nth_weekday(year, 11, 3, 4), "Thanksgiving", "NYSE"),
+    ]
+    # Fixe US-Feiertage mit Ersatztag. Neujahr an einem Samstag wird NICHT am
+    # 31.12. nachgeholt (NYSE-Sonderregel).
+    for d, name in ((date(year, 6, 19), "Juneteenth"), (date(year, 7, 4), "Independence Day"),
+                    (date(year, 12, 25), "Weihnachten")):
+        obs = _us_observed(d)
+        out.append((obs, name + (" (beobachtet)" if obs != d else ""), "NYSE"))
+    ny = date(year, 1, 1)
+    if ny.weekday() != 5:
+        obs = _us_observed(ny)
+        out.append((obs, "Neujahr" + (" (beobachtet)" if obs != ny else ""), "NYSE"))
+    return out
+
+
+def _holidays_on(d: date) -> list[dict]:
+    """Feiertage an einem Tag, Börsen gleichnamiger Einträge zusammengeführt."""
+    merged: dict[str, list[str]] = {}
+    for hd, name, exchanges in holidays_for_year(d.year):
+        if hd == d:
+            ex = merged.setdefault(name.replace(" (beobachtet)", ""), [])
+            ex.extend(e.strip() for e in exchanges.split(",") if e.strip() not in ex)
+    return [{"name": n, "exchanges": ", ".join(ex)} for n, ex in merged.items()]
 
 
 def get_market_status(today: date = None) -> dict:
@@ -50,24 +109,19 @@ def get_market_status(today: date = None) -> dict:
     weekday = today.weekday()  # 0=Mo, 6=So
     is_weekend = weekday >= 5
 
-    # Feiertage heute
-    holidays_today = []
-    for month, day, name, exchanges in HOLIDAYS_2026:
-        if today.month == month and today.day == day:
-            holidays_today.append({"name": name, "exchanges": exchanges})
+    holidays_today = _holidays_on(today)
 
     # Nächste Feiertage (kommende 14 Tage)
     upcoming_holidays = []
     for i in range(1, 15):
         future = today + timedelta(days=i)
-        for month, day, name, exchanges in HOLIDAYS_2026:
-            if future.month == month and future.day == day:
-                upcoming_holidays.append({
-                    "date": future.isoformat(),
-                    "name": name,
-                    "exchanges": exchanges,
-                    "days_until": i,
-                })
+        for h in _holidays_on(future):
+            upcoming_holidays.append({
+                "date": future.isoformat(),
+                "name": h["name"],
+                "exchanges": h["exchanges"],
+                "days_until": i,
+            })
 
     nyse_open = not is_weekend and not any("NYSE" in h["exchanges"] for h in holidays_today)
     xetra_open = not is_weekend and not any("XETRA" in h["exchanges"] for h in holidays_today)
@@ -87,53 +141,122 @@ def get_market_status(today: date = None) -> dict:
 
 # ── Makro-Event-Kalender ────────────────────────────────────────
 
-# Bekannte Termine 2026 (Fed, EZB, wichtige US-Daten)
-MACRO_EVENTS_2026 = [
-    # Fed FOMC Meetings (Datum = Entscheidungstag)
-    ("2026-01-28", "Fed FOMC Zinsentscheid", "FED"),
-    ("2026-03-18", "Fed FOMC Zinsentscheid", "FED"),
-    ("2026-05-06", "Fed FOMC Zinsentscheid", "FED"),
-    ("2026-06-17", "Fed FOMC Zinsentscheid + Projektionen", "FED"),
-    ("2026-07-29", "Fed FOMC Zinsentscheid", "FED"),
-    ("2026-09-16", "Fed FOMC Zinsentscheid + Projektionen", "FED"),
-    ("2026-10-28", "Fed FOMC Zinsentscheid", "FED"),
-    ("2026-12-16", "Fed FOMC Zinsentscheid + Projektionen", "FED"),
-    # EZB Sitzungen
-    ("2026-01-22", "EZB Zinsentscheid", "EZB"),
-    ("2026-03-05", "EZB Zinsentscheid", "EZB"),
-    ("2026-04-16", "EZB Zinsentscheid", "EZB"),
-    ("2026-06-04", "EZB Zinsentscheid", "EZB"),
-    ("2026-07-16", "EZB Zinsentscheid", "EZB"),
-    ("2026-09-10", "EZB Zinsentscheid", "EZB"),
-    ("2026-10-22", "EZB Zinsentscheid", "EZB"),
-    ("2026-12-10", "EZB Zinsentscheid", "EZB"),
-    # Wichtige US-Daten (monatlich, approximiert)
-    ("2026-04-10", "US CPI (März)", "MACRO"),
-    ("2026-05-13", "US CPI (April)", "MACRO"),
-    ("2026-06-10", "US CPI (Mai)", "MACRO"),
-    ("2026-07-14", "US CPI (Juni)", "MACRO"),
-    ("2026-04-04", "US Jobs Report (März)", "MACRO"),
-    ("2026-05-08", "US Jobs Report (April)", "MACRO"),
-    ("2026-06-05", "US Jobs Report (Mai)", "MACRO"),
-]
+# Zentralbank-Termine lassen sich nicht berechnen — Fed und EZB veröffentlichen sie
+# jährlich. Neue Jahre hier ergänzen; fehlt ein Jahr, steht das als Hinweis im Kalender.
+CENTRAL_BANK_EVENTS = {
+    # Quellen: federalreserve.gov/monetarypolicy/fomccalendars.htm, ecb.europa.eu (Kalender
+    # der Governing-Council-Sitzungen). Datum = Entscheidungstag. 2026 war vorher in
+    # mehreren Terminen falsch (u. a. FOMC 16.12. statt 9.12., EZB 10.12. statt 17.12.).
+    2026: [
+        ("2026-01-28", "Fed FOMC Zinsentscheid", "FED"),
+        ("2026-03-18", "Fed FOMC Zinsentscheid + Projektionen", "FED"),
+        ("2026-04-29", "Fed FOMC Zinsentscheid", "FED"),
+        ("2026-06-17", "Fed FOMC Zinsentscheid + Projektionen", "FED"),
+        ("2026-07-29", "Fed FOMC Zinsentscheid", "FED"),
+        ("2026-09-16", "Fed FOMC Zinsentscheid + Projektionen", "FED"),
+        ("2026-10-28", "Fed FOMC Zinsentscheid", "FED"),
+        ("2026-12-09", "Fed FOMC Zinsentscheid + Projektionen", "FED"),
+        ("2026-02-05", "EZB Zinsentscheid", "EZB"),
+        ("2026-03-19", "EZB Zinsentscheid", "EZB"),
+        ("2026-04-30", "EZB Zinsentscheid", "EZB"),
+        ("2026-06-11", "EZB Zinsentscheid", "EZB"),
+        ("2026-07-23", "EZB Zinsentscheid", "EZB"),
+        ("2026-09-10", "EZB Zinsentscheid", "EZB"),
+        ("2026-10-29", "EZB Zinsentscheid", "EZB"),
+        ("2026-12-17", "EZB Zinsentscheid", "EZB"),
+    ],
+    2027: [  # FOMC: vorläufiger Plan (Pressemitteilung 05.09.2025)
+        ("2027-01-27", "Fed FOMC Zinsentscheid", "FED"),
+        ("2027-03-17", "Fed FOMC Zinsentscheid + Projektionen", "FED"),
+        ("2027-04-28", "Fed FOMC Zinsentscheid", "FED"),
+        ("2027-06-09", "Fed FOMC Zinsentscheid + Projektionen", "FED"),
+        ("2027-07-28", "Fed FOMC Zinsentscheid", "FED"),
+        ("2027-09-15", "Fed FOMC Zinsentscheid + Projektionen", "FED"),
+        ("2027-10-27", "Fed FOMC Zinsentscheid", "FED"),
+        ("2027-12-08", "Fed FOMC Zinsentscheid + Projektionen", "FED"),
+        ("2027-02-04", "EZB Zinsentscheid", "EZB"),
+        ("2027-03-18", "EZB Zinsentscheid", "EZB"),
+        ("2027-04-29", "EZB Zinsentscheid", "EZB"),
+        ("2027-06-10", "EZB Zinsentscheid", "EZB"),
+        ("2027-07-22", "EZB Zinsentscheid", "EZB"),
+        ("2027-09-09", "EZB Zinsentscheid", "EZB"),
+        ("2027-10-28", "EZB Zinsentscheid", "EZB"),
+        ("2027-12-16", "EZB Zinsentscheid", "EZB"),
+    ],
+}
+
+# US-Datentermine kommen live aus dem FRED-Release-Kalender (enthält angekündigte
+# künftige Termine). FRED-Release-IDs: 10 = CPI, 50 = Employment Situation,
+# 53 = GDP, 54 = Personal Income and Outlays (PCE).
+FRED_RELEASES = {
+    10: "US CPI (Inflation)",
+    50: "US Jobs Report (Arbeitsmarkt)",
+    53: "US BIP",
+    54: "US PCE (Fed-Inflationsmaß)",
+}
 
 
-def get_upcoming_macro_events(days_ahead: int = 30) -> list[dict]:
+def _fred_release_dates(api_key: str, start: date, end: date) -> list[dict]:
+    events = []
+    for release_id, name in FRED_RELEASES.items():
+        try:
+            resp = requests.get(
+                "https://api.stlouisfed.org/fred/release/dates",
+                params={
+                    "release_id": release_id, "api_key": api_key, "file_type": "json",
+                    "realtime_start": start.isoformat(), "realtime_end": "9999-12-31",
+                    "include_release_dates_with_no_data": "true",
+                    "sort_order": "asc", "limit": 10,
+                },
+                timeout=10,
+            )
+            for row in resp.json().get("release_dates", []):
+                d = date.fromisoformat(row["date"])
+                if start <= d <= end:
+                    events.append({"date": d.isoformat(), "name": name, "category": "MACRO"})
+        except Exception as e:
+            logger.warning(f"FRED-Release-Kalender {release_id} Fehler: {e}")
+    return events
+
+
+def _first_friday_jobs_reports(start: date, end: date) -> list[dict]:
+    """Ersatz ohne FRED-Key: Arbeitsmarktbericht meist am ersten Freitag im Monat (Näherung)."""
+    events = []
+    y, m = start.year, start.month
+    while date(y, m, 1) <= end:
+        d = _nth_weekday(y, m, 4, 1)
+        if start <= d <= end:
+            events.append({"date": d.isoformat(), "name": "US Jobs Report (ca., erster Freitag)",
+                           "category": "MACRO"})
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return events
+
+
+def get_upcoming_macro_events(days_ahead: int = 30, fred_api_key: str = "",
+                              today: date | None = None) -> list[dict]:
     """Holt kommende Makro-Events der nächsten X Tage."""
-    today = date.today()
+    today = today or date.today()
     cutoff = today + timedelta(days=days_ahead)
     events = []
 
-    for date_str, name, category in MACRO_EVENTS_2026:
-        event_date = date.fromisoformat(date_str)
-        if today <= event_date <= cutoff:
-            events.append({
-                "date": date_str,
-                "name": name,
-                "category": category,
-                "days_until": (event_date - today).days,
-            })
+    for year in range(today.year, cutoff.year + 1):
+        if year not in CENTRAL_BANK_EVENTS:
+            logger.warning(f"Zentralbank-Termine für {year} nicht gepflegt (CENTRAL_BANK_EVENTS)")
+            events.append({"date": date(year, 1, 1).isoformat() if year > today.year else today.isoformat(),
+                           "name": f"Hinweis: Fed-/EZB-Termine {year} nicht hinterlegt",
+                           "category": "INFO"})
+            continue
+        for date_str, name, category in CENTRAL_BANK_EVENTS[year]:
+            if today <= date.fromisoformat(date_str) <= cutoff:
+                events.append({"date": date_str, "name": name, "category": category})
 
+    if fred_api_key:
+        events.extend(_fred_release_dates(fred_api_key, today, cutoff))
+    else:
+        events.extend(_first_friday_jobs_reports(today, cutoff))
+
+    for e in events:
+        e["days_until"] = (date.fromisoformat(e["date"]) - today).days
     events.sort(key=lambda x: x["date"])
     return events
 
@@ -370,7 +493,7 @@ def format_full_calendar(market_status: dict, earnings: list[dict], macro_events
     lines.append("\n=== MAKRO-EVENTS ===")
     if macro_events:
         for e in macro_events:
-            emoji = {"FED": "🇺🇸", "EZB": "🇪🇺", "MACRO": "📊"}.get(e["category"], "📅")
+            emoji = {"FED": "🇺🇸", "EZB": "🇪🇺", "MACRO": "📊", "INFO": "ℹ️"}.get(e["category"], "📅")
             lines.append(f"  {e['date']} (in {e['days_until']}d): {emoji} {e['name']}")
     else:
         lines.append("  Keine anstehenden Makro-Events.")

@@ -345,12 +345,16 @@ def _build_price_dict(ticker: str, info: dict, hist_1y) -> dict | None:
 
     # 1y-Tagesreturns fürs Downstream-Risk/Korrelation (Contract: performance.py liest das)
     returns: list[float] = []
+    return_dates: list[str] = []
     if hist_1y is not None and not hist_1y.empty:
         try:
-            rets = hist_1y["Close"].astype(float).pct_change().dropna()
+            rets = hist_1y["Close"].astype(float).dropna().pct_change().dropna()
             returns = [round(float(r), 5) for r in rets]
-        except (KeyError, ValueError, TypeError):
-            returns = []
+            # Handelstage dazu, damit Korrelationen nach Datum statt nach Position
+            # ausgerichtet werden (US- und EU-Börsen haben verschiedene Feiertage).
+            return_dates = [d.strftime("%Y-%m-%d") for d in rets.index]
+        except (KeyError, ValueError, TypeError, AttributeError):
+            returns, return_dates = [], []
 
     price_dict = {
         "ticker": ticker,
@@ -390,6 +394,7 @@ def _build_price_dict(ticker: str, info: dict, hist_1y) -> dict | None:
         "stale_quote": stale_quote,
         # 1y-Tagesreturns fürs Downstream-Risk
         "returns": returns,
+        "return_dates": return_dates,
         "source": "yfinance",
         "timestamp": datetime.now().isoformat(),
     }
@@ -472,13 +477,18 @@ def _fetch_single_index(name: str, ticker: str) -> tuple[str, dict | None]:
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="5d")
-        if hist.empty:
+        closes = hist["Close"].dropna() if not hist.empty else hist
+        if closes.empty:
             return name, None
-        current = float(hist["Close"].iloc[-1])
-        prev = float(hist["Close"].iloc[0])
+        current = float(closes.iloc[-1])
+        prev_day = float(closes.iloc[-2]) if len(closes) >= 2 else current
+        first = float(closes.iloc[0])
         return name, {
             "value": round(current, 2),
-            "change_pct": round((current / prev - 1) * 100, 2),
+            # change_pct = Tagesänderung (wie bei Aktien); bisher war das stillschweigend
+            # die 5-Tages-Änderung und stand im Prompt neben den Tageswerten.
+            "change_pct": round((current / prev_day - 1) * 100, 2),
+            "change_5d_pct": round((current / first - 1) * 100, 2),
             "source": "yfinance",
             "timestamp": datetime.now().isoformat(),
         }
@@ -499,6 +509,8 @@ def fetch_index_data() -> dict:
         "Gold": "GC=F",
         "EUR/USD": "EURUSD=X",
         "BTC/USD": "BTC-USD",
+        # Vergleichsmaßstab der Erfolgsbilanz (src/analysis/track_record.py)
+        "MSCI World (EUR)": "EUNL.DE",
     }
     results = {}
     with ThreadPoolExecutor(max_workers=min(10, len(indices))) as ex:
@@ -544,7 +556,7 @@ def collect_all_market_data(portfolio: dict) -> dict:
     watchlist_data = {}
 
     # Alle Ticker-Fetches (Portfolio + Watchlist + Indizes) parallel
-    total = len(tickers) + len(watchlist_items) + 9  # 9 = Anzahl Indizes
+    total = len(tickers) + len(watchlist_items) + 10  # 10 = Anzahl Indizes
     max_workers = min(12, max(1, total))
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:

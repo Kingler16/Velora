@@ -68,7 +68,8 @@ WICHTIGE REGELN:
 
 9. RISIKO-PROFIL DES NUTZERS:
    - {user_profile}
-   - WICHTIG: Auch bei hoher Risikotoleranz — sei KONSERVATIV mit Empfehlungen. Kapitalerhalt geht vor Rendite. Empfehle NIE mehr als 5-10% des Portfolios in einer einzelnen Aktion zu bewegen. Bei Unsicherheit: lieber abwarten.
+   - Richte Risiko und Handelsfrequenz an Ziel und Horizont des Nutzers aus (Profil oben bzw. Mandat §0) — nicht pauschal defensiv. Beide Fehler kosten Geld: ein Fehlkauf UND Kapital, das dauerhaft ungenutzt bleibt. Abwarten ist legitim, aber kein Selbstzweck.
+   - ORDER-GRÖSSE: Es gelten die Grenzen des Mandats (Order-Deckel, Positionslimit). Ohne Mandat: 2–5 % des Gesamtvermögens pro Kauf.
 """
 
 
@@ -148,7 +149,7 @@ Erstelle das Briefing. Struktur:
 
 2b. STOP-CHECK (nur wenn die Sektion STOP-LOSS-LAGE vorhanden ist): Nenne JEDE Position ohne Stop beim Namen und gib einen konkreten Stop-Kurs in der Quote-Währung an. Hintergrund: Der Nutzer kann bei Trade Republic und Erste Bank KEINEN Stop zur Limit-Kauforder hinterlegen — er muss ihn nach der Ausführung von Hand nachtragen, und genau das geht unter. Ein Satz pro Position reicht: Titel, Stop-Kurs, was das im Verlustfall kostet. Nutze den Soll-Stop als Ausgangspunkt und weiche begründet ab, wenn Earnings anstehen oder die Charttechnik einen anderen Halt nahelegt. Auffällige Ist-Stops (zu eng, zu weit, ungültig, nachziehbar) ebenfalls ansprechen. Wenn alles sauber gesichert ist: ein Satz, fertig. Diese Hinweise gehören in den Fliesstext — in die JSON-Empfehlungsliste kommt ein Stop nur als "hold" mit stop_loss, und nur für Positionen, bei denen sich der Stop wirklich ändern soll.
 3. EARNINGS & EVENTS (welche Positionen reporten bald? Was ist zu erwarten? Kommende Katalysatoren.)
-4. EMPFEHLUNGEN — STRENG: max. 3 Einträge pro Briefing, nur High-Conviction. Wenn nichts überzeugt: 0 Empfehlungen ist die richtige Antwort. "Halten" / "Beobachten ohne Order" gehört in den Fließtext, NICHT in die JSON-Liste. Jede Empfehlung MUSS konkret sein: Einstieg, Stop-Loss, Ziel, Risk/Reward UND Stückzahl. Bei Kauf: Anzahl Stück. Bei Verkauf: Prozent der Position ODER Anzahl Stück. Bei buy/watch IMMER eine konkrete Stückzahl (`shares`) ODER einen €-Betrag angeben — orientiert an der freien Cash-Quote (z.B. 2-5% des Depotwerts pro Position). Ohne Stückzahl ist die Empfehlung nicht direkt ausführbar. Berücksichtige Tax-Loss-Harvesting wenn sinnvoll. WICHTIG: Leite Stop-Distanzen aus dem ATR ab (z.B. Stop ≈ Kurs − 1,5–2×ATR) statt sie zu raten — zu enge Stops sind der häufigste Verlustgrund. Berücksichtige Klumpenrisiko/Korrelation (effektive Positionen) und nutze die Analysten-Kursziele als Konsens-Anker für deine Ziele. Jede Empfehlung MUSS das Mandat (§0) einhalten — Block-Verstöße werden beim Speichern automatisch verworfen, Warn-Verstöße markiert; schlage Block-Verstöße gar nicht erst vor. KALIBRIERUNG: Schau VOR dem Empfehlen auf deine Hit-Rate + Expectancy in der EMPFEHLUNGS-BILANZ. Bei Hit-Rate < 50% nenne explizit, was deine letzten Fehlschläge gemeinsam hatten und warum diese Empfehlung anders ist; übergewichte nicht systematisch dieselbe These/denselben Sektor, in der du zuletzt falsch lagst.
+4. EMPFEHLUNGEN — STRENG: max. 3 Einträge pro Briefing, nur High-Conviction. Wenn nichts überzeugt: 0 Empfehlungen ist die richtige Antwort. "Halten" / "Beobachten ohne Order" gehört in den Fließtext, NICHT in die JSON-Liste. Jede Empfehlung MUSS konkret sein: Einstieg, Stop-Loss, Ziel, Risk/Reward UND Stückzahl. Bei Kauf: Anzahl Stück. Bei Verkauf: Prozent der Position ODER Anzahl Stück. Bei buy/watch IMMER eine konkrete Stückzahl (`shares`) ODER einen €-Betrag angeben — innerhalb der ORDER-GRÖSSE aus Regel 9 und orientiert an der freien Cash-Quote. Ohne Stückzahl ist die Empfehlung nicht direkt ausführbar. Berücksichtige Tax-Loss-Harvesting wenn sinnvoll. WICHTIG: Leite Stop-Distanzen aus dem ATR ab (z.B. Stop ≈ Kurs − 1,5–2×ATR) statt sie zu raten — zu enge Stops sind der häufigste Verlustgrund. Berücksichtige Klumpenrisiko/Korrelation (effektive Positionen) und nutze die Analysten-Kursziele als Konsens-Anker für deine Ziele. Jede Empfehlung MUSS das Mandat (§0) einhalten — Block-Verstöße werden beim Speichern automatisch verworfen, Warn-Verstöße markiert; schlage Block-Verstöße gar nicht erst vor. KALIBRIERUNG: Schau VOR dem Empfehlen auf die EMPFEHLUNGS-BILANZ (Trefferquote mit Konfidenzintervall, Ø Überrendite ggü. Benchmark). Unter 20 bewerteten Fällen ist sie Rauschen — dann keine Schlüsse daraus ziehen, weder Richtung Vorsicht noch Richtung Mut. Ab 20 Fällen und Trefferquote < 50% nenne explizit, was deine letzten Fehlschläge gemeinsam hatten und warum diese Empfehlung anders ist; übergewichte nicht systematisch dieselbe These/denselben Sektor, in der du zuletzt falsch lagst.
 5. NEUE IDEEN — Kandidaten kommen aus WATCHLIST und SCREENER-KANDIDATEN oben. Beide Listen liefern dir echte Kursdaten (Kurs, ATR, RSI, SMA200, 52W-Range), du kannst also Einstieg, Stop und Ziel genauso sauber rechnen wie bei einer Depot-Position — nichts davon musst du schätzen. Der Screener zeigt bewusst Sektoren, die im Depot fehlen: das ist Diversifikation, kein Aktionismus. Prüfe pro Kandidat: Bewertung, Technik, Portfolio-Fit, Mandats-Konformität. Wenn einer überzeugt, gehört er als vollwertige buy/watch-Empfehlung in die JSON-Liste unter Punkt 4 (mit Stückzahl) — nicht nur als Fließtext-Erwähnung. Wenn keiner überzeugt: sag knapp warum, das ist eine valide Antwort. Es ist KEINE Liste fremder Analystenempfehlungen, die du abnicken sollst — es sind Rohdaten für deine eigene Analyse.
 6. RISIKEN AUF DEM RADAR (was könnte schiefgehen?)
 7. EMPFEHLUNGS-BILANZ (wenn es offene Empfehlungen gibt: wie haben sie sich entwickelt? Für frisch ABGESCHLOSSENE Empfehlungen: kurzes POST-MORTEM — war die ursprüngliche These richtig oder falsch, und WARUM? Was lernst du daraus für künftige Empfehlungen?)
@@ -185,21 +186,14 @@ MONTHLY_REPORT_TEMPLATE = """
 
 Erstelle den Monatsreport. Struktur:
 
-1. MONATSÜBERBLICK: Wie ist der Monat gelaufen? Performance in € und %
+1. MONATSÜBERBLICK: Wie ist der Monat gelaufen? Nutze die berechneten Zahlen aus PERFORMANCE — rechne Gesamtwert und Renditen NICHT selbst aus
 2. TOP & FLOP: Beste und schlechteste Positionen
 3. EMPFEHLUNGS-BILANZ: Welche Empfehlungen wurden gegeben? Wie haben sie performt?
 4. PORTFOLIO-ENTWICKLUNG: Vergleich zum Vormonat (Gesamtwert, Allokation, Cash-Quote)
 5. AUSBLICK: Was steht nächsten Monat an? (Earnings, Makro-Events, etc.)
 6. LESSONS LEARNED: Was lief gut, was schlecht, was lernen wir daraus?
 
-Formatiere in Telegram-kompatiblem HTML.
-
-Am Ende: JSON-Block mit:
-- "total_value": Gesamtwert des Portfolios
-- "monthly_return_pct": Monatsrendite in %
-- "monthly_return_eur": Monatsrendite in €
-- "top_performer": {{"ticker": "...", "return_pct": ...}}
-- "worst_performer": {{"ticker": "...", "return_pct": ...}}
+Formatiere in Telegram-kompatiblem HTML. Kein JSON-Block — die Kennzahlen speichert das System selbst.
 """
 
 
@@ -553,7 +547,10 @@ def format_lookthrough(lt: dict | None) -> str:
 def format_index_data(indices: dict) -> str:
     lines = []
     for name, data in indices.items():
-        lines.append(f"{name}: {data['value']} ({data['change_pct']:+.2f}%) [{data['source']}, {data['timestamp'][:16]}]")
+        five = data.get("change_5d_pct")
+        five_str = f", 5 Tage {five:+.2f}%" if five is not None else ""
+        lines.append(f"{name}: {data['value']} (heute {data['change_pct']:+.2f}%{five_str}) "
+                     f"[{data['source']}, {data['timestamp'][:16]}]")
     return "\n".join(lines)
 
 
@@ -612,7 +609,15 @@ def build_briefing_prompt(portfolio: dict, market_data: dict, macro_data: dict, 
                 detail = s.get("rating_trend_detail")
                 trend_str = f" | Analysten-Rating: {trend}" + (f" ({detail})" if detail else "")
             if bull is not None:
-                lines.append(f"  {ticker}: {bull:.0%} bullish / {bear:.0%} bearish (Artikel letzte Woche: {buzz or '?'}){trend_str}")
+                # bullish/bearish kommen bereits in Prozent (0–100), nicht als Anteil —
+                # `:.0%` machte daraus „6500 % bullish“.
+                if s.get("source") == "finnhub":
+                    basis = f"Artikel letzte Woche: {buzz or '?'}"
+                    kind = "News-Sentiment"
+                else:
+                    basis = f"{buzz or '?'} Analysten"
+                    kind = "Analysten"
+                lines.append(f"  {ticker}: {kind} {bull:.0f}% bullish / {bear or 0:.0f}% bearish ({basis}){trend_str}")
             elif trend:
                 lines.append(f"  {ticker}:{trend_str}")
         if lines:
@@ -639,7 +644,7 @@ def build_briefing_prompt(portfolio: dict, market_data: dict, macro_data: dict, 
 
 {bloomberg_str}
 
-=== SENTIMENT-ANALYSE (Finnhub) ===
+=== ANALYSTEN-STIMMUNG (Anteil Kauf-/Verkaufsratings, Yahoo Finance) ===
 
 {sentiment_str}
 """
@@ -653,7 +658,7 @@ def build_ticker_analysis_prompt(ticker: str, ticker_data: dict, portfolio: dict
     """Baut den Prompt für eine On-Demand Ticker-Analyse."""
     p = ticker_data.get("price", {})
     # Rohes returns-Array (252 Tagesreturns) NICHT in den Prompt dumpen — bloated nur.
-    p = {k: v for k, v in p.items() if k != "returns"}
+    p = {k: v for k, v in p.items() if k not in ("returns", "return_dates")}
     ticker_str = json.dumps(p, indent=2, default=str)
     news_str = "\n".join(f"- {a['title']}: {a['description'][:150]}" for a in news) if news else "Keine News gefunden."
 

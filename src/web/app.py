@@ -161,8 +161,37 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(_run_refresh())
     else:
         logger.info(f"Cache gefunden (Alter: {age:.0f} Minuten)")
+    daily_task = asyncio.create_task(_daily_track_loop())
     yield
+    daily_task.cancel()
     logger.info("Velora Dashboard gestoppt")
+
+
+# Tagesabschluss für die Erfolgsbilanz: nach US-Börsenschluss (22:00 MEZ) einmal
+# Kurse holen, Depot-NAV speichern und laufende Empfehlungen bewerten. Läuft im
+# Web-Dienst, damit keine zusätzliche Crontab-Zeile nötig ist.
+DAILY_TRACK_HOUR = 22
+DAILY_TRACK_MINUTE = 45
+
+
+async def _daily_track_loop():
+    from datetime import datetime as _dt
+    from src.analysis import track_record
+    while True:
+        try:
+            now = _dt.now()
+            due = (now.weekday() < 5
+                   and (now.hour, now.minute) >= (DAILY_TRACK_HOUR, DAILY_TRACK_MINUTE)
+                   and not track_record.has_nav_for(now.date()))
+            if due:
+                result = await asyncio.to_thread(track_record.run_daily)
+                if result.get("market_data", {}).get("positions"):
+                    save_cache("market_data", result["market_data"])
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Tagesabschluss Erfolgsbilanz fehlgeschlagen")
+        await asyncio.sleep(30 * 60)
 
 
 app = FastAPI(title="Velora Dashboard", lifespan=lifespan)
@@ -1222,41 +1251,8 @@ async def api_system_update():
 def _maybe_append_monthly_snapshot(overview: dict) -> bool:
     """Haengt einen Snapshot fuer den aktuellen Monat an monthly_snapshots.json an,
     falls fuer diesen Monat noch keiner existiert. Returns True wenn geschrieben."""
-    from datetime import datetime
-    import json
-    memory_dir = Path(__file__).parent.parent.parent / "memory"
-    path = memory_dir / "monthly_snapshots.json"
-    memory_dir.mkdir(parents=True, exist_ok=True)
-    snapshots = []
-    if path.exists():
-        try:
-            with open(path) as f:
-                snapshots = json.load(f)
-        except Exception:
-            snapshots = []
-    now = datetime.now()
-    month_key = now.strftime("%Y-%m")
-    if any(s.get("month") == month_key for s in snapshots):
-        return False
-    snap = {
-        "date": now.isoformat(),
-        "month": month_key,
-        "total_value": round(overview.get("total_value_eur", 0), 2),
-        "portfolio_value": round(overview.get("total_value_eur", 0), 2),
-        "holdings_value_eur": round(overview.get("holdings_value_eur", 0), 2),
-        "cash_total": round(overview.get("cash_total", 0), 2),
-        "total_pnl_eur": round(overview.get("total_pnl_eur", 0), 2),
-        "total_pnl_pct": round(overview.get("total_pnl_pct", 0), 2),
-        "position_count": len(overview.get("positions", [])),
-    }
-    snapshots.append(snap)
-    snapshots = snapshots[-24:]
-    tmp = path.with_suffix(".json.tmp")
-    with open(tmp, "w") as f:
-        json.dump(snapshots, f, indent=2, default=str)
-    tmp.replace(path)
-    logger.info(f"Monthly-Snapshot fuer {month_key} angelegt: {snap['total_value']}€")
-    return True
+    from src.analysis.memory import append_monthly_snapshot
+    return append_monthly_snapshot(overview) is not None
 
 
 @app.post("/api/refresh")
@@ -1350,7 +1346,7 @@ async def _run_refresh():
         async def run_calendar():
             earnings = await asyncio.to_thread(fetch_earnings_calendar, portfolio_tickers)
             market_status = get_market_status()
-            macro_events = get_upcoming_macro_events(days_ahead=30)
+            macro_events = await asyncio.to_thread(get_upcoming_macro_events, 30, fred_key)
             save_cache("calendar_data", {
                 "earnings": earnings,
                 "market_status": market_status,
@@ -1384,6 +1380,8 @@ async def _run_refresh():
             market_data = market_result if isinstance(market_result, dict) else get_market_data()
             overview = compute_portfolio_overview(portfolio, market_data)
             _maybe_append_monthly_snapshot(overview)
+            from src.analysis.track_record import record_nav
+            record_nav(overview, market_data)
         except Exception as e:
             logger.error(f"Snapshot-Append fehlgeschlagen: {e}")
 

@@ -14,7 +14,7 @@ import json
 import logging
 import sys
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -46,7 +46,6 @@ from src.analysis.memory import (
     save_briefing_summary,
     save_recommendations,
     update_recommendation_outcomes,
-    save_monthly_snapshot,
     update_notes,
     add_position_thesis,
     load_memory,
@@ -55,7 +54,6 @@ from src.analysis.chat_history import add_message, get_history_for_prompt
 from src.analysis.performance import (
     calculate_benchmark_comparison,
     find_tax_loss_harvesting,
-    track_recommendation_performance,
     classify_regime,
     compute_risk_metrics,
     compute_correlation_data,
@@ -75,6 +73,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+# httpx loggt auf INFO jede Request-URL — bei Telegram steht darin der Bot-Token
+# im Klartext (…/bot<TOKEN>/getUpdates) und landete so im Journal.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 CONFIG_DIR = Path(__file__).parent.parent / "config"
@@ -113,7 +115,8 @@ async def run_briefing():
         logger.info("Sammle Kalender-Daten...")
         earnings = fetch_earnings_calendar(tickers)
         market_status = get_market_status()
-        macro_events = get_upcoming_macro_events(days_ahead=30)
+        macro_events = get_upcoming_macro_events(
+            days_ahead=30, fred_api_key=settings.get("fred", {}).get("api_key", ""))
         calendar_str = format_full_calendar(market_status, earnings, macro_events)
 
         # 1b. Cache für Dashboard schreiben
@@ -130,7 +133,6 @@ async def run_briefing():
         logger.info("Berechne Performance-Metriken...")
         benchmark = calculate_benchmark_comparison(market_data)
         tax_loss = find_tax_loss_harvesting(portfolio, market_data)
-        rec_tracking = track_recommendation_performance(market_data)
         regime = classify_regime(market_data, macro_data)
         risk_metrics = compute_risk_metrics(market_data, macro_data)
         correlation = compute_correlation_data(market_data)
@@ -159,6 +161,14 @@ async def run_briefing():
         logger.info("Lade Memory...")
         update_recommendation_outcomes(market_data)
         memory_context = get_context_for_prompt()
+
+        # 3b. Erfolgsbilanz: Archiv nachführen (Tageshoch/-tief seit dem Anlegen),
+        #     Depot-NAV des Tages speichern.
+        from src.analysis import track_record
+        track_record.ensure_backfilled(load_memory().get("recommendations", []))
+        track_record.evaluate_open()
+        track_record.record_nav(overview, market_data)
+        rec_tracking = track_record.format_for_prompt()
 
         # 4. Prompt bauen + Claude aufrufen
         logger.info("Baue Prompt...")
@@ -199,11 +209,21 @@ async def run_briefing():
         full_prompt = base_prompt + extra
 
         logger.info(f"Rufe Claude auf (Prompt: {len(full_prompt)} Zeichen)...")
-        result = ask_claude(build_system_prompt(load_settings(), load_portfolio()), full_prompt)
+        system_prompt = build_system_prompt(load_settings(), load_portfolio())
+        result = ask_claude(system_prompt, full_prompt)
+        # Eingaben + Antwort sichern: spätere Prompt-Varianten lassen sich so auf
+        # denselben Daten vergleichen.
+        snapshot_path = track_record.save_input_snapshot(system_prompt, full_prompt, result.get("text"))
 
         # 5. Memory updaten
         briefing_text = strip_json_block(result["text"])
         structured = result.get("structured")
+        if not structured:
+            # Ohne JSON gehen alle Empfehlungen verloren, obwohl der Text sie nennt.
+            logger.error("Briefing ohne auswertbaren JSON-Block — Empfehlungen nicht gespeichert")
+            await send_system_alert("Briefing ohne JSON-Block",
+                                    "Die Empfehlungen dieses Briefings konnten nicht gespeichert werden.")
+        saved = {"accepted": [], "dropped": []}
         if structured:
             if structured.get("summary"):
                 save_briefing_summary(
@@ -213,7 +233,7 @@ async def run_briefing():
                     full_text=briefing_text,
                 )
             if structured.get("recommendations"):
-                save_recommendations(structured["recommendations"], overview, market_data)
+                saved = save_recommendations(structured["recommendations"], overview, market_data) or saved
             if structured.get("market_regime"):
                 update_notes("market_regime", structured["market_regime"])
             if structured.get("new_insights"):
@@ -232,6 +252,8 @@ async def run_briefing():
             if structured.get("position_theses_updates"):
                 for ticker, thesis in structured["position_theses_updates"].items():
                     add_position_thesis(ticker, thesis)
+        track_record.record_briefing(saved["accepted"], saved["dropped"], market_data, regime,
+                                     candidates, snapshot_path)
 
         # 6. Via Telegram senden (wenn aktiviert)
         try:
@@ -292,9 +314,24 @@ async def run_monthly_report():
         portfolio_summary = build_portfolio_summary(portfolio, market_data)
         benchmark = calculate_benchmark_comparison(market_data)
         tax_loss = find_tax_loss_harvesting(portfolio, market_data)
-        rec_tracking = track_recommendation_performance(market_data)
+
+        # Alle Kennzahlen rechnet der Code; das LLM kommentiert nur. Früher lieferte das
+        # LLM Gesamtwert und Monatsrendite als JSON, die dann als Snapshot gespeichert
+        # wurden — oder gar nichts, wenn der JSON-Block fehlte.
+        from src.analysis import track_record
+        from src.analysis.memory import append_monthly_snapshot
+        from src.web.services.portfolio_service import compute_portfolio_overview
+        overview = compute_portfolio_overview(portfolio, market_data)
+        append_monthly_snapshot(overview)
+        track_record.record_nav(overview, market_data)
+        track_record.evaluate_open()
+        rec_tracking = track_record.format_for_prompt()
+        perf_str = _format_month_performance(overview, memory.get("monthly_snapshots", []))
 
         monthly_data = f"""
+PERFORMANCE (berechnet — übernimm diese Zahlen, rechne nichts selbst):
+{perf_str}
+
 PORTFOLIO-STAND:
 {portfolio_summary}
 
@@ -318,10 +355,6 @@ INDIZES:
         prompt = MONTHLY_REPORT_TEMPLATE.format(monthly_data=monthly_data, monthly_snapshots=snapshots)
 
         result = ask_claude(build_system_prompt(load_settings(), load_portfolio()), prompt)
-
-        structured = result.get("structured")
-        if structured:
-            save_monthly_snapshot(structured)
 
         briefing_text = strip_json_block(result["text"])
         month_label = f"{_MONTHS_DE[datetime.now().month - 1]} {datetime.now().year}"
@@ -370,6 +403,35 @@ INDIZES:
         await send_system_alert("Monatsreport fehlgeschlagen", str(e))
 
     logger.info("=== MONATSREPORT ENDE ===")
+
+
+def _format_month_performance(overview: dict, snapshots: list[dict], now: datetime | None = None) -> str:
+    """Monatsvergleich aus Code-Zahlen: Vermögen ggü. Vormonats-Snapshot und Depot-TWR."""
+    from datetime import date as _date
+    from src.analysis import track_record
+    now = now or datetime.now()
+    def eur(x, sign=""):
+        return f"{x:{sign},.0f}".replace(",", ".") + " €"
+
+    lines = [f"Gesamtvermögen jetzt: {eur(overview.get('total_value_eur', 0))} "
+             f"(davon Cash {eur(overview.get('cash_total', 0))} = {overview.get('cash_pct', 0):.1f} %)"]
+    this_month = now.strftime("%Y-%m")
+    previous = [s for s in snapshots if s.get("month") and s["month"] < this_month and s.get("total_value")]
+    if previous:
+        prev = sorted(previous, key=lambda s: s["month"])[-1]
+        diff = overview.get("total_value_eur", 0) - prev["total_value"]
+        lines.append(f"Veränderung seit Snapshot {prev['month']}: {eur(diff, '+')} "
+                     f"({diff / prev['total_value'] * 100:+.1f} %) — enthält Einzahlungen, ist also keine Rendite")
+    first_prev = (_date(now.year, now.month, 1) - timedelta(days=1)).replace(day=1)
+    perf = track_record.nav_performance(since=first_prev)
+    if perf and perf.get("twr_pct") is not None:
+        line = f"Depot-Rendite zeitgewichtet {perf['from']} bis {perf['to']}: {perf['twr_pct']:+.2f} %"
+        if perf.get("bench_pct") is not None:
+            line += f" · {track_record.BENCHMARK_NAME}: {perf['bench_pct']:+.2f} %"
+        lines.append(line)
+    else:
+        lines.append("Depot-Rendite zeitgewichtet: noch zu wenig tägliche Messpunkte.")
+    return "\n".join(lines)
 
 
 async def run_ticker_analysis(ticker: str, update=None, context=None):

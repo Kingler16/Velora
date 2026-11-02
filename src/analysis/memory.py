@@ -141,26 +141,31 @@ def save_recommendations(recommendations: list[dict], overview: dict | None = No
     strukturierten Regeln geprüft: block-Verstöße werden verworfen, warn-Verstöße
     landen als rec["mandate_warnings"] (UI zeigt sie als Hinweis). `overview` =
     compute_portfolio_overview, damit Allokations-Regeln gegen echte Werte rechnen.
+
+    Returns {"accepted": [recs], "dropped": [{ticker, action, reason}]} fürs Archiv.
     """
     from src.analysis.mandate import load_mandate, validate_against_mandate
 
     existing = _load_json("recommendations.json", [])
     mandate = load_mandate()
-    accepted = 0
-    dropped = 0
+    accepted_recs: list[dict] = []
+    dropped_recs: list[dict] = []
+
+    def drop(rec, reason):
+        dropped_recs.append({"ticker": rec.get("ticker", "?"), "action": rec.get("action"), "reason": reason})
 
     for rec in recommendations:
         ok, reason = _is_actionable(rec)
         if not ok:
             logger.info("Recommendation dropped (%s): %s", rec.get("ticker", "?"), reason)
-            dropped += 1
+            drop(rec, reason)
             continue
 
         if mandate:
             verdict, violations = validate_against_mandate(rec, mandate, overview)
             if verdict == "block":
                 logger.info("Recommendation mandate-blocked (%s): %s", rec.get("ticker", "?"), "; ".join(violations))
-                dropped += 1
+                drop(rec, "Mandat: " + "; ".join(violations))
                 continue
             if verdict == "warn":
                 rec["mandate_warnings"] = violations
@@ -168,7 +173,7 @@ def save_recommendations(recommendations: list[dict], overview: dict | None = No
         ok_p, reason_p = _plausi_check(rec, market_data)
         if not ok_p:
             logger.info("Recommendation plausi-dropped (%s): %s", rec.get("ticker", "?"), reason_p)
-            dropped += 1
+            drop(rec, reason_p)
             continue
 
         rec["date"] = datetime.now().isoformat()
@@ -184,16 +189,28 @@ def save_recommendations(recommendations: list[dict], overview: dict | None = No
                 break
         if not replaced:
             existing.append(rec)
-        accepted += 1
+        accepted_recs.append(rec)
 
-    logger.info("save_recommendations: %d accepted, %d dropped", accepted, dropped)
+    logger.info("save_recommendations: %d accepted, %d dropped", len(accepted_recs), len(dropped_recs))
     # Truncation nach Status trennen: alle offenen behalten + die letzten 40 geschlossenen.
     # Vorher kürzte existing[-50:] rein FIFO — das warf die abgeschlossenen Recs (= die
     # Lern-Daten mit echten Outcomes) zuerst weg, sobald viele offene nachrückten.
+    # Die Listen-Reihenfolge taugt dafür NICHT: offene Recs stehen vorne, und wird eine
+    # davon geschlossen, liegt sie vor allen alten — `[-40:]` warf so genau die NEUESTEN
+    # Abschlüsse weg und die Bilanz fror ein. Deshalb nach Abschlussdatum sortieren.
     open_r = [r for r in existing if r.get("status") == "open"]
-    closed_r = [r for r in existing if r.get("status") != "open"]
-    existing = open_r + closed_r[-40:]
+    closed_r = sorted((r for r in existing if r.get("status") != "open"), key=_closed_sort_key)
+    existing = open_r + closed_r[-CLOSED_KEEP:]
     _save_json("recommendations.json", existing)
+    return {"accepted": accepted_recs, "dropped": dropped_recs}
+
+
+CLOSED_KEEP = 60
+
+
+def _closed_sort_key(rec: dict) -> str:
+    """Sortierschlüssel für abgeschlossene Empfehlungen: Abschluss-, sonst Anlagedatum."""
+    return str(rec.get("closed_date") or rec.get("date") or "")
 
 
 WATCH_EXPIRE_DAYS = 30
@@ -287,6 +304,33 @@ def save_monthly_snapshot(snapshot: dict):
     _save_json("monthly_snapshots.json", snapshots)
 
 
+def append_monthly_snapshot(overview: dict, now: datetime | None = None) -> dict | None:
+    """Legt den Snapshot des laufenden Monats aus der berechneten Übersicht an
+    (einmal pro Monat). Zahlen kommen nur aus dem Code — früher speicherte der
+    Monatsreport hier vom LLM gerechnete Werte (oder gar nichts, wenn das JSON fehlte).
+    Returns den neuen Snapshot oder None, wenn es schon einen gibt."""
+    now = now or datetime.now()
+    month_key = now.strftime("%Y-%m")
+    snapshots = _load_json("monthly_snapshots.json", [])
+    if any(s.get("month") == month_key for s in snapshots):
+        return None
+    snap = {
+        "date": now.isoformat(),
+        "month": month_key,
+        "total_value": round(overview.get("total_value_eur", 0), 2),
+        "portfolio_value": round(overview.get("total_value_eur", 0), 2),
+        "holdings_value_eur": round(overview.get("holdings_value_eur", 0), 2),
+        "cash_total": round(overview.get("cash_total", 0), 2),
+        "total_pnl_eur": round(overview.get("total_pnl_eur", 0), 2),
+        "total_pnl_pct": round(overview.get("total_pnl_pct", 0), 2),
+        "position_count": len(overview.get("positions", [])),
+    }
+    snapshots.append(snap)
+    _save_json("monthly_snapshots.json", snapshots[-24:])
+    logger.info("Monats-Snapshot für %s angelegt: %s€", month_key, snap["total_value"])
+    return snap
+
+
 def update_notes(key: str, value):
     """Aktualisiert eine Notiz im Memory."""
     notes = _load_json("notes.json", {})
@@ -363,7 +407,7 @@ def get_context_for_prompt() -> str:
     # Offene Empfehlungen + Outcomes
     recs = memory["recommendations"]
     open_recs = [r for r in recs if r.get("status") == "open"]
-    closed_recs = [r for r in recs if r.get("status") != "open"]
+    closed_recs = sorted((r for r in recs if r.get("status") != "open"), key=_closed_sort_key)
 
     if open_recs:
         parts.append("\n=== OFFENE EMPFEHLUNGEN (tracke diese) ===")

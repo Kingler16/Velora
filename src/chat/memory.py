@@ -52,7 +52,7 @@ WICHTIGE REGELN:
 
 6. RISIKO-PROFIL:
 {user_profile}
-   WICHTIG: Auch bei hoher Risikotoleranz — konservativ mit Empfehlungen. Kapitalerhalt vor Rendite.
+   Richte Risiko an Ziel und Horizont des Nutzers aus (Profil bzw. Mandat), nicht pauschal defensiv. Beides kostet Geld: ein Fehlkauf und dauerhaft ungenutztes Kapital.
 
 7. GESPRÄCHS-KONTINUITÄT:
    - Du führst ein Gespräch. Beziehe dich auf frühere Nachrichten im Thread wenn sinnvoll.
@@ -95,7 +95,7 @@ IMPORTANT RULES:
 
 6. RISK PROFILE:
 {user_profile}
-   IMPORTANT: Even with high risk tolerance — be conservative with recommendations. Capital preservation before returns.
+   Match risk to the user's goal and horizon (profile or mandate), not a blanket defensive stance. Both cost money: a bad buy and capital that stays idle for good.
 
 7. CONVERSATION CONTINUITY:
    - You are having a conversation. Reference earlier messages in the thread when relevant.

@@ -12,7 +12,8 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-def _fetch_fred_series(name: str, series_id: str, api_key: str, start: str, today: str) -> tuple[str, dict | None]:
+def _fetch_fred_series(name: str, series_id: str, api_key: str, start: str, today: str,
+                       units: str = "lin") -> tuple[str, dict | None]:
     base_url = "https://api.stlouisfed.org/fred/series/observations"
     try:
         params = {
@@ -23,6 +24,8 @@ def _fetch_fred_series(name: str, series_id: str, api_key: str, start: str, toda
             "observation_end": today,
             "sort_order": "desc",
             "limit": 5,
+            # lin = Rohwert, pc1 = Veränderung zum Vorjahr in % (FRED rechnet serverseitig)
+            "units": units,
         }
         resp = requests.get(base_url, params=params, timeout=10)
         data = resp.json()
@@ -32,9 +35,9 @@ def _fetch_fred_series(name: str, series_id: str, api_key: str, start: str, toda
             value = latest.get("value", ".")
             if value != ".":
                 return name, {
-                    "value": float(value),
+                    "value": round(float(value), 3),
                     "date": latest["date"],
-                    "source": f"FRED:{series_id}",
+                    "source": f"FRED:{series_id}" + (f" ({units})" if units != "lin" else ""),
                 }
     except Exception as e:
         logger.error(f"FRED {name} ({series_id}) Fehler: {e}")
@@ -45,7 +48,8 @@ def fetch_fred_data(api_key: str) -> dict:
     """Holt wichtige US-Makrodaten von FRED (parallel)."""
     series = {
         "fed_funds_rate": "FEDFUNDS",
-        "us_cpi_yoy": "CPIAUCSL",
+        # CPIAUCSL ist ein Indexstand (~320) — als YoY-Rate nur mit units=pc1
+        "us_cpi_yoy": ("CPIAUCSL", "pc1"),
         "us_10y_yield": "DGS10",
         "us_2y_yield": "DGS2",
         "us_unemployment": "UNRATE",
@@ -59,10 +63,10 @@ def fetch_fred_data(api_key: str) -> dict:
     start = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
 
     with ThreadPoolExecutor(max_workers=min(8, len(series))) as ex:
-        futures = [
-            ex.submit(_fetch_fred_series, name, sid, api_key, start, today)
-            for name, sid in series.items()
-        ]
+        futures = []
+        for name, spec in series.items():
+            sid, units = spec if isinstance(spec, tuple) else (spec, "lin")
+            futures.append(ex.submit(_fetch_fred_series, name, sid, api_key, start, today, units))
         for fut in as_completed(futures):
             name, data = fut.result()
             if data:

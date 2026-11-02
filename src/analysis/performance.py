@@ -29,7 +29,10 @@ def compute_benchmark_data(market_data: dict) -> list:
 
     for name in ["S&P 500", "NASDAQ", "DAX", "ATX", "Euro Stoxx 50", "Gold", "BTC/USD"]:
         if name in indices:
-            change = indices[name].get("change_pct", 0)
+            # Wochenvergleich: 5-Tages-Änderung (ältere Caches haben nur change_pct,
+            # das damals ebenfalls die 5-Tages-Änderung war).
+            idx = indices[name]
+            change = idx.get("change_5d_pct", idx.get("change_pct", 0))
             if change is None or (isinstance(change, float) and math.isnan(change)):
                 change = 0.0
             benchmarks.append({"name": name, "change_pct": change})
@@ -281,6 +284,10 @@ def compute_recommendation_data(market_data: dict) -> dict:
 
     for rec in recs:
         status = rec.get("status", "open")
+        # "hold" = Stop nachziehen, keine Anlageidee: hat kein Ziel, kann also nur als
+        # stop_hit enden und drückte die Trefferquote systematisch nach unten.
+        if rec.get("action") == "hold" and status != "open":
+            continue
         if status == "open":
             open_recs.append(rec)
         elif status == "target_hit":
@@ -430,6 +437,23 @@ def _get_returns(pos: dict):
     return arr
 
 
+def _dated_returns(pos: dict):
+    """Tagesreturns als pandas.Series mit Datumsindex — oder None (ohne return_dates)."""
+    price = pos.get("price") if isinstance(pos, dict) else None
+    if not isinstance(price, dict):
+        return None
+    raw, dates = price.get("returns"), price.get("return_dates")
+    if not isinstance(raw, (list, tuple)) or not isinstance(dates, (list, tuple)) or len(raw) != len(dates):
+        return None
+    try:
+        s = pd.Series(np.asarray(raw, dtype=float), index=pd.to_datetime(list(dates)))
+    except (TypeError, ValueError):
+        return None
+    s = s[np.isfinite(s.values)]
+    s = s[~s.index.duplicated(keep="last")]
+    return s if len(s) >= MIN_RETURNS else None
+
+
 def _rf_from_macro(macro_data: dict, fallback: float = 0.04) -> float:
     """Fed-Funds-Rate als Dezimal aus macro_data["us"]["fed_funds_rate"]["value"].
 
@@ -542,20 +566,30 @@ def compute_correlation_data(market_data: dict) -> dict:
     positions = (market_data or {}).get("positions", {})
 
     returns_by_ticker: dict = {}
+    dated: dict = {}
     for ticker, pos in positions.items():
         r = _get_returns(pos)
-        if r is not None:
-            returns_by_ticker[ticker] = r
+        if r is None:
+            continue
+        returns_by_ticker[ticker] = r
+        series = _dated_returns(pos)
+        if series is not None:
+            dated[ticker] = series
 
     if len(returns_by_ticker) < 2:
         return dict(empty)
 
-    # Auf gemeinsame Laenge trimmen (von hinten = juengste Returns behalten).
-    min_len = min(len(r) for r in returns_by_ticker.values())
-    data = {t: r[-min_len:] for t, r in returns_by_ticker.items()}
-
-    df = pd.DataFrame(data)
-    corr = df.corr()
+    if len(dated) == len(returns_by_ticker):
+        # Nach Handelstag ausrichten; paarweise nur gemeinsame Tage (pandas corr
+        # ignoriert NaN paarweise). Sonst verglich man z. B. einen US-Feiertag
+        # mit dem EU-Folgetag.
+        df = pd.DataFrame(dated)
+        corr = df.corr(min_periods=MIN_RETURNS)
+    else:
+        # Ältere Caches ohne return_dates: auf gemeinsame Länge trimmen (von hinten).
+        min_len = min(len(r) for r in returns_by_ticker.values())
+        df = pd.DataFrame({t: r[-min_len:] for t, r in returns_by_ticker.items()})
+        corr = df.corr()
 
     # Oberes Dreieck (ohne Diagonale) als Paarliste.
     tickers = list(corr.columns)

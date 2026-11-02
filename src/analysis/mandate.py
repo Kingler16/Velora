@@ -196,6 +196,27 @@ def _rule_text(r: dict) -> str:
     return t or "?"
 
 
+_GOAL_LABELS = {
+    "max_growth": "maximales langfristiges Wachstum",
+    "growth": "Wachstum",
+    "balanced": "ausgewogen (Wachstum und Stabilität)",
+    "income": "laufende Erträge",
+    "preservation": "Kapitalerhalt",
+}
+
+
+def _objective_text(objective: dict) -> str:
+    parts = []
+    goal = objective.get("primary_goal")
+    if goal:
+        parts.append(_GOAL_LABELS.get(goal, str(goal)))
+    if objective.get("horizon_years"):
+        parts.append(f"Anlagehorizont ca. {objective['horizon_years']} Jahre")
+    if objective.get("monthly_contribution_eur"):
+        parts.append(f"Sparrate {objective['monthly_contribution_eur']} €/Monat")
+    return " · ".join(parts)
+
+
 def build_mandate_block(mandate: dict | None) -> str:
     """Rendert das Mandat als §0-Block für den System-/Briefing-Prompt.
     Gibt "" zurück wenn kein Mandat (opt-in)."""
@@ -211,6 +232,11 @@ def build_mandate_block(mandate: dict | None) -> str:
         lines.append(mandate["summary_human"])
     if mandate.get("philosophy"):
         lines.append(f"Philosophie: {mandate['philosophy']}")
+    objective = _objective_text(mandate.get("objective") or {})
+    if objective:
+        # Das eigentliche Ziel stand bisher nur in der UI — das LLM kannte weder
+        # Horizont noch „max. Wachstum“ und fiel auf pauschale Vorsicht zurück.
+        lines.append(f"ZIEL: {objective}")
     if block:
         lines.append("HARTE REGELN (block, NICHT vorschlagen wenn verletzt): " + " · ".join(_rule_text(r) for r in block))
     if warn:
