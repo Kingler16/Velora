@@ -383,7 +383,7 @@ def deactivate_apns_device(token: str) -> None:
 def get_active_apns_devices() -> list[dict]:
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT token, environment, device_name FROM apns_devices WHERE active = 1"
+            "SELECT token, environment, device_name, app_version FROM apns_devices WHERE active = 1"
         ).fetchall()
     return [dict(r) for r in rows]
 

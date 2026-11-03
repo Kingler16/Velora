@@ -50,6 +50,7 @@ After 7 days the app stops launching. Press ▶︎ again in Xcode.
    ios/testflight.sh
    ```
    Every upload gets a new build number (`YYYYMMDD.HHMM`). Optional: put an App Store Connect API key into `config/settings.json` → `app_store_connect` (see `config/settings.example.json`) and the script waits until Apple has processed the build.
+   The server reads the upload date from this build number and reminds you by push (14, 7, 3 and 1 days before) and on the dashboard before the 90-day TestFlight period ends.
 4. App Store Connect › your app › TestFlight › Internal Testing "+": tick "automatically distribute to all builds", add yourself. Install via the TestFlight app on the iPhone.
 
 ## 3. Push notifications (paid account only)

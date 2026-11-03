@@ -22,6 +22,18 @@
 
 <div class="hero-greeting" id="heroGreeting"></div>
 
+{% if build_expiry %}
+{# TestFlight-Build läuft bald ab — danach kommen keine Mitteilungen mehr an #}
+<div class="card" style="margin-bottom: var(--space-4); border-left: 3px solid var(--{{ 'red' if build_expiry.days_left <= 3 else 'yellow' }});">
+    <div class="card-title">{{ t.dashboard.build_expiry_title }}</div>
+    <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+        {% if build_expiry.days_left < 0 %}{{ t.dashboard.build_expired }}{% else %}{{ t.dashboard.build_expiry_body.replace('{days}', build_expiry.days_left|string) }}{% endif %}
+        <code style="font-family: var(--font-mono, monospace);">ios/testflight.sh</code>
+        · {{ build_expiry.app_version }}
+    </div>
+</div>
+{% endif %}
+
 {# „Heute"-Karte: offene Aktionen + letztes Briefing auf einen Blick #}
 <a class="today-card{% if actionable_count > 0 %} today-card--active{% endif %}" href="/recommendations">
     <div class="today-card-main">

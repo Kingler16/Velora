@@ -149,7 +149,7 @@ def test_register_device(client, chat_db):
                                                      "device_name": "iPhone", "app_version": "1.0 (5)"})
     assert r.status_code == 200
     assert chat_db.get_active_apns_devices() == [{"token": token.lower(), "environment": "sandbox",
-                                                  "device_name": "iPhone"}]
+                                                  "device_name": "iPhone", "app_version": "1.0 (5)"}]
     client.post("/api/push/apns/unregister", json={"token": token})
     assert chat_db.get_active_apns_devices() == []
 

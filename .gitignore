@@ -9,6 +9,7 @@ config/watchlist.json
 config/region_exposure.json
 config/holdings_research.json
 config/portfolio.bak.*.json
+config/settings*.bak*
 config/.portfolio.lock
 memory/
 logs/

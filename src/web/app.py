@@ -162,8 +162,10 @@ async def lifespan(app: FastAPI):
     else:
         logger.info(f"Cache gefunden (Alter: {age:.0f} Minuten)")
     daily_task = asyncio.create_task(_daily_track_loop())
+    expiry_task = asyncio.create_task(_build_expiry_loop())
     yield
     daily_task.cancel()
+    expiry_task.cancel()
     logger.info("Velora Dashboard gestoppt")
 
 
@@ -192,6 +194,21 @@ async def _daily_track_loop():
         except Exception:
             logger.exception("Tagesabschluss Erfolgsbilanz fehlgeschlagen")
         await asyncio.sleep(30 * 60)
+
+
+async def _build_expiry_loop():
+    """Erinnert tagsüber per Push, bevor der TestFlight-Build abläuft (je Schwelle einmal)."""
+    from datetime import datetime as _dt
+    from src.delivery.build_expiry import check_and_notify
+    while True:
+        try:
+            if 9 <= _dt.now().hour < 21:
+                await asyncio.to_thread(check_and_notify)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Prüfung des TestFlight-Ablaufs fehlgeschlagen")
+        await asyncio.sleep(60 * 60)
 
 
 app = FastAPI(title="Velora Dashboard", lifespan=lifespan)
@@ -374,11 +391,19 @@ async def dashboard(request: Request):
     benchmarks = compute_benchmark_data(market_data)
     actionable = _actionable_recommendations()
     latest_briefing = _latest_briefing()
+    build_expiry = None
+    try:
+        from src.delivery.build_expiry import SHOW_DAYS, expiry_status
+        status = expiry_status()
+        if status and status["days_left"] <= SHOW_DAYS:
+            build_expiry = status
+    except Exception:
+        logger.exception("TestFlight-Ablauf nicht lesbar")
 
     return templates.TemplateResponse(request, "dashboard.html", _ctx(request, "dashboard",
         overview=overview, indices=indices, snapshots=snapshots, cache_status=cache_status,
         benchmarks=benchmarks, actionable=actionable, actionable_count=len(actionable),
-        latest_briefing=latest_briefing,
+        latest_briefing=latest_briefing, build_expiry=build_expiry,
     ))
 
 

@@ -39,6 +39,9 @@ _TRANSLATIONS: dict[str, dict] = {
             "updated_at": "Aktuell",
         },
         "dashboard": {
+            "build_expiry_title": "iOS-App läuft bald ab",
+            "build_expiry_body": "Der TestFlight-Build läuft in {days} Tagen ab. Danach kommen keine Mitteilungen mehr an. Neuen Build hochladen mit",
+            "build_expired": "Der TestFlight-Build ist abgelaufen, Mitteilungen kommen nicht mehr an. Neuen Build hochladen mit",
             "title": "Dashboard",
             "title_sub": "Dein Vermögen auf einen Blick",
             "refresh": "Aktualisieren",
@@ -527,6 +530,9 @@ _TRANSLATIONS: dict[str, dict] = {
             "updated_at": "Updated",
         },
         "dashboard": {
+            "build_expiry_title": "iOS app expires soon",
+            "build_expiry_body": "The TestFlight build expires in {days} days. After that, notifications stop arriving. Upload a new build with",
+            "build_expired": "The TestFlight build has expired, notifications no longer arrive. Upload a new build with",
             "title": "Dashboard",
             "title_sub": "Your Wealth at a Glance",
             "refresh": "Refresh",
