@@ -195,13 +195,15 @@ async def recommendations():
 
 @router.get("/strategy")
 async def strategy():
-    from src.analysis.mandate import load_mandate, compute_strategy_drift
+    from src.analysis.mandate import load_mandate, compute_strategy_drift, lint_mandate
+    from src.analysis.cash_plan import compute_cash_plan
     mandate = load_mandate()
-    drift = None
+    drift = cash_plan = None
     if mandate:
         overview = compute_portfolio_overview(load_portfolio(), get_market_data())
         drift = compute_strategy_drift(overview, mandate)
-    return {"mandate": mandate, "drift": drift}
+        cash_plan = compute_cash_plan(overview, mandate, persist=False)
+    return {"mandate": mandate, "drift": drift, "cash_plan": cash_plan, "hints": lint_mandate(mandate)}
 
 
 @router.get("/holdings")

@@ -102,7 +102,7 @@ Built with FastAPI + Jinja2 + HTMX + Chart.js + TradingView Lightweight Charts. 
 | **Market** | 9 indices with descriptions, US/EU macro data, Fear & Greed gauge, earnings calendar |
 | **Briefings** | Market regime, key insights, expandable briefing history with full text |
 | **Recommendations** | Active BUY/SELL cards, WATCH/HOLD watchlist, one-click close, hit-rate KPIs |
-| **Strategy** | Optional investment mandate (target allocation, hard rules) and drift against it |
+| **Strategy** | Optional investment mandate (target allocation, hard rules) and drift against it. With `policy.cash.max` set, cash above the band is deployed in fixed monthly tranches (`policy.deployment`, see `config/mandate.example.json`) |
 | **Chat** | Conversation with Velora about your portfolio; write actions need your confirmation |
 | **Settings** | API keys, language (de/en), briefing schedule, notifications per category |
 

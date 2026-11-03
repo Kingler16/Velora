@@ -479,14 +479,18 @@ async def recommendations_page(request: Request):
 
 @app.get("/strategy", response_class=HTMLResponse)
 async def strategy_page(request: Request):
-    from src.analysis.mandate import load_mandate, compute_strategy_drift
+    from src.analysis.mandate import load_mandate, compute_strategy_drift, lint_mandate
+    from src.analysis.cash_plan import compute_cash_plan
     mandate = load_mandate()
-    drift = None
+    drift = cash_plan = None
     if mandate:
         overview = compute_portfolio_overview(load_portfolio(), get_market_data())
         drift = compute_strategy_drift(overview, mandate)
+        # Nur anzeigen — Start und Ende eines Plans setzt allein das Briefing.
+        cash_plan = compute_cash_plan(overview, mandate, persist=False)
     return templates.TemplateResponse(request, "strategy.html",
-        _ctx(request, "strategy", mandate=mandate, drift=drift))
+        _ctx(request, "strategy", mandate=mandate, drift=drift, cash_plan=cash_plan,
+             mandate_hints=lint_mandate(mandate)))
 
 
 def _lookthrough_funds(portfolio: dict, research: dict) -> list:

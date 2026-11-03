@@ -141,6 +141,11 @@ async def run_briefing():
         from src.analysis.mandate import load_mandate, compute_strategy_drift
         drift_str = format_strategy_drift(compute_strategy_drift(overview, load_mandate()))
         drift_section = f"\n=== STRATEGIE-DRIFT (Soll vs. Ist deines Mandats) ===\n\n{drift_str}\n" if drift_str else ""
+        from src.analysis.cash_plan import compute_cash_plan, format_cash_plan
+        cash_plan_str = format_cash_plan(compute_cash_plan(overview, load_mandate()))
+        if not cash_plan_str:
+            logger.info("Cash-Einsatzplan aus (Mandat ohne policy.cash.max)")
+        cash_plan_section = f"\n=== CASH-EINSATZPLAN (berechnet) ===\n\n{cash_plan_str}\n" if cash_plan_str else ""
         from src.analysis.factors import compute_factor_data, format_factor_data
         factor_str = format_factor_data(compute_factor_data(market_data, overview))
         factor_section = f"\n=== FAKTOR-PROFIL (Style-Exposure der Einzelaktien, regelbasiert) ===\n\n{factor_str}\n" if factor_str else ""
@@ -189,7 +194,7 @@ async def run_briefing():
 === KORRELATION & KLUMPENRISIKO ===
 
 {format_correlation(correlation)}
-{factor_section}{drift_section}{lookthrough_section}{stop_section}
+{factor_section}{drift_section}{cash_plan_section}{lookthrough_section}{stop_section}
 === FINANZKALENDER (Börsen, Earnings, Makro-Events) ===
 
 {calendar_str}

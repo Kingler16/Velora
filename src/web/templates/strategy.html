@@ -219,6 +219,58 @@
 </div>
 {% endif %}
 
+<!-- Cash-Einsatzplan (nur mit policy.cash.max) -->
+{% if cash_plan %}
+<div class="card" style="margin-bottom: 24px;">
+    <div class="card-title">{{ t.strategy.cash_plan }}</div>
+    <div style="display: grid; gap: 8px; font-size: 13px; color: var(--text-secondary);">
+        <div style="display: flex; justify-content: space-between;">
+            <span>{{ t.strategy.cash_band }}</span>
+            <strong style="color: var(--text-primary);">{% if cash_plan.band.min is not none %}{{ cash_plan.band.min }}–{% endif %}{{ cash_plan.band.max }}% · Ist {{ cash_plan.cash_pct }}%</strong>
+        </div>
+        {% if cash_plan.below_min %}
+        <div>{{ t.strategy.cash_below_min }}</div>
+        {% elif not cash_plan.active %}
+        <div>{{ t.strategy.cash_in_band }}</div>
+        {% else %}
+        <div style="display: flex; justify-content: space-between;">
+            <span>{{ t.strategy.cash_excess }}</span>
+            <strong class="tabular-nums" style="color: var(--text-primary);">{{ cash_plan.excess_eur|eur }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <span>{{ t.strategy.cash_drag }}</span>
+            <strong class="tabular-nums" style="color: var(--text-primary);">≈ {{ cash_plan.drag_eur_per_year|eur }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <span>{{ t.strategy.cash_budget }} ({{ t.strategy.cash_plan_month.replace('{m}', cash_plan.month|string).replace('{n}', cash_plan.months|string) }})</span>
+            <strong class="tabular-nums" style="color: var(--accent);">{{ cash_plan.budget_eur|eur }}</strong>
+        </div>
+        {% if cash_plan.backlog_eur > 0 %}
+        <div style="display: flex; justify-content: space-between;">
+            <span>{{ t.strategy.cash_backlog }}</span>
+            <strong class="tabular-nums" style="color: var(--text-primary);">{{ cash_plan.backlog_eur|eur }}</strong>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Linter-Hinweise -->
+{% if mandate_hints %}
+<div class="card" style="margin-bottom: 24px;">
+    <div class="card-title">{{ t.strategy.lint_title }}</div>
+    <ul style="margin: 0; padding: 0; list-style: none; display: grid; gap: 10px;">
+        {% for hint in mandate_hints %}
+        <li style="display: flex; gap: 10px; font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+            <span style="color: var(--yellow); flex-shrink: 0;">&bull;</span>
+            <span>{{ hint }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
 <!-- Präferenzen + Steuer -->
 {% if mandate.soft_preferences or mandate.tax_directives %}
 <div class="card" style="margin-bottom: 24px;">

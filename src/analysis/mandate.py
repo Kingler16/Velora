@@ -121,7 +121,72 @@ def validate_mandate_schema(mandate: dict) -> tuple[bool, str]:
             return False, f"Unbekannter Regel-Typ: {rtype!r} (erlaubt: {sorted(KNOWN_RULE_TYPES)})"
         if r.get("rule") not in ("block", "warn"):
             return False, f"Regel {r.get('id', rtype)}: rule muss 'block' oder 'warn' sein"
+    return _validate_policy(mandate.get("policy"))
+
+
+def _validate_policy(policy) -> tuple[bool, str]:
+    """policy ist optional: cash {min, target, max} in % und deployment {months, parking}."""
+    if policy is None:
+        return True, ""
+    if not isinstance(policy, dict):
+        return False, "policy muss ein Objekt sein"
+    cash = policy.get("cash")
+    if cash is not None:
+        if not isinstance(cash, dict):
+            return False, "policy.cash muss ein Objekt sein"
+        vals = [cash.get(k) for k in ("min", "target", "max")]
+        for k, v in zip(("min", "target", "max"), vals):
+            if v is not None and (not isinstance(v, (int, float)) or not 0 <= v <= 100):
+                return False, f"policy.cash.{k} muss eine Zahl zwischen 0 und 100 sein"
+        given = [v for v in vals if v is not None]
+        if given != sorted(given):
+            return False, "policy.cash: es muss min ≤ target ≤ max gelten"
+    dep = policy.get("deployment")
+    if dep is not None:
+        from src.analysis.cash_plan import MAX_MONTHS, PARKING_OPTIONS
+        if not isinstance(dep, dict):
+            return False, "policy.deployment muss ein Objekt sein"
+        months = dep.get("months")
+        if months is not None and (not isinstance(months, int) or not 1 <= months <= MAX_MONTHS):
+            return False, f"policy.deployment.months muss eine ganze Zahl von 1 bis {MAX_MONTHS} sein"
+        if dep.get("parking") is not None and dep["parking"] not in PARKING_OPTIONS:
+            return False, f"policy.deployment.parking muss eines von {list(PARKING_OPTIONS)} sein"
     return True, ""
+
+
+# Freitext, der einem Einsatzplan widerspricht — genau diese Sätze hat das LLM
+# Briefing für Briefing als Grund fürs Nichtstun zitiert.
+_CASH_BRAKE_PHRASES = ("kein handlungsdruck", "auf krampf", "kein kaufzwang")
+
+
+def lint_mandate(mandate: dict | None) -> list[str]:
+    """Inhaltliche Hinweise (keine Fehler): Lücken und Widersprüche, die die Empfehlungen
+    still verzerren. Leere Liste = nichts auffällig."""
+    if not mandate:
+        return []
+    hints = []
+    targets = mandate.get("targets") or {}
+    cash = (mandate.get("policy") or {}).get("cash") or {}
+    objective = mandate.get("objective") or {}
+    if not objective.get("horizon_years") or not objective.get("primary_goal"):
+        hints.append("Ziel oder Anlagehorizont fehlt (objective) — Velora kann das Risiko nicht passend einordnen.")
+    if targets.get("cash_pct") is not None and cash.get("max") is None:
+        hints.append("Cash-Ziel ohne Obergrenze (policy.cash.max): Cash darüber wird nie planmässig investiert.")
+    if cash.get("target") is not None and targets.get("cash_pct") is not None \
+            and cash["target"] != targets["cash_pct"]:
+        hints.append(f"Cash-Ziel doppelt und verschieden: targets.cash_pct {targets['cash_pct']} % "
+                     f"gegen policy.cash.target {cash['target']} %.")
+    min_rule = next((r for r in mandate.get("hard_rules", []) if r.get("type") == "min_cash_pct"), None)
+    if min_rule and cash.get("min") is not None and min_rule.get("value") is not None \
+            and min_rule["value"] > cash["min"]:
+        hints.append(f"Regel min_cash_pct ({min_rule['value']} %) liegt über policy.cash.min ({cash['min']} %).")
+    if cash.get("max") is not None:
+        texts = [mandate.get("summary_human") or "", mandate.get("philosophy") or ""]
+        texts += [str(p) for p in mandate.get("soft_preferences") or []]
+        if any(ph in t.lower() for t in texts for ph in _CASH_BRAKE_PHRASES):
+            hints.append("Freitext bremst den Cash-Einsatzplan („kein Handlungsdruck“ o. ä.) — "
+                         "Velora bekommt widersprüchliche Vorgaben.")
+    return hints
 
 
 def save_mandate(new_mandate: dict, change_summary: str = "") -> dict:
@@ -246,6 +311,13 @@ def build_mandate_block(mandate: dict | None) -> str:
         reg = ", ".join(f"{k} {v}%" for k, v in targets["regions"].items())
         cash = f" · Cash {targets['cash_pct']}%" if targets.get("cash_pct") is not None else ""
         lines.append(f"SOLL-ALLOKATION (Ziel, nicht hart): {reg}{cash}")
+    from src.analysis.cash_plan import cash_band
+    band = cash_band(mandate)
+    if band:
+        parts = [f"min {band['min']}%" if band.get("min") is not None else None,
+                 f"Ziel {band['target']}%" if band.get("target") is not None else None,
+                 f"max {band['max']}%"]
+        lines.append("CASH-BAND (vom Gesamtvermögen): " + " · ".join(p for p in parts if p))
     if mandate.get("single_trade_cap_pct"):
         lines.append(f"ORDER-GRÖSSE: einzelne Order max {mandate['single_trade_cap_pct']}% des Gesamtvermögens")
     frozen = mandate.get("frozen_tickers") or {}
@@ -257,11 +329,19 @@ def build_mandate_block(mandate: dict | None) -> str:
         lines.append(f"  - Präferenz: {pref}")
     for tax in (mandate.get("tax_directives") or [])[:4]:
         lines.append(f"  - Steuer: {tax}")
-    lines.append("Verstößt eine Idee gegen eine BLOCK-Regel → schlage sie NICHT vor, erkläre kurz warum. "
-                 "Bei WARN-Regeln nur mit expliziter Begründung im reasoning abweichen. "
-                 "Die Soll-Allokation ist Orientierung, KEIN Rebalancing-Zwang — eine Abweichung allein "
-                 "(z.B. eine hohe Cash-Quote) ist kein Grund für eine Order, solange keine überzeugende "
-                 "Einzelidee dahintersteht. Lieber Cash halten als auf Krampf investieren.")
+    rules_text = ("Verstößt eine Idee gegen eine BLOCK-Regel → schlage sie NICHT vor, erkläre kurz warum. "
+                  "Bei WARN-Regeln nur mit expliziter Begründung im reasoning abweichen. ")
+    if band:
+        # Mit Band gilt der Einsatzplan: Tranchen statt alles auf einmal, aber
+        # Nichtinvestieren über dem Band braucht eine Begründung.
+        rules_text += ("Die Regional-Allokation ist Orientierung, KEIN Rebalancing-Zwang. Für Cash über dem "
+                       "Band gilt der CASH-EINSATZPLAN (eigene Sektion): in Monatstranchen investieren, "
+                       "nicht alles auf einmal — wer nicht investiert, begründet es dort.")
+    else:
+        rules_text += ("Die Soll-Allokation ist Orientierung, KEIN Rebalancing-Zwang — eine Abweichung allein "
+                       "(z.B. eine hohe Cash-Quote) ist kein Grund für eine Order, solange keine überzeugende "
+                       "Einzelidee dahintersteht. Lieber Cash halten als auf Krampf investieren.")
+    lines.append(rules_text)
     return "\n".join(lines)
 
 
@@ -513,14 +593,24 @@ def compute_strategy_drift(overview: dict | None, mandate: dict | None) -> dict 
                 })
 
     # Cash-Drift (Ist = % vom Gesamtvermögen)
-    if targets.get("cash_pct") is not None:
+    from src.analysis.cash_plan import cash_band
+    band = cash_band(mandate)
+    cash_target = (band or {}).get("target", targets.get("cash_pct"))
+    if cash_target is not None:
         ist_cash = (overview.get("cash_total") or 0) / total * 100
-        dev = ist_cash - targets["cash_pct"]
-        dims.append({
+        dev = ist_cash - cash_target
+        dim = {
             "name": "Cash", "kind": "cash",
-            "soll": round(targets["cash_pct"], 1), "ist": round(ist_cash, 1),
+            "soll": round(cash_target, 1), "ist": round(ist_cash, 1),
             "abweichung_pp": round(dev, 1), "severity": _severity(dev),
-        })
+        }
+        if band:
+            # Mit Band zählt der Abstand zur Bandgrenze, nicht zum Ziel.
+            lo = band["min"] if band.get("min") is not None else cash_target
+            outside = ist_cash - band["max"] if ist_cash > band["max"] else min(ist_cash - lo, 0)
+            dim["severity"] = _severity(outside) if outside else "ok"
+            dim["band"] = {"min": band.get("min"), "max": band["max"]}
+        dims.append(dim)
 
     # Einzelpositions-Übergewicht vs. max_position_pct — auf das INVESTIERTE Kapital
     # (konsistent mit validate_against_mandate), über Depots aggregiert, und mit

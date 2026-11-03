@@ -24,6 +24,10 @@
     "regions": { "USA": 55, "Europa": 30, "Asien": 12, "Sonstige": 3 },
     "cash_pct": 8
   },
+  "policy": {
+    "cash": { "min": 5, "target": 8, "max": 15 },
+    "deployment": { "months": 4, "parking": "none" }
+  },
   "hard_rules": [
     { "id": "max_single_stock", "type": "max_position_pct", "value": 12, "exceptions": {}, "rule": "block" },
     { "id": "no_leverage", "type": "forbidden_instrument", "match": ["hebel", "leverage", "2x", "3x", "margin", "cfd", "option", "futures", "knock-out"], "rule": "block" },

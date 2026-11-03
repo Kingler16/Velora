@@ -459,7 +459,9 @@ def propose_mandate(mandate_json: str, change_summary: str) -> dict:
     Parameter:
       mandate_json: vollständiges Mandat als JSON-String. Felder: summary_human, philosophy,
         soft_preferences[], tax_directives[], objective{horizon_years,primary_goal,
-        monthly_contribution_eur}, targets{regions{},cash_pct}, hard_rules[{id,type,...,
+        monthly_contribution_eur}, targets{regions{},cash_pct}, optional policy{cash{min,target,max}
+        (% vom Gesamtvermögen; max aktiviert den Cash-Einsatzplan), deployment{months 1-6,
+        parking "none"|"existing_positions"}}, hard_rules[{id,type,...,
         rule:"block"|"warn"}]. Erlaubte rule-types: max_position_pct (value), forbidden_instrument
         (match[]), forbidden_ticker (tickers[]), min_cash_pct (value), max_keyword_pct
         (keywords[],value), max_sector_pct (sector,value). Wenn der User nur Teile ändert:
@@ -476,6 +478,8 @@ def propose_mandate(mandate_json: str, change_summary: str) -> dict:
     ok, err = validate_mandate_schema(mandate)
     if not ok:
         return {"error": f"Mandat ungültig: {err}. Korrigiere und ruf das Tool erneut auf."}
+    from src.analysis.mandate import lint_mandate
+    hints = lint_mandate(mandate)
     summary = change_summary or "Mandat aktualisiert"
     action_id = chat_db.create_pending_action(
         tool_name="propose_mandate",
@@ -484,7 +488,9 @@ def propose_mandate(mandate_json: str, change_summary: str) -> dict:
     )
     return {
         "status": "pending_confirmation", "action_id": action_id, "summary": summary,
-        "message": "Der Strategie-Vorschlag wartet auf Bestätigung in der UI. Sag dem User Bescheid.",
+        "message": "Der Strategie-Vorschlag wartet auf Bestätigung in der UI. Sag dem User Bescheid"
+                   + (" und nenne ihm die Hinweise (hints) zum Vorschlag." if hints else "."),
+        "hints": hints,
     }
 
 
