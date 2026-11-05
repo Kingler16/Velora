@@ -285,7 +285,7 @@ struct RecommendationDetailView: View {
                        accounts: accounts, recTicker: rec.ticker, presetAccount: rec.account,
                        presetShares: rec.shares, presetLimit: rec.entryPrice)
         }
-        .sheet(isPresented: $showTrade) { TradeSheet(position: nil, accounts: accounts, presetTicker: rec.ticker, presetCurrency: rec.currency) }
+        .sheet(isPresented: $showTrade) { TradeSheet(position: nil, accounts: accounts, presetTicker: rec.ticker, presetCurrency: rec.currency, presetAccount: rec.account) }
         .sheet(item: $stopTarget) { target in
             EditStopSheet(target: target) {
                 // Empfehlung ist damit erledigt – zurück zur Liste, sobald das Formular zu ist.

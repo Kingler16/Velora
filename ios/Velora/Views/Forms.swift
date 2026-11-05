@@ -44,11 +44,38 @@ private struct FormSheet<Content: View>: View {
 private struct AccountPicker: View {
     var accounts: [String]
     @Binding var selection: String
+    var preset: String?
+
+    @Environment(AppModel.self) private var model
+    @State private var loaded: [String] = []
+    @State private var failed = false
+
+    /// Kommt keine Liste mit (z. B. Ladefehler im Empfehlungs-Detail), holt der Picker sie selbst.
+    private var options: [String] { accounts.isEmpty ? loaded : accounts }
 
     var body: some View {
-        Picker("Depot", selection: $selection) {
-            ForEach(accounts, id: \.self) { Text(Format.accountName($0)).tag($0) }
+        Group {
+            if options.isEmpty && failed {
+                LabeledContent("Depot", value: "nicht geladen – Verbindung prüfen")
+            } else {
+                Picker("Depot", selection: $selection) {
+                    ForEach(options, id: \.self) { Text(Format.accountName($0)).tag($0) }
+                }
+            }
         }
+        .task {
+            if accounts.isEmpty {
+                do { loaded = try await model.client.get("/api/accounts", as: [String].self) } catch { failed = true }
+            }
+            fill()
+        }
+        .onChange(of: options) { fill() }
+    }
+
+    /// Ohne gültige Auswahl zeigt der Picker nichts an – dann Vorgabe bzw. erstes Depot wählen.
+    private func fill() {
+        guard !options.contains(selection) else { return }
+        if let preset, options.contains(preset) { selection = preset } else { selection = options.first ?? "" }
     }
 }
 
@@ -84,6 +111,7 @@ struct TradeSheet: View {
     var accounts: [String]
     var presetTicker: String?
     var presetCurrency: String?
+    var presetAccount: String?
 
     @Environment(AppModel.self) private var model
     @State private var action = "buy"
@@ -104,7 +132,7 @@ struct TradeSheet: View {
                 TextField("Ticker (z. B. AAPL, EUNL.DE)", text: $ticker)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
-                AccountPicker(accounts: accounts, selection: $account)
+                AccountPicker(accounts: accounts, selection: $account, preset: position?.account ?? presetAccount)
             }
             Section {
                 NumberField(title: "Stück", text: $shares, prompt: "0")
@@ -119,7 +147,7 @@ struct TradeSheet: View {
         }
         .onAppear {
             ticker = position?.ticker ?? presetTicker ?? ""
-            account = position?.account ?? accounts.first ?? ""
+            account = position?.account ?? presetAccount ?? accounts.first ?? ""
             currency = position?.currency ?? presetCurrency ?? "EUR"
         }
     }
@@ -165,7 +193,7 @@ struct OrderSheet: View {
                 TextField("Ticker", text: $form.ticker)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
-                AccountPicker(accounts: accounts, selection: $form.account)
+                AccountPicker(accounts: accounts, selection: $form.account, preset: presetAccount)
             }
             Section {
                 NumberField(title: "Stück", text: $form.shares, prompt: "0")
